@@ -2393,9 +2393,10 @@ class DailyNexusApp:
             )
             return
         secret_note = (
-            "A new private feed secret was generated and stored only in local config.toml."
+            "A new private feed secret was generated and stored in your operating "
+            "system credential vault."
             if result.created_new_secret
-            else "Your existing private feed secret was preserved."
+            else "Your existing private feed secret was preserved in the credential vault."
         )
         messagebox.showinfo(
             "Firebase project saved",

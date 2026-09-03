@@ -7,7 +7,13 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from audiodigest.config import load_settings
+from audiodigest.config import (
+    FIREBASE_FEED_STORAGE_KIND,
+    FIREBASE_FEED_VAULT_SERVICE,
+    firebase_secret_username,
+    load_settings,
+    read_firebase_secret,
+)
 from audiodigest.cost_guard import (
     validate_firebase_json,
     validate_spark_confirmation,
@@ -56,6 +62,8 @@ def _write_validated_config(config_path: Path, value: str) -> None:
 def configure_private_publishing(
     config_path: Path,
     project_id: str,
+    *,
+    rotate_secret: bool = False,
 ) -> PublishingSetupResult:
     normalized = project_id.strip().lower()
     if not PROJECT_ID_PATTERN.fullmatch(normalized):
@@ -66,16 +74,56 @@ def configure_private_publishing(
     original = config_path.read_text(encoding="utf-8")
     parsed = tomllib.loads(original)
     firebase = parsed.get("firebase")
-    existing_secret = (
-        str(firebase.get("secret_path", "")).strip()
-        if isinstance(firebase, dict)
-        else ""
+    existing_secret = ""
+    if isinstance(firebase, dict):
+        existing_project_id = str(firebase.get("project_id", "")).strip()
+        secret_storage = str(firebase.get("secret_storage", "")).strip().casefold()
+        if secret_storage == FIREBASE_FEED_STORAGE_KIND:
+            existing_secret = read_firebase_secret(existing_project_id)
+            if len(existing_secret) < 32 and not rotate_secret:
+                raise PreferenceValidationError(
+                    "The configured private feed path is missing from the operating "
+                    "system credential vault. Restore it, or use --rotate-secret "
+                    "only if you intend to replace the private feed URL."
+                )
+        elif secret_storage:
+            raise PreferenceValidationError(
+                "Firebase secret storage must be empty or 'keyring'."
+            )
+        else:
+            existing_secret = str(firebase.get("secret_path", "")).strip()
+    secret = (
+        secrets.token_hex(16)
+        if rotate_secret or len(existing_secret) < 32
+        else existing_secret
     )
-    secret = existing_secret if len(existing_secret) >= 32 else secrets.token_hex(16)
+    try:
+        import keyring
+        from keyring.errors import KeyringError
+    except ImportError as exc:
+        raise PreferenceValidationError(
+            "keyring is required to store the private feed path securely"
+        ) from exc
+    try:
+        keyring.set_password(
+            FIREBASE_FEED_VAULT_SERVICE,
+            firebase_secret_username(normalized),
+            secret,
+        )
+    except KeyringError as exc:
+        raise PreferenceValidationError(
+            "The operating system credential vault could not store the private feed path."
+        ) from exc
     base_url = f"https://{normalized}.web.app"
     updated = _set_toml_string(original, "firebase", "project_id", normalized)
     updated = _set_toml_string(updated, "firebase", "base_url", base_url)
-    updated = _set_toml_string(updated, "firebase", "secret_path", secret)
+    updated = _set_toml_string(updated, "firebase", "secret_path", "")
+    updated = _set_toml_string(
+        updated,
+        "firebase",
+        "secret_storage",
+        FIREBASE_FEED_STORAGE_KIND,
+    )
     updated = _set_toml_value(
         updated,
         "firebase",

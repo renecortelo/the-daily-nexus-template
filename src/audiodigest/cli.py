@@ -5,7 +5,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from audiodigest.config import generate_secret_path, load_settings
+from audiodigest.config import load_settings
 from audiodigest.cost_guard import write_spark_confirmation
 from audiodigest.diagnostics import checks_as_json, run_doctor
 from audiodigest.gmail_client import GmailClient
@@ -81,7 +81,6 @@ def build_parser() -> argparse.ArgumentParser:
         dest="episode_date",
     )
 
-    sub.add_parser("generate-secret", help="Generate a 128-bit private feed path")
     sub.add_parser(
         "confirm-spark",
         help="Record the operator's confirmation that Firebase is on Spark with no billing",
@@ -91,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Configure a dedicated Firebase project while keeping publishing disabled",
     )
     configure_publishing.add_argument("--project-id", required=True)
+    configure_publishing.add_argument(
+        "--rotate-secret",
+        action="store_true",
+        help="Replace the private feed URL and store its new path in the credential vault",
+    )
     sub.add_parser(
         "enable-publishing",
         help="Enable private publishing after the Spark confirmation is recorded",
@@ -138,12 +142,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "generate-secret":
-        print(generate_secret_path())
-        return
     config_path = Path(args.config)
     if args.command == "configure-publishing":
-        result = configure_private_publishing(config_path, args.project_id)
+        result = configure_private_publishing(
+            config_path,
+            args.project_id,
+            rotate_secret=args.rotate_secret,
+        )
         print(
             json.dumps(
                 {
@@ -151,9 +156,9 @@ def main(argv: list[str] | None = None) -> None:
                     "project_id": result.project_id,
                     "base_url": result.base_url,
                     "private_secret": (
-                        "created and stored locally"
+                        "created or rotated in the operating system credential vault"
                         if result.created_new_secret
-                        else "existing local secret preserved"
+                        else "existing credential-vault secret preserved"
                     ),
                 },
                 indent=2,

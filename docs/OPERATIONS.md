@@ -104,11 +104,23 @@ private Apple Podcasts steps are in [PUBLISHING.md](PUBLISHING.md).
 
 ## Rotate the feed URL
 
-1. Generate a new secret with `audiodigest generate-secret`.
-2. Change `firebase.secret_path` in `config.toml`.
-3. Run a manual publication.
-4. Add the new URL to Apple Podcasts.
-5. Remove the old Firebase release only after confirming the new feed.
+1. Pause every schedule and private runner.
+2. Recheck that the Firebase project is on Spark with no linked billing account.
+3. Rotate without printing the new bearer path:
+
+   ```powershell
+   & "$env:LOCALAPPDATA\AudioDigest\venv\Scripts\python.exe" `
+     -m audiodigest --config config.toml configure-publishing `
+     --project-id YOUR_PROJECT_ID --rotate-secret
+   ```
+
+4. Record the Spark confirmation again, enable publishing, and run one manual
+   publication. Use the app's explicit copy action only when adding the new URL
+   to Apple Podcasts.
+5. Remove the old Firebase release only after confirming the replacement feed.
+
+If `secret_storage = "keyring"` but its credential-vault entry is missing, the
+app stops instead of silently changing the feed URL.
 
 ## Stop or pause
 
@@ -121,5 +133,6 @@ fully stops AudioDigest. There is no background service or scheduled task to dis
 2. Remove the Apple Podcasts feed.
 3. Delete the Firebase Hosting site or project in Firebase Console if desired.
 4. Remove the Gmail OAuth grant from Google Account security.
-5. Delete the `AudioDigest` credential from Windows Credential Manager.
+5. Delete the `AudioDigest`, `TheDailyNexusFirebase`, and web-runner credentials
+   from Windows Credential Manager.
 6. Remove `%LOCALAPPDATA%\AudioDigest` only after preserving wanted audio.

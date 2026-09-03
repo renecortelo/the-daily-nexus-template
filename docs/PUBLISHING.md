@@ -66,9 +66,10 @@ In **The Daily Nexus > GEN > Apple Private Feed**:
 1. Choose **Configure**.
 2. Enter the exact Firebase Project ID from Step 1.
 3. The app stores the project host and creates a cryptographically random
-   128-bit feed path in the ignored local `config.toml`.
+   128-bit feed path in the operating system credential vault. The ignored
+   local `config.toml` stores only the non-secret `keyring` storage marker.
 
-The secret is not printed by setup or placed in Git. It is used only as the
+The secret is not printed by setup, written to TOML, or placed in Git. It is used only as the
 unguessable path in the hosted URL. Publishing remains disabled after this
 step.
 

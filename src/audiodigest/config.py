@@ -18,6 +18,8 @@ from audiodigest.preferences import (
 )
 
 _WINDOWS_ENVIRONMENT = re.compile(r"%([^%]+)%")
+FIREBASE_FEED_VAULT_SERVICE = "TheDailyNexusFirebase"
+FIREBASE_FEED_STORAGE_KIND = "keyring"
 
 
 def _expand_environment(value: str) -> str:
@@ -42,6 +44,33 @@ def _expand_executable(value: str, base_dir: Path) -> str:
     if "/" in expanded or "\\" in expanded:
         return str((base_dir / path).resolve())
     return expanded
+
+
+def firebase_secret_username(project_id: str) -> str:
+    """Return the non-secret credential-vault key for one Firebase project."""
+    return f"{project_id}-private-feed-path"
+
+
+def read_firebase_secret(project_id: str) -> str:
+    """Read the private feed path from the operating system credential vault."""
+    if not project_id or "REPLACE_" in project_id:
+        return ""
+    try:
+        import keyring
+        from keyring.errors import KeyringError
+    except ImportError as exc:
+        raise ValueError(
+            "keyring is required to read the private feed path securely"
+        ) from exc
+    try:
+        return keyring.get_password(
+            FIREBASE_FEED_VAULT_SERVICE,
+            firebase_secret_username(project_id),
+        ) or ""
+    except KeyringError as exc:
+        raise ValueError(
+            "the operating system credential vault could not read the private feed path"
+        ) from exc
 
 
 @dataclass(slots=True)
@@ -370,15 +399,28 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
         secondary_voice=str(hosts_raw.get("secondary_voice", "am_michael")),
         secondary_tone=str(hosts_raw.get("secondary_tone", "dry_wit")),
     )
+    firebase_project_id = str(firebase_raw.get("project_id", ""))
+    firebase_secret_storage = str(
+        firebase_raw.get("secret_storage", "")
+    ).strip().casefold()
+    if firebase_secret_storage not in {"", FIREBASE_FEED_STORAGE_KIND}:
+        raise ValueError("firebase.secret_storage must be empty or 'keyring'")
+    configured_secret_path = str(firebase_raw.get("secret_path", "")).strip().strip("/")
+    if firebase_secret_storage == FIREBASE_FEED_STORAGE_KIND:
+        if configured_secret_path:
+            raise ValueError(
+                "firebase.secret_path must be empty when secret_storage is 'keyring'"
+            )
+        configured_secret_path = read_firebase_secret(firebase_project_id)
     firebase = FirebaseSettings(
-        project_id=str(firebase_raw.get("project_id", "")),
+        project_id=firebase_project_id,
         executable=_expand_executable(
             str(firebase_raw.get("executable", "firebase")),
             base,
         ),
         public_dir=_expand_path(str(firebase_raw.get("public_dir", "hosting")), base),
         base_url=str(firebase_raw.get("base_url", "")).rstrip("/"),
-        secret_path=str(firebase_raw.get("secret_path", "")).strip().strip("/"),
+        secret_path=configured_secret_path,
         require_spark_confirmation=bool(firebase_raw.get("require_spark_confirmation", True)),
         publish_enabled=bool(firebase_raw.get("publish_enabled", False)),
         publish_mode=str(firebase_raw.get("publish_mode", "manual")),

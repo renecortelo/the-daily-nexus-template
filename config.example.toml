@@ -71,6 +71,9 @@ executable = "%LOCALAPPDATA%/AudioDigest/node-tools/node_modules/.bin/firebase.c
 public_dir = "hosting"
 base_url = "https://REPLACE_WITH_FIREBASE_PROJECT_ID.web.app"
 secret_path = ""
+# Local setup changes this to "keyring" and keeps the bearer path out of TOML.
+# Cloud runtime materializes a short-lived direct value instead.
+secret_storage = ""
 require_spark_confirmation = true
 publish_enabled = false
 publish_mode = "manual"

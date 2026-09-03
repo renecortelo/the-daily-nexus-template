@@ -165,7 +165,8 @@ does not hide work that already finished.
 
 Use [PUBLISHING.md](PUBLISHING.md). Begin with manual publication of a reviewed
 edition. Anyone with the private URL can access the static unlisted feed, so
-rotate `secret_path` and redeploy if it is exposed.
+use the credential-vault rotation procedure in
+[OPERATIONS.md](OPERATIONS.md) and redeploy if it is exposed.
 
 ## 9. Recreate the launcher if needed
 

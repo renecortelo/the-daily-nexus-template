@@ -216,9 +216,11 @@ async function main() {
     );
     versionName = extractVersionName(created);
   }
+  const versionPrefix = `sites/${projectId}/versions/`;
   if (
     typeof versionName !== "string"
-    || !new RegExp(`^sites/${projectId}/versions/[A-Za-z0-9_-]+$`).test(versionName)
+    || !versionName.startsWith(versionPrefix)
+    || !/^[A-Za-z0-9_-]+$/.test(versionName.slice(versionPrefix.length))
   ) {
     fail("Firebase did not create a safe Hosting version");
   }

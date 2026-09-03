@@ -8,6 +8,15 @@ from unittest import TestCase
 
 
 class FirebaseCloneDeployTests(TestCase):
+    def test_version_validation_never_compiles_project_input_as_regex(self):
+        source = Path("scripts/firebase-clone-deploy.cjs").read_text(encoding="utf-8")
+        self.assertNotIn("new RegExp", source)
+        self.assertIn("versionName.startsWith(versionPrefix)", source)
+        self.assertIn(
+            "/^[A-Za-z0-9_-]+$/.test(versionName.slice(versionPrefix.length))",
+            source,
+        )
+
     def test_release_wrapper_never_prints_raw_exception_details(self):
         source = Path("scripts/firebase-clone-deploy.cjs").read_text(encoding="utf-8")
         self.assertNotIn("DEBUG CLONE STACK", source)
