@@ -114,12 +114,12 @@ class PublishingSetupTests(TestCase):
     def test_existing_plaintext_secret_is_migrated_out_of_config(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
             config_path = self._config(Path(name))
-            legacy_secret = "b" * 32
+            legacy_feed_path = "b" * 32
             value = _set_toml_string(
                 config_path.read_text(encoding="utf-8"),
                 "firebase",
                 "secret_path",
-                legacy_secret,
+                legacy_feed_path,
             )
             config_path.write_text(value, encoding="utf-8")
 
@@ -130,9 +130,9 @@ class PublishingSetupTests(TestCase):
 
             serialized = config_path.read_text(encoding="utf-8")
             self.assertFalse(result.created_new_secret)
-            self.assertNotIn(legacy_secret, serialized)
+            self.assertNotIn(legacy_feed_path, serialized)
             self.assertEqual(
-                legacy_secret,
+                legacy_feed_path,
                 load_settings(config_path).firebase.secret_path,
             )
 
