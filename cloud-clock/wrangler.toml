@@ -1,0 +1,13 @@
+name = "the-daily-nexus-cloud-clock"
+main = "src/index.js"
+compatibility_date = "2026-08-04"
+
+# This object stores only opaque schedule IDs and timing. It never stores
+# newsletter labels, editorial parameters, Firebase credentials, or media URLs.
+[[durable_objects.bindings]]
+name = "TDN_CLOUD_CLOCK"
+class_name = "CloudClock"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CloudClock"]

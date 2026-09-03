@@ -1,0 +1,62 @@
+[
+  {
+    "text": "The unexamined life is not worth living.",
+    "author": "Socrates, as recorded by Plato",
+    "source_url": "https://www.gutenberg.org/files/1656/1656-h/1656-h.htm"
+  },
+  {
+    "text": "Knowledge itself is power.",
+    "author": "Francis Bacon",
+    "source_url": "https://en.wikisource.org/wiki/Meditationes_Sacrae"
+  },
+  {
+    "text": "I think, therefore I am.",
+    "author": "René Descartes",
+    "source_url": "https://www.gutenberg.org/ebooks/23306"
+  },
+  {
+    "text": "Experience is merely the name men gave to their mistakes.",
+    "author": "Oscar Wilde",
+    "source_url": "https://www.gutenberg.org/ebooks/174"
+  },
+  {
+    "text": "We can only see a short distance ahead, but we can see plenty there that needs to be done.",
+    "author": "Alan Turing",
+    "source_url": "https://www.csee.umbc.edu/courses/471/papers/turing.pdf"
+  },
+  {
+    "text": "All models are wrong, but some are useful.",
+    "author": "George E. P. Box",
+    "source_url": "https://doi.org/10.1080/01621459.1976.10480949"
+  },
+  {
+    "text": "Any sufficiently advanced technology is indistinguishable from magic.",
+    "author": "Arthur C. Clarke",
+    "source_url": "https://archive.org/details/profilesoffuture00clar"
+  },
+  {
+    "text": "Stay hungry. Stay foolish.",
+    "author": "The Whole Earth Catalog, quoted by Steve Jobs",
+    "source_url": "https://news.stanford.edu/stories/2005/06/youve-got-find-love-jobs-says"
+  },
+  {
+    "text": "The best way to predict the future is to invent it.",
+    "author": "Alan Kay",
+    "source_url": "https://archive.computerhistory.org/resources/access/text/2012/10/102702224-05-01-acc.pdf"
+  },
+  {
+    "text": "The Web does not just connect machines, it connects people.",
+    "author": "Tim Berners-Lee",
+    "source_url": "https://www.w3.org/People/Berners-Lee/Weaving/Overview.html"
+  },
+  {
+    "text": "Simplicity is prerequisite for reliability.",
+    "author": "Edsger W. Dijkstra",
+    "source_url": "https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html"
+  },
+  {
+    "text": "The purpose of computing is insight, not numbers.",
+    "author": "Richard Hamming",
+    "source_url": "https://archive.org/details/numericalmethods0000hamm"
+  }
+]

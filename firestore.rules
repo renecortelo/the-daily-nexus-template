@@ -1,0 +1,223 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn()
+        && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/owners/$(uid));
+    }
+
+    function validParameters(parameters) {
+      return parameters is map
+        && parameters.keys().hasOnly([
+          'runName',
+          'gmailLabel',
+          'sections',
+          'hostCount',
+          'soloName',
+          'dialogueStyle',
+          'primaryVoice',
+          'primaryTone',
+          'secondaryVoice',
+          'secondaryTone',
+          'publish',
+          'dateMode',
+          'includeTih',
+          'editionScale',
+          'evidenceMode'
+        ])
+        && parameters.runName is string
+        && parameters.runName.size() > 0
+        && parameters.runName.size() <= 80
+        && parameters.gmailLabel is string
+        && parameters.gmailLabel.size() > 0
+        && parameters.gmailLabel.size() <= 225
+        && parameters.sections is list
+        && parameters.sections.size() <= 10
+        && parameters.hostCount in [1, 2]
+        && parameters.soloName in ['Dalia', 'Nox']
+        && parameters.dialogueStyle in ['broadcast', 'conversation']
+        && parameters.primaryVoice is string
+        && parameters.primaryTone is string
+        && parameters.secondaryVoice is string
+        && parameters.secondaryTone is string
+        && parameters.publish is bool
+        && parameters.dateMode in ['previous_day', 'today']
+        && parameters.includeTih is bool
+        && parameters.editionScale in ['focused', 'standard', 'comprehensive']
+        && parameters.evidenceMode in ['newsletter_first', 'newsletter_only'];
+    }
+
+    function validSchedule() {
+      return request.resource.data.keys().hasOnly([
+          'name',
+          'enabled',
+          'timezone',
+          'startTime',
+          'readyBy',
+          'weekdays',
+          'parameters',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.enabled is bool
+        && request.resource.data.timezone is string
+        && request.resource.data.timezone.size() <= 80
+        && request.resource.data.startTime is string
+        && request.resource.data.startTime.size() == 5
+        && request.resource.data.readyBy is string
+        && request.resource.data.readyBy.size() == 5
+        && request.resource.data.weekdays is list
+        && request.resource.data.weekdays.size() > 0
+        && request.resource.data.weekdays.size() <= 7
+        && validParameters(request.resource.data.parameters)
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // This is the deliberately narrow schedule projection used by the
+    // independent cloud clock. It has timing only: never a Gmail label,
+    // editorial setting, feed URL, or any credential.
+    function validClockSchedule(uid, scheduleId) {
+      return request.resource.data.keys().hasOnly([
+          'scheduleId',
+          'enabled',
+          'timezone',
+          'startTime',
+          'weekdays',
+          'schemaVersion'
+        ])
+        && request.resource.data.scheduleId == scheduleId
+        && request.resource.data.enabled is bool
+        && request.resource.data.timezone is string
+        && request.resource.data.timezone.size() > 0
+        && request.resource.data.timezone.size() <= 80
+        && request.resource.data.startTime is string
+        && request.resource.data.startTime.size() == 5
+        && request.resource.data.weekdays is list
+        && request.resource.data.weekdays.size() > 0
+        && request.resource.data.weekdays.size() <= 7
+        && request.resource.data.schemaVersion == 1
+        // A client may create or update this document only when its matching
+        // authoritative schedule exists in the resulting transaction state.
+        && existsAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId))
+        && request.resource.data.enabled
+          == getAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId)).data.enabled
+        && request.resource.data.timezone
+          == getAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId)).data.timezone
+        && request.resource.data.startTime
+          == getAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId)).data.startTime
+        && request.resource.data.weekdays
+          == getAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId)).data.weekdays;
+    }
+
+    function validExecutionCreate() {
+      return request.resource.data.keys().hasOnly([
+          'executionId',
+          'episodeDate',
+          'status',
+          'startedAt',
+          'updatedAt',
+          'schemaVersion'
+        ])
+        && request.resource.data.executionId is string
+        && request.resource.data.executionId.size() > 0
+        && request.resource.data.executionId.size() <= 160
+        && request.resource.data.episodeDate is string
+        && request.resource.data.episodeDate.size() == 10
+        && request.resource.data.status == 'running'
+        && request.resource.data.startedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.schemaVersion == 1;
+    }
+
+    match /owners/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{uid}/schedules/{scheduleId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validSchedule();
+    }
+
+    match /users/{uid}/clockSchedules/{scheduleId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validClockSchedule(uid, scheduleId);
+      // The projection is deleted atomically with the authoritative schedule.
+      allow delete: if isOwner(uid)
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/schedules/$(scheduleId));
+    }
+
+    match /users/{uid}/runRequests/{requestId} {
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'parameters',
+          'requestedDate',
+          'status',
+          'schemaVersion',
+          'requestedAt',
+          'updatedAt'
+        ])
+        && validParameters(request.resource.data.parameters)
+        && request.resource.data.requestedDate is string
+        && request.resource.data.requestedDate.size() == 10
+        && request.resource.data.status == 'queued'
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.requestedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'startedAt', 'finishedAt', 'updatedAt', 'detail'
+        ])
+        && request.resource.data.status in [
+          'queued', 'running', 'completed', 'published', 'failed', 'expired'
+        ]
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{uid}/episodes/{episodeId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users/{uid}/executions/{executionId} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && validExecutionCreate();
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'startedAt',
+          'finishedAt',
+          'updatedAt'
+        ])
+        && (
+          (
+            resource.data.status == 'running'
+            && request.resource.data.status in ['completed', 'failed']
+            && request.resource.data.finishedAt is timestamp
+            && request.resource.data.updatedAt is timestamp
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /users/{uid}/runner/{documentId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

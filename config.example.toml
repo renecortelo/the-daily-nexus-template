@@ -1,0 +1,118 @@
+[app]
+timezone = "UTC"
+gmail_label = "AudioDigest/Source"
+retention_days = 30
+target_min_words = 2850
+target_max_words = 3800
+max_newsletters = 80
+max_articles_per_newsletter = 5
+runtime_dir = "%LOCALAPPDATA%/AudioDigest"
+backup_dir = ""
+
+[gmail]
+client_secret_path = "%LOCALAPPDATA%/AudioDigest/secrets/client_secret.json"
+token_service = "AudioDigest"
+token_username = "gmail-oauth-token"
+# Leave blank on desktop. The private cloud runner uses owner-only temporary files.
+token_file_path = ""
+account_email_file_path = ""
+
+[antigravity]
+executable = "%LOCALAPPDATA%/agy/bin/agy.exe"
+model = ""
+timeout_seconds = 900
+workspace_dir = "%LOCALAPPDATA%/AudioDigest/antigravity-workspace"
+settings_path = "%USERPROFILE%/.gemini/antigravity-cli/settings.json"
+agent_path = "config/antigravity-agent.md"
+agent_name = "audio-digest"
+use_g1_credits = false
+telemetry = false
+
+[articles]
+timeout_seconds = 10
+max_bytes = 2097152
+max_redirects = 3
+user_agent = "AudioDigest/0.1 personal newsletter reader"
+
+[research]
+enabled = true
+required = true
+timeout_seconds = 10
+max_bytes = 2097152
+history_event_limit = 15
+current_events_max_chars = 30000
+user_agent = "TheDailyNexus/0.2 private daily briefing"
+
+[audio]
+voice = "af_heart"
+language_code = "a"
+ffmpeg = "%LOCALAPPDATA%/Microsoft/WinGet/Links/ffmpeg.exe"
+ffprobe = "%LOCALAPPDATA%/Microsoft/WinGet/Links/ffprobe.exe"
+bitrate = "64k"
+sample_rate = 44100
+target_lufs = -16.0
+true_peak_db = -1.0
+min_duration_seconds = 60
+
+[hosts]
+count = 1
+solo_name = "Dalia"
+dialogue_style = "broadcast"
+primary_name = "Dalia"
+primary_voice = "af_heart"
+primary_tone = "warm"
+secondary_name = "Nox"
+secondary_voice = "am_michael"
+secondary_tone = "dry_wit"
+
+[firebase]
+project_id = "REPLACE_WITH_FIREBASE_PROJECT_ID"
+executable = "%LOCALAPPDATA%/AudioDigest/node-tools/node_modules/.bin/firebase.cmd"
+public_dir = "hosting"
+base_url = "https://REPLACE_WITH_FIREBASE_PROJECT_ID.web.app"
+secret_path = ""
+require_spark_confirmation = true
+publish_enabled = false
+publish_mode = "manual"
+deployment_token_file_path = ""
+
+[web]
+enabled = false
+# Public Firebase Web configuration value; this is not a private API credential.
+firebase_api_key = ""
+# Firebase Authentication UID of the single authorized owner.
+owner_uid = ""
+# Dedicated Desktop OAuth client downloaded from this Firebase project's
+# Google Auth Platform. Never reuse the Gmail OAuth client.
+oauth_client_secret_path = "%LOCALAPPDATA%/AudioDigest/secrets/client_secret_web_runner.json"
+token_service = "TheDailyNexusWebRunner"
+token_username = "firebase-refresh-token"
+token_file_path = ""
+poll_minutes = 5
+
+[podcast]
+tone = "warm"
+max_script_repairs = 2
+include_today_in_history = true
+# focused = specialized/lower-volume label; standard = balanced; comprehensive = broad news label.
+newspaper_edition_scale = "standard"
+# newsletter_first uses email bodies first and only safe direct article links as enrichment.
+# newsletter_only never fetches the web and requires TIH to be disabled.
+evidence_mode = "newsletter_first"
+# Leave blank to derive concise sections from each day's content.
+# Otherwise list ordered section names; TIH is kept first automatically.
+sections = []
+title = "The Daily Nexus"
+author = "Dario Novelli"
+description = "A private AI-generated daily briefing on technology, data, and world events."
+language = "en"
+category = "News"
+explicit = false
+cover_filename = "cover-retrofuture.jpg"
+closing_quotes_path = "config/closing-quotes.json"
+
+[safety]
+forbid_paid_credentials = true
+delete_source_payloads_after_success = true
+allow_personal_email = false
+allow_attachments = false

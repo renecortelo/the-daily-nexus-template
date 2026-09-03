@@ -1,0 +1,29 @@
+[
+  {
+    "message_id": "fixture-ai-001",
+    "publication": "Example AI Review",
+    "sender": "editor@example.invalid",
+    "subject": "A small model improves document extraction",
+    "received_at": "2026-07-25T09:00:00+02:00",
+    "email_text": "A research group released a compact document extraction model. The newsletter reports that the model is available under a permissive license and includes reproducible evaluation results. This is synthetic fixture content for AudioDigest testing.",
+    "article_urls": []
+  },
+  {
+    "message_id": "fixture-local-001",
+    "publication": "Example City Bulletin",
+    "sender": "briefing@example.invalid",
+    "subject": "Riverton expands a public data pilot",
+    "received_at": "2026-07-25T12:30:00+02:00",
+    "email_text": "Riverton announced an expansion of a public data pilot. The synthetic report says the next phase will cover two additional municipal services. Riverton is fictional and this fixture does not describe a real event.",
+    "article_urls": []
+  },
+  {
+    "message_id": "fixture-culture-001",
+    "publication": "Example Good News",
+    "sender": "hello@example.invalid",
+    "subject": "Community library reaches a donation milestone",
+    "received_at": "2026-07-25T18:00:00+02:00",
+    "email_text": "A fictional community library reached its annual book donation target. Volunteers will distribute the books to neighborhood reading rooms. This is synthetic fixture content.",
+    "article_urls": []
+  }
+]

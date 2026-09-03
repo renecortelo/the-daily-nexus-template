@@ -1,0 +1,106 @@
+[app]
+timezone = "UTC"
+gmail_label = "AudioDigest/Source"
+retention_days = 30
+target_min_words = 2850
+target_max_words = 3800
+max_newsletters = 80
+max_articles_per_newsletter = 5
+runtime_dir = __TDN_RUNTIME_DIR__
+backup_dir = ""
+
+[gmail]
+client_secret_path = __TDN_GMAIL_CLIENT_PATH__
+token_service = "AudioDigestCloud"
+token_username = "gmail-oauth-token"
+token_file_path = __TDN_GMAIL_TOKEN_PATH__
+account_email_file_path = ""
+
+[antigravity]
+executable = "agy"
+model = ""
+timeout_seconds = 900
+workspace_dir = __TDN_ANTIGRAVITY_WORKSPACE__
+settings_path = __TDN_ANTIGRAVITY_SETTINGS__
+agent_path = "config/antigravity-agent.md"
+agent_name = "audio-digest"
+use_g1_credits = false
+telemetry = false
+
+[articles]
+timeout_seconds = 10
+request_attempts = 3
+max_bytes = 2097152
+max_redirects = 3
+user_agent = "AudioDigest/0.7 private newsletter reader"
+
+[research]
+enabled = true
+required = true
+timeout_seconds = 10
+max_bytes = 2097152
+history_event_limit = 15
+current_events_max_chars = 30000
+user_agent = "TheDailyNexus/0.7 private daily briefing"
+
+[audio]
+voice = "af_heart"
+language_code = "a"
+ffmpeg = "ffmpeg"
+ffprobe = "ffprobe"
+bitrate = "64k"
+sample_rate = 44100
+target_lufs = -16.0
+true_peak_db = -1.0
+min_duration_seconds = 60
+
+[hosts]
+count = 1
+solo_name = "Dalia"
+dialogue_style = "broadcast"
+primary_name = "Dalia"
+primary_voice = "af_heart"
+primary_tone = "warm"
+secondary_name = "Nox"
+secondary_voice = "am_michael"
+secondary_tone = "dry_wit"
+
+[firebase]
+project_id = __TDN_FIREBASE_PROJECT_ID__
+executable = "firebase"
+public_dir = "hosting"
+base_url = __TDN_FIREBASE_BASE_URL__
+secret_path = __TDN_FIREBASE_SECRET_PATH__
+require_spark_confirmation = true
+publish_enabled = true
+publish_mode = "automatic"
+deployment_token_file_path = __TDN_FIREBASE_DEPLOY_TOKEN_PATH__
+
+[web]
+enabled = true
+firebase_api_key = __TDN_FIREBASE_API_KEY__
+owner_uid = __TDN_FIREBASE_OWNER_UID__
+oauth_client_secret_path = __TDN_WEB_OAUTH_PLACEHOLDER__
+token_service = "TheDailyNexusCloudRunner"
+token_username = "firebase-refresh-token"
+token_file_path = __TDN_FIREBASE_REFRESH_TOKEN_PATH__
+poll_minutes = 60
+
+[podcast]
+tone = "warm"
+max_script_repairs = 2
+sections = []
+title = "The Daily Nexus"
+author = "Dario Novelli"
+description = "A private AI-generated daily briefing on technology, data, and world events."
+language = "en"
+category = "News"
+explicit = false
+cover_filename = "cover-retrofuture.jpg"
+closing_quotes_path = "config/closing-quotes.json"
+
+[safety]
+forbid_paid_credentials = true
+delete_source_payloads_after_success = true
+allow_personal_email = false
+allow_attachments = false

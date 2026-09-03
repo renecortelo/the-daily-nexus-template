@@ -1,0 +1,9 @@
+{
+  "name": "audio-digest-local-tools",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned local command-line tools for AudioDigest.",
+  "devDependencies": {
+    "firebase-tools": "15.24.0"
+  }
+}

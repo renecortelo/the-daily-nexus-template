@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#110b07">
+    <meta name="color-scheme" content="dark">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Daily Nexus">
+    <title>The Daily Nexus</title>
+    <link rel="manifest" href="/manifest.webmanifest?v=4.0.13">
+    <link rel="apple-touch-icon" href="/assets/tdn-icon.png">
+    <link rel="icon" href="/assets/tdn-icon.png">
+    <link rel="stylesheet" href="/styles.css?v=4.1.2">
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <noscript>
+      <div class="fatal">JavaScript is required. No private data was loaded.</div>
+    </noscript>
+
+    <main id="auth-screen" class="auth-screen">
+      <section class="auth-card" aria-labelledby="auth-title">
+        <img class="auth-mark" src="/assets/tdn-icon.png" alt="The Daily Nexus">
+        <p class="eyebrow">PRIVATE MORNING INTELLIGENCE // V4</p>
+        <h1 id="auth-title">THE DAILY NEXUS</h1>
+        <p class="auth-copy">
+          Your newsletters, schedules, episodes, and reading editions remain locked
+          until this browser session is authenticated.
+        </p>
+        <button id="sign-in-button" class="google-button" type="button">
+          <img src="/assets/google-g.png" alt="" aria-hidden="true">
+          <span>Sign in with Google</span>
+        </button>
+        <p id="auth-status" class="status-copy" role="status">
+          Session-only sign-in. Closing this app clears the web session.
+        </p>
+        <div class="security-strip">
+          <span>SESSION ONLY</span>
+          <span>OWNER LOCK</span>
+          <span>NO CLOUD AI</span>
+          <span>SPARK ONLY</span>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-shell" class="app-shell" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <img src="/assets/tdn-icon-transparent.png" alt="">
+          <div>
+            <p class="brand-title">THE DAILY NEXUS</p>
+            <p class="brand-subtitle">NEXUS WEB CONSOLE // PRIVATE</p>
+          </div>
+        </div>
+        <div class="session-panel">
+          <div>
+            <span class="session-label">SIGNED IN</span>
+            <strong id="signed-in-user"></strong>
+          </div>
+          <button id="install-button" class="ghost-button" type="button">INSTALL</button>
+          <button id="sign-out-button" class="danger-button" type="button">SIGN OUT</button>
+        </div>
+      </header>
+
+      <nav class="mode-nav" aria-label="Primary">
+        <button class="mode-button active" data-view="gen" type="button">GEN</button>
+        <button class="mode-button" data-view="play" type="button">PLAY</button>
+        <button class="mode-button" data-view="read" type="button">READ</button>
+        <button class="mode-button" data-view="schedule" type="button">SCHED</button>
+        <button class="mode-button" data-view="about" type="button">ABOUT</button>
+      </nav>
+
+      <div id="global-alert" class="global-alert" role="status" hidden></div>
+      <section id="mini-player" class="mini-player" hidden aria-label="Current episode">
+        <div class="mini-transport">
+          <button id="mini-previous-button" class="ghost-button icon-action" type="button" aria-label="Previous episode" title="Previous episode"><span class="transport-icon previous" aria-hidden="true"></span></button>
+          <button id="mini-play-button" class="primary-button icon-action" type="button" aria-label="Play" title="Play"><span class="transport-icon play" aria-hidden="true"></span></button>
+          <button id="mini-pause-button" class="ghost-button icon-action" type="button" aria-label="Play or pause" title="Play or pause"><span class="transport-icon play-pause" aria-hidden="true"><i></i><b></b><b></b></span></button>
+          <button id="mini-stop-button" class="ghost-button icon-action" type="button" aria-label="Stop" title="Stop"><span class="transport-icon stop" aria-hidden="true"></span></button>
+          <button id="mini-next-button" class="ghost-button icon-action" type="button" aria-label="Next episode" title="Next episode"><span class="transport-icon next" aria-hidden="true"></span></button>
+        </div>
+        <div class="mini-player-copy">
+          <strong id="mini-player-title">THE DAILY NEXUS</strong>
+          <div class="mini-progress-line">
+            <span id="mini-player-current" class="item-meta">00:00</span>
+            <input id="mini-player-progress" type="range" min="0" max="100" value="0" aria-label="Episode progress">
+            <span id="mini-player-total" class="item-meta">00:00</span>
+          </div>
+        </div>
+        <div class="mini-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <label class="compact-control mini-volume-control">VOL <input id="mini-volume" type="range" min="0" max="100" value="85" aria-label="Volume"><span id="mini-volume-value">85%</span></label>
+        <label class="compact-control mini-speed-control">SPD <input id="mini-speed" type="range" min="75" max="200" step="25" value="100" aria-label="Playback speed"><span id="mini-speed-value">1.0x</span></label>
+      </section>
+
+      <section id="view-gen" class="view active" aria-labelledby="gen-heading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">GEN // PRIVATE CLOUD RUNNER</p>
+            <h2 id="gen-heading">Generate a Podcast + Paper</h2>
+          </div>
+          <div class="runner-chip">
+            <span class="signal-dot"></span>
+            <span id="runner-status">RUNNER STATUS UNKNOWN</span>
+          </div>
+        </div>
+        <div class="grid two-column">
+          <form id="generation-form" class="console-card parameter-form">
+            <fieldset>
+              <legend>Source and date</legend>
+              <label>
+                Run name
+                <input name="runName" value="Morning Nexus" maxlength="80" required>
+              </label>
+              <label>
+                Gmail label
+                <input name="gmailLabel" value="AudioDigest/Source" maxlength="225" required>
+              </label>
+              <label>
+                Episode date
+                <input name="requestedDate" type="date" required>
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Podcast sections</legend>
+              <label>
+                Ordered sections
+                <div class="section-token-editor" data-sections-editor>
+                  <div class="section-token-list" aria-live="polite"></div>
+                  <input class="section-token-input" type="text" placeholder="Type a section, then Enter">
+                  <textarea name="sections" hidden></textarea>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <input name="includeTih" type="checkbox" checked>
+                <span>Include TIH: Today in History</span>
+              </label>
+              <label>
+                Evidence mode
+                <select name="evidenceMode">
+                  <option value="newsletter_first" selected>Newsletter first — safe links enrich when available</option>
+                  <option value="newsletter_only">Newsletter only — no web retrieval</option>
+                </select>
+              </label>
+              <label>
+                Edition scale
+                <select name="editionScale">
+                  <option value="focused">Focused — specialized or lower-volume label</option>
+                  <option value="standard" selected>Standard — balanced executive edition</option>
+                  <option value="comprehensive">Comprehensive — broad daily-news label</option>
+                </select>
+              </label>
+              <p class="field-note">
+                Choose up to 10 sections. TIH is optional and does not use one of those 10.
+                Scale sets the Read-edition article range; all newsletter evidence is still ranked.
+                Newsletter only requires TIH to be off.
+              </p>
+            </fieldset>
+
+            <fieldset>
+              <legend>Hosts and editorial</legend>
+              <div class="host-layout" data-host-controls>
+                <label>
+                  Host format
+                  <select name="hostCount">
+                    <option value="1">One host</option>
+                    <option value="2">Dalia and Nox</option>
+                  </select>
+                </label>
+                <label data-solo-control>
+                  Solo host
+                  <select name="soloName">
+                    <option>Dalia</option>
+                    <option>Nox</option>
+                  </select>
+                </label>
+                <label data-duo-control>
+                  Two-host format
+                  <select name="dialogueStyle">
+                    <option value="broadcast">Broadcast</option>
+                    <option value="conversation">Conversation</option>
+                  </select>
+                </label>
+                <label>
+                  Primary voice
+                  <select name="primaryVoice">
+                    <option value="af_heart" data-gender="Female">Warm and engaging</option>
+                    <option value="bf_emma" data-gender="Female">Clear and analytical</option>
+                    <option value="af_bella" data-gender="Female">Polished and expressive</option>
+                    <option value="am_michael" data-gender="Male">Warm and engaging</option>
+                    <option value="am_eric" data-gender="Male">Clear and analytical</option>
+                    <option value="am_puck" data-gender="Male">Polished and expressive</option>
+                  </select>
+                </label>
+                <label>
+                  Primary tone
+                  <select name="primaryTone">
+                    <option value="warm">Warm</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="dry_wit">Dry wit</option>
+                    <option value="fun">Fun</option>
+                    <option value="formal">Very formal</option>
+                  </select>
+                </label>
+                <label data-secondary-control>
+                  Secondary voice
+                  <select name="secondaryVoice">
+                    <option value="af_heart" data-gender="Female">Warm and engaging</option>
+                    <option value="bf_emma" data-gender="Female">Clear and analytical</option>
+                    <option value="af_bella" data-gender="Female">Polished and expressive</option>
+                    <option value="am_michael" data-gender="Male">Warm and engaging</option>
+                    <option value="am_eric" data-gender="Male">Clear and analytical</option>
+                    <option value="am_puck" data-gender="Male">Polished and expressive</option>
+                  </select>
+                </label>
+                <label data-secondary-control>
+                  Secondary tone
+                  <select name="secondaryTone">
+                    <option value="dry_wit">Dry wit</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="warm">Warm</option>
+                    <option value="fun">Fun</option>
+                    <option value="formal">Very formal</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="profile-actions">
+              <input id="profile-name" type="text" maxlength="60" placeholder="Save these parameters as a favorite">
+              <div class="profile-buttons">
+                <button id="save-profile-button" class="ghost-button" type="button">SAVE AS FAVORITE</button>
+                <button id="update-profile-button" class="ghost-button" type="button" disabled>UPDATE</button>
+                <button id="delete-profile-button" class="danger-button" type="button" disabled>DELETE</button>
+              </div>
+              <select id="profile-picker" aria-label="Saved favorites"><option value="">LOAD FAVORITE…</option></select>
+            </div>
+
+            <p class="field-note publish-note">Verified cloud runs publish automatically.</p>
+            <button class="primary-button" type="submit">GENERATE</button>
+          </form>
+
+          <aside class="console-card monitor-card">
+            <div class="card-header">
+              <span>PROCESS MONITOR</span>
+              <div class="monitor-actions">
+                <button id="refresh-monitor-button" class="icon-button" type="button">REFRESH</button>
+                <span id="queue-count">0 QUEUED</span>
+              </div>
+            </div>
+            <div class="monitor-filters">
+              <input id="monitor-date-filter" type="date" aria-label="Filter by episode date">
+              <select id="monitor-status-filter" aria-label="Filter by status"><option value="">ALL STATUS</option><option value="queued">QUEUED</option><option value="running">RUNNING</option><option value="published">PUBLISHED</option><option value="completed">COMPLETED</option><option value="failed">FAILED</option><option value="expired">EXPIRED</option></select>
+              <input id="monitor-query-filter" type="search" placeholder="Filter name or label" aria-label="Filter by name or label">
+              <select id="monitor-sort-filter" aria-label="Sort process requests"><option value="newest">NEWEST FIRST</option><option value="oldest">OLDEST FIRST</option><option value="status">STATUS</option><option value="name">RUN NAME</option></select>
+            </div>
+            <p id="runner-detail" class="runner-detail" aria-live="polite">
+              Awaiting the private cloud runner status.
+            </p>
+            <div id="run-request-list" class="terminal-list empty-state">
+              No queued tasks for this session.
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="view-play" class="view" aria-labelledby="play-heading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">PLAY // PRIVATE ARCHIVE</p>
+            <h2 id="play-heading">Published episodes</h2>
+          </div>
+          <label class="archive-sort">SORT <select id="episode-sort" aria-label="Sort published episodes"><option value="newest">NEWEST</option><option value="oldest">OLDEST</option><option value="title">TITLE</option><option value="duration">DURATION</option></select></label>
+        </div>
+        <div class="play-layout">
+          <aside id="episode-list" class="episode-list empty-state">
+            No synchronized episodes are available yet.
+          </aside>
+          <section id="web-player" class="console-card web-player">
+            <p class="eyebrow">AUDIO TERMINAL</p>
+            <h3 id="player-title">SELECT AN EPISODE</h3>
+            <div class="player-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <audio id="episode-audio" preload="metadata"></audio>
+            <div class="progress-line">
+              <span id="player-current" class="item-meta">00:00</span>
+              <input id="episode-progress" type="range" min="0" max="100" value="0" aria-label="Episode progress">
+              <span id="player-total" class="item-meta">00:00</span>
+            </div>
+            <div class="player-controls">
+              <button id="player-previous-button" class="ghost-button icon-action" type="button" aria-label="Previous episode" title="Previous episode" disabled><span class="transport-icon previous" aria-hidden="true"></span></button>
+              <button id="player-play-button" class="primary-button icon-action" type="button" aria-label="Play" title="Play" disabled><span class="transport-icon play" aria-hidden="true"></span></button>
+              <button id="player-pause-button" class="ghost-button icon-action" type="button" aria-label="Play or pause" title="Play or pause" disabled><span class="transport-icon play-pause" aria-hidden="true"><i></i><b></b><b></b></span></button>
+              <button id="player-stop-button" class="ghost-button icon-action" type="button" aria-label="Stop" title="Stop" disabled><span class="transport-icon stop" aria-hidden="true"></span></button>
+              <button id="player-next-button" class="ghost-button icon-action" type="button" aria-label="Next episode" title="Next episode" disabled><span class="transport-icon next" aria-hidden="true"></span></button>
+              <label class="compact-control">VOLUME <input id="player-volume" type="range" min="0" max="100" value="85" aria-label="Volume"><span id="player-volume-value">85%</span></label>
+              <label class="compact-control">SPEED <input id="player-speed" type="range" min="75" max="200" step="25" value="100" aria-label="Playback speed"><span id="player-speed-value">1.0x</span></label>
+              <span id="player-time" class="item-meta" hidden>00:00 / 00:00</span>
+            </div>
+            <div class="player-detail-tabs" role="tablist">
+              <button id="show-references" class="ghost-button active" type="button">REFERENCES</button>
+              <button id="show-transcript" class="ghost-button" type="button">TRANSCRIPT</button>
+            </div>
+            <div id="player-details" class="player-details empty-state">Load an episode to view references.</div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-read" class="view" aria-labelledby="read-heading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">READ // EXECUTIVE EDITIONS</p>
+            <h2 id="read-heading">Newspaper archive</h2>
+          </div>
+          <label class="archive-sort">SORT <select id="edition-sort" aria-label="Sort newspaper archive"><option value="newest">NEWEST</option><option value="oldest">OLDEST</option><option value="title">TITLE</option></select></label>
+        </div>
+        <div class="read-layout">
+          <aside id="edition-list" class="edition-list empty-state">
+            No synchronized editions are available yet.
+          </aside>
+          <section class="console-card edition-viewer">
+            <p class="eyebrow">PRIVATE NEWSPAPER</p>
+            <h3 id="edition-title">SELECT AN EDITION</h3>
+            <div class="edition-zoom-controls" aria-label="Reader zoom controls">
+              <span>ZOOM</span>
+              <button id="edition-zoom-out" class="ghost-button icon-action" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+              <output id="edition-zoom-value" aria-live="polite">100%</output>
+              <button id="edition-zoom-in" class="ghost-button icon-action" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+            </div>
+            <div id="edition-pages" class="edition-pages empty-state">Select an edition to read it here.</div>
+            <a id="edition-pdf-link" class="ghost-button edition-pdf-link" href="#" target="_blank" rel="noopener noreferrer" hidden>OPEN PDF</a>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-schedule" class="view" aria-labelledby="schedule-heading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">SCHEDULE // EARLY SIGNAL</p>
+            <h2 id="schedule-heading">Automations</h2>
+          </div>
+          <div id="cloud-clock-status" class="ready-chip">CLOUD CLOCK // SIGN-IN REQUIRED</div>
+        </div>
+        <div class="grid schedule-layout">
+          <form id="schedule-form" class="console-card parameter-form">
+            <input name="scheduleId" type="hidden">
+            <fieldset>
+              <legend>Timing</legend>
+              <label>
+                Schedule name
+                <input name="name" value="Weekday morning nexus" maxlength="120" required>
+              </label>
+              <div class="form-grid">
+                <label>
+                  Start generation
+                  <input name="startTime" type="time" value="04:45" required>
+                </label>
+                <label>
+                  Ready by
+                  <input name="readyBy" type="time" value="06:00" required>
+                </label>
+                <label>
+                  Timezone
+                  <select name="timezone">
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">America/New York</option>
+                    <option value="Europe/London">Europe/London</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                  </select>
+                </label>
+              </div>
+              <div class="weekday-picker" aria-label="Run days">
+                <label><input type="checkbox" name="weekday" value="0" checked><span>M</span></label>
+                <label><input type="checkbox" name="weekday" value="1" checked><span>T</span></label>
+                <label><input type="checkbox" name="weekday" value="2" checked><span>W</span></label>
+                <label><input type="checkbox" name="weekday" value="3" checked><span>T</span></label>
+                <label><input type="checkbox" name="weekday" value="4" checked><span>F</span></label>
+                <label><input type="checkbox" name="weekday" value="5"><span>S</span></label>
+                <label><input type="checkbox" name="weekday" value="6"><span>S</span></label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Task parameters</legend>
+              <label>
+                Episode run name
+                <input name="runName" value="Morning Nexus" maxlength="80" required>
+              </label>
+              <label>
+                Gmail label
+                <input name="gmailLabel" value="AudioDigest/Source" maxlength="225" required>
+              </label>
+              <label>
+                Ordered podcast sections
+                <div class="section-token-editor" data-sections-editor>
+                  <div class="section-token-list" aria-live="polite"></div>
+                  <input class="section-token-input" type="text" placeholder="Type a section, then Enter">
+                  <textarea name="sections" hidden></textarea>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <input name="includeTih" type="checkbox" checked>
+                <span>Include TIH: Today in History</span>
+              </label>
+              <label>
+                Evidence mode
+                <select name="evidenceMode">
+                  <option value="newsletter_first" selected>Newsletter first — safe links enrich when available</option>
+                  <option value="newsletter_only">Newsletter only — no web retrieval</option>
+                </select>
+              </label>
+              <label>
+                Edition scale
+                <select name="editionScale">
+                  <option value="focused">Focused — specialized or lower-volume label</option>
+                  <option value="standard" selected>Standard — balanced executive edition</option>
+                  <option value="comprehensive">Comprehensive — broad daily-news label</option>
+                </select>
+              </label>
+              <div class="host-layout" data-host-controls>
+                <label>
+                  Host format
+                  <select name="hostCount">
+                    <option value="1">One host</option>
+                    <option value="2">Dalia and Nox</option>
+                  </select>
+                </label>
+                <label data-solo-control>
+                  Solo host
+                  <select name="soloName">
+                    <option>Dalia</option>
+                    <option>Nox</option>
+                  </select>
+                </label>
+                <label data-duo-control>
+                  Two-host style
+                  <select name="dialogueStyle">
+                    <option value="broadcast">Broadcast</option>
+                    <option value="conversation">Conversation</option>
+                  </select>
+                </label>
+                <label>
+                  Primary voice
+                  <select name="primaryVoice">
+                    <option value="af_heart" data-gender="Female">Warm and engaging</option>
+                    <option value="bf_emma" data-gender="Female">Clear and analytical</option>
+                    <option value="af_bella" data-gender="Female">Polished and expressive</option>
+                    <option value="am_michael" data-gender="Male">Warm and engaging</option>
+                    <option value="am_eric" data-gender="Male">Clear and analytical</option>
+                    <option value="am_puck" data-gender="Male">Polished and expressive</option>
+                  </select>
+                </label>
+                <label>
+                  Primary tone
+                  <select name="primaryTone">
+                    <option value="warm">Warm</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="dry_wit">Dry wit</option>
+                    <option value="fun">Fun</option>
+                    <option value="formal">Very formal</option>
+                  </select>
+                </label>
+                <label data-secondary-control>
+                  Secondary voice
+                  <select name="secondaryVoice">
+                    <option value="af_heart" data-gender="Female">Warm and engaging</option>
+                    <option value="bf_emma" data-gender="Female">Clear and analytical</option>
+                    <option value="af_bella" data-gender="Female">Polished and expressive</option>
+                    <option value="am_michael" data-gender="Male">Warm and engaging</option>
+                    <option value="am_eric" data-gender="Male">Clear and analytical</option>
+                    <option value="am_puck" data-gender="Male">Polished and expressive</option>
+                  </select>
+                </label>
+                <label data-secondary-control>
+                  Secondary tone
+                  <select name="secondaryTone">
+                    <option value="dry_wit">Dry wit</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="warm">Warm</option>
+                    <option value="fun">Fun</option>
+                    <option value="formal">Very formal</option>
+                  </select>
+                </label>
+                <label>
+                  Episode date
+                  <select name="dateMode">
+                    <option value="previous_day">Previous calendar day</option>
+                    <option value="today">Same calendar day</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="toggle-stack">
+              <label class="toggle-row">
+                <input name="enabled" type="checkbox" checked>
+                <span>Schedule enabled</span>
+              </label>
+            </div>
+            <p class="field-note publish-note">Verified cloud runs publish automatically.</p>
+            <div class="button-row">
+              <button class="primary-button" type="submit">SAVE SCHEDULE</button>
+              <button id="cancel-edit-button" class="ghost-button" type="button" hidden>
+                CANCEL EDIT
+              </button>
+            </div>
+          </form>
+
+          <aside class="console-card">
+            <div class="card-header">
+              <span>ACTIVE TASKS</span>
+              <span id="schedule-count">0</span>
+            </div>
+            <div id="schedule-list" class="schedule-list empty-state">
+              No schedules configured.
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="view-about" class="view" aria-labelledby="about-heading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">ABOUT // DARIO NOVELLI</p>
+            <h2 id="about-heading">Your morning signal, in three forms</h2>
+          </div>
+          <div class="version-chip">V4 WEB FOUNDATION</div>
+        </div>
+        <div class="about-grid">
+          <article class="console-card prose-card">
+            <h3>FROM NEWSLETTERS TO SIGNAL</h3>
+            <p>
+              I start with the newsletters you deliberately place in your chosen Gmail label.
+              I identify the useful reporting, connect the relevant developments, and turn it
+              into a clear morning brief. The goal is not to repeat your inbox: it is to help
+              you see what changed, why it matters, and what deserves your attention.
+            </p>
+          </article>
+          <article class="console-card prose-card">
+            <h3>GEN, PLAY, AND READ</h3>
+            <p>
+              In GEN, choose the label, hosts, editorial mood, and the sections that matter
+              to you. In PLAY, listen to the finished episode, follow the transcript, and open
+              its source references. In READ, scan the companion newspaper when a screen is
+              more useful than headphones.
+            </p>
+          </article>
+          <article class="console-card prose-card">
+            <h3>YOUR RHYTHM, YOUR EDITION</h3>
+            <p>
+              Generate an edition when you need one, or schedule recurring briefings around
+              your day. Each run can use its own name, newsletter label, voices, tone, and
+              section order, so a broad morning review and a focused specialist briefing can
+              live side by side without becoming the same show in different clothes.
+            </p>
+          </article>
+          <article class="console-card prose-card">
+            <h3>PRIVATE BY DESIGN</h3>
+            <p>
+              Your sign-in keeps this console personal. I work only with the label you choose,
+              and you can sign out whenever you are done. Install the app on an iPhone from
+              Safari using Share then Add to Home Screen; it will still ask you to sign in when
+              a new session begins.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <span><i class="signal-dot"></i> SECURE SESSION</span>
+        <span id="session-countdown">AUTO SIGN-OUT // 15:00</span>
+      </footer>
+    </div>
+
+    <script src="/cloud-clock-config.js?v=4.1.2"></script>
+    <script type="module" src="/app.js?v=4.1.2"></script>
+  </body>
+</html>

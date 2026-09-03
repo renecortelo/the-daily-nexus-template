@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audio-digest"
+version = "0.7.0"
+description = "The Daily Nexus zero-additional-cost newsletter-to-private-podcast pipeline."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Dario Novelli" }]
+dependencies = [
+  "beautifulsoup4>=4.12,<5",
+  "google-api-python-client>=2.160,<3",
+  "google-auth-httplib2>=0.2,<1",
+  "google-auth-oauthlib>=1.2,<2",
+  "keyring>=25,<26",
+  "pillow>=11,<12",
+  "pymupdf>=1.26,<2",
+  "reportlab>=4.4,<5",
+  "trafilatura>=2,<3",
+]
+
+[project.optional-dependencies]
+audio = [
+  "kokoro>=0.9.4,<1",
+  "misaki[en]>=0.9.4,<1",
+  "numpy>=2,<3",
+  "soundfile>=0.13,<1",
+]
+dev = [
+  "coverage>=7,<8",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+audiodigest = "audiodigest.cli:main"
+audiodigest-launcher = "audiodigest.launcher:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S603"]

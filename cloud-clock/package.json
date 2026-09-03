@@ -1,0 +1,9 @@
+{
+  "name": "the-daily-nexus-cloud-clock",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/schedule.js",
+    "test": "node test/schedule.test.mjs && node test/clock.test.mjs"
+  }
+}
