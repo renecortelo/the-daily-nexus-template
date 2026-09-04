@@ -13,6 +13,36 @@ It includes:
 - optional unattended generation with a private GitHub Actions runner and a
   timing-only Cloudflare Worker.
 
+Each successful run produces a narrated MP3, a synchronized transcript, source
+references, a reader-oriented PDF newspaper, preview images, metadata, and—when
+publishing is enabled—an updated private RSS feed.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Approved Gmail label] --> B[Newsletter bodies]
+    B --> C[Safe public-article enrichment]
+    C --> D[Antigravity editorial pipeline]
+    R[Optional date research] --> D
+    D --> E[Verified podcast script]
+    D --> F[Independent newspaper edition]
+    E --> G[Kokoro voices]
+    G --> H[FFmpeg MP3 and transcript timing]
+    F --> I[ReportLab PDF and PyMuPDF previews]
+    H --> J[Local episode archive]
+    I --> J
+    J -. optional .-> K[Firebase private RSS and web app]
+    L[Cloudflare timing-only clock] -. optional wake-up .-> M[Private GitHub Actions runner]
+    M -. runs the same pipeline .-> A
+```
+
+The model writes and checks editorial structures; it does not synthesize the
+voice. Kokoro generates speech, while the PDF renderer builds a separate
+reader-facing edition rather than copying the spoken script. See the
+[technical overview](docs/TECHNICAL_OVERVIEW.md) for the stages, boundaries,
+technology choices, and current limitations.
+
 ## Read this first
 
 This repository is a **public source template**. It contains no working account,
@@ -27,6 +57,15 @@ Each installation uses the operator's own Gmail, Google AI Pro/Antigravity,
 Firebase, GitHub, and Cloudflare accounts. Repository secrets are not copied by
 GitHub templates.
 
+| Component | Needed for | Where private authorization lives |
+| --- | --- | --- |
+| Gmail read-only OAuth | Newsletter collection | Operating-system credential vault |
+| Google AI Pro and Antigravity OAuth | Editorial generation and verification | Antigravity's operating-system keyring entry |
+| Kokoro and FFmpeg | Local speech and audio processing | No account credential |
+| Firebase Spark | Optional private web app, RSS, MP3, and PDF hosting | Local credential vault and private deployment settings |
+| Private GitHub repository | Optional unattended Linux generation | Encrypted repository secrets |
+| Cloudflare Free Worker | Optional schedule wake-up | Worker secrets; timing data only |
+
 | Goal | Stop after |
 | --- | --- |
 | Generate and play locally | Local desktop setup |
@@ -40,7 +79,12 @@ You may stop after any stage; the later services are optional.
 subscription plus the no-billing/free tiers of the other services. Those tiers
 have limits and can change. The application refuses known paid AI credentials,
 requires Antigravity AI-credit fallback to be off, and is designed to stop at a
-free-tier boundary rather than silently enable billing.
+free-tier boundary rather than silently enable billing. Operators must still
+verify the current [Firebase pricing](https://firebase.google.com/pricing),
+[GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
+and [Cloudflare Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
+before enabling automation. A spending budget is a guardrail, not a substitute
+for reviewing provider billing settings.
 
 ## Fastest setup: local desktop app
 
@@ -169,22 +213,20 @@ Follow the exact sequence in [private publishing setup](docs/PUBLISHING.md).
 
 ## Optional: private web app
 
-The web console requires the same Firebase project:
+The web console requires the same Firebase project. Complete these steps in the
+new private deployment repository, never in this public template:
 
 1. Enable Google in Firebase Authentication.
-2. Create the Firestore **Standard edition** `(default)` database and immediately
-   deploy the included owner-only rules while remaining on Spark.
-3. Add one document to the `owners` collection whose document ID is your
-   Firebase Authentication UID. A harmless field such as `active = true` is
-   enough; do not store an email or name there.
-4. Create a second Desktop OAuth client for the unattended Firebase owner
+2. Create the Firestore **Standard edition** `(default)` database while remaining
+   on Spark.
+3. Create a second Desktop OAuth client for the unattended Firebase owner
    session. Keep it distinct from the Gmail client and store it at:
 
    ```text
    %LOCALAPPDATA%\AudioDigest\secrets\client_secret_web_runner.json
    ```
 
-5. Put only your deployment values in the ignored `config.toml`:
+4. Put only your deployment values in the ignored `config.toml`:
 
    ```toml
    [web]
@@ -198,7 +240,24 @@ The web console requires the same Firebase project:
    poll_minutes = 5
    ```
 
-6. Authenticate the web runner, then deploy the web shell:
+5. Authenticate the Firebase CLI, deploy the owner-only Firestore rules, and
+   deploy the web shell. The cloud clock is optional at this stage:
+
+   ```powershell
+   .\scripts\authenticate-firebase.ps1
+
+   & "$env:LOCALAPPDATA\AudioDigest\node-tools\node_modules\.bin\firebase.cmd" `
+     deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
+
+   .\scripts\deploy-private-web-console.ps1 `
+     -ProjectId YOUR_FIREBASE_PROJECT_ID
+   ```
+
+6. Open the new `web.app` address and sign in once. Firebase Authentication now
+   lists that user and UID. In Firestore, add one document to the `owners`
+   collection whose document ID is exactly that UID. A harmless field such as
+   `active = true` is enough; do not store an email or name in the document.
+7. Authenticate the unattended owner session, then reload the web app:
 
    ```powershell
    & "$env:LOCALAPPDATA\AudioDigest\venv\Scripts\python.exe" `
@@ -296,6 +355,9 @@ syntax checks, Cloudflare tests, and Python tests on every push and pull request
 Maintainers should also follow the
 [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md); private deployment
 history must never be merged into this repository.
+
+For a verified component map and the exact eight-stage generation sequence, see
+[TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md).
 
 ## License and trademarks
 

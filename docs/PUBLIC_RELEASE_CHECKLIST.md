@@ -16,6 +16,11 @@ public history: commit metadata and deleted blobs can retain personal data.
 4. Confirm that all credential paths point outside the clone or to ignored files.
 5. Do not paste secret values into command arguments, logs, issues, or pull
    requests.
+6. Inspect binary artwork for EXIF, XMP, author, GPS, device, and filesystem
+   metadata. A text-only source scan cannot prove an image is clean.
+7. Follow the README once as a new operator would. Confirm every local link,
+   command, prerequisite, optional stopping point, and security warning is
+   accurate.
 
 ## Verify before committing
 
@@ -54,6 +59,12 @@ After committing, run both full-history checks:
 gitleaks git . --redact --no-banner
 ```
 
+Do not use GitHub's merge or squash button for the final public commit when the
+account profile contains a personal display name. GitHub can write that name
+into commit metadata even when the source branch is neutral. Push the neutral
+candidate branch, wait for its required checks, and then fast-forward `main` to
+that already-checked commit.
+
 ## Publish safely
 
 1. Push the candidate to a new **private** repository first.
@@ -68,6 +79,10 @@ gitleaks git . --redact --no-banner
 6. Manually dispatch public readiness once more after the visibility change;
    this creates and verifies the public status-check context.
 7. Mark the repository as a template only after the public check succeeds.
+8. Enable secret scanning, push protection, dependency security updates, and
+   CodeQL. Confirm there are no open code, secret, or dependency alerts.
+9. Protect the default branch against force pushes and deletion, and require the
+   public readiness and CodeQL checks before changes are accepted.
 
 If any scan fails, keep the remote private. Revoke any real credential that may
 have entered Git; deleting the file or rewriting history alone is insufficient.

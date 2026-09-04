@@ -4,9 +4,10 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')]
     [string]$ProjectId,
 
-    [Parameter(Mandatory = $true)]
-    [ValidatePattern('^https://[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.workers\.dev/?$')]
-    [string]$CloudClockUrl
+    [ValidateScript({
+        $_ -eq '' -or $_ -match '^https://[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.workers\.dev/?$'
+    })]
+    [string]$CloudClockUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'

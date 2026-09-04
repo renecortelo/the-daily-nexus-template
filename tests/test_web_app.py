@@ -156,3 +156,11 @@ class WebAppSecurityTests(TestCase):
                 _copy_static_web_app(project, public)
             config = (public / "cloud-clock-config.js").read_text(encoding="utf-8")
             self.assertIn("https://private-clock.example.workers.dev", config)
+
+    def test_web_console_can_be_deployed_before_cloud_clock_setup(self):
+        source = Path("scripts/deploy-private-web-console.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("[string]$CloudClockUrl = ''", source)
+        self.assertIn("$_ -eq '' -or $_ -match", source)
