@@ -125,7 +125,7 @@ linked.
 
 ## 6. Run the safety doctor
 
-Open **The Daily Nexus** and press **Check setup**. For command-line
+Open **The Daily Nexus** and press **DOCTOR** in the SYSTEM panel. For command-line
 troubleshooting:
 
 ```powershell

@@ -19,23 +19,7 @@ publishing is enabled—an updated private RSS feed.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[Approved Gmail label] --> B[Newsletter bodies]
-    B --> C[Safe public-article enrichment]
-    C --> D[Antigravity editorial pipeline]
-    R[Optional date research] --> D
-    D --> E[Verified podcast script]
-    D --> F[Independent newspaper edition]
-    E --> G[Kokoro voices]
-    G --> H[FFmpeg MP3 and transcript timing]
-    F --> I[ReportLab PDF and PyMuPDF previews]
-    H --> J[Local episode archive]
-    I --> J
-    J -. optional .-> K[Firebase private RSS and web app]
-    L[Cloudflare timing-only clock] -. optional wake-up .-> M[Private GitHub Actions runner]
-    M -. runs the same pipeline .-> A
-```
+![Four phases run left to right: Collect reads the approved Gmail label and allowed public pages; Editorial extracts stories, drafts the host script and fact-checks it; the run then splits into two independent tracks, a Read edition and a Listen track; Deliver stages the episode locally and can publish a private feed. An optional band shows the same run happening unattended.](assets/diagram-pipeline.svg)
 
 The model writes and checks editorial structures; it does not synthesize the
 voice. Kokoro generates speech, while the PDF renderer builds a separate
@@ -180,7 +164,7 @@ The authentication helpers also set these privacy preferences in the user's
 global Antigravity and Firebase CLI configuration, so the same opt-outs apply
 outside this clone until the user changes them.
 
-Open **The Daily Nexus**, run **Check setup**, and make the first episode a
+Open **The Daily Nexus**, run **DOCTOR** in the SYSTEM panel, and make the first episode a
 local-only test. Generated files stay under
 `%LOCALAPPDATA%\AudioDigest\episodes`.
 
@@ -306,16 +290,10 @@ Use the detailed guides in this order:
 
 ## Privacy boundaries
 
-The application deliberately separates the data paths:
+The application deliberately separates the data paths. Each service you connect
+sees only a narrow slice of the run:
 
-```text
-approved Gmail label
-  -> newsletter text and allowed public pages
-  -> isolated Antigravity request
-  -> verified script + independent newspaper
-  -> local Kokoro audio + local PDF rendering
-  -> optional static private feed
-```
+![Raw newsletters, OAuth grants, local configuration, the verified script and the rendered archive stay on your machine. Across the trust boundary, Gmail sees a query for the configured label, public websites see an ordinary HTTPS request, Antigravity sees the selected source text, Firebase sees the finished media, GitHub sees encrypted secrets, and Cloudflare sees opaque schedule IDs and times only.](assets/diagram-trust-boundary.svg)
 
 - The Gmail OAuth grant is mailbox-wide read-only access. Application logic
   queries only the configured label. A trusted repository writer could modify a

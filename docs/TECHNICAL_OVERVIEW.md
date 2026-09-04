@@ -7,55 +7,7 @@ reading surface; it does not perform model inference in the browser.
 
 ## System architecture
 
-```mermaid
-flowchart TB
-    subgraph Input[Operator-controlled inputs]
-        GL[Gmail label]
-        P[Episode parameters]
-        DR[Optional date research]
-    end
-
-    subgraph Generation[Python generation pipeline]
-        COL[Collect and sanitize evidence]
-        AG[Antigravity structured editorial calls]
-        QC[Schema, coverage, fact, and repetition checks]
-        TTS[Kokoro multi-voice synthesis]
-        AUD[FFmpeg assembly and normalization]
-        PDF[ReportLab newspaper rendering]
-        PNG[PyMuPDF page previews]
-    end
-
-    subgraph Local[Private runtime state]
-        SQL[SQLite state]
-        FILES[MP3, transcript, PDF, previews, and manifest]
-        VAULT[Operating-system credential vault]
-    end
-
-    subgraph OptionalCloud[Optional per-user private deployment]
-        WEB[Firebase Hosting PWA and private RSS]
-        FS[Owner-locked Firestore queue and metadata]
-        GH[Private GitHub Actions runner]
-        CF[Cloudflare timing-only Durable Object]
-    end
-
-    GL --> COL
-    P --> COL
-    DR --> COL
-    COL --> AG
-    AG --> QC
-    QC --> TTS
-    QC --> PDF
-    TTS --> AUD
-    PDF --> PNG
-    AUD --> FILES
-    PNG --> FILES
-    SQL <--> Generation
-    VAULT -. authorizes .-> Generation
-    FILES -. optional publish .-> WEB
-    FS --> GH
-    CF -. due-time dispatch .-> GH
-    GH --> Generation
-```
+![Operator inputs feed a Python generation runtime that runs on a Windows desktop or an ephemeral Linux runner: collect and sanitize, Antigravity calls, quality gates, then Kokoro and FFmpeg for audio and ReportLab and PyMuPDF for the newspaper. All state stays in private local storage. An optional per-operator deployment adds a Cloudflare timing-only clock, a private GitHub Actions runner, an owner-locked Firestore queue and Firebase Hosting.](../assets/diagram-architecture.svg)
 
 Every deployment belongs to one operator. Sharing the source means another
 operator creates a separate private repository, credentials, Firebase project,
@@ -103,7 +55,7 @@ must also succeed.
 | Core application | Python 3.11+ | Pipeline orchestration, validation, storage, publishing, and desktop UI |
 | Gmail access | Google Gmail API and OAuth 2.0 | Mailbox-wide read-only grant; application query is restricted to the configured label |
 | Editorial model access | Google Antigravity CLI with Google OAuth | Uses an existing Google AI Pro allowance; paid API keys and AI-credit fallback are rejected |
-| Speech | Kokoro, PyTorch, Misaki, espeak-ng | Local or ephemeral-runner voice synthesis |
+| Speech | Kokoro, PyTorch, and Misaki | Local or ephemeral-runner voice synthesis |
 | Audio | FFmpeg and SoundFile | Assembly, encoding, loudness normalization, and playback transformations |
 | Newspaper | ReportLab, Pillow, and PyMuPDF | PDF layout, bundled graphics, and page previews |
 | Local state | SQLite and filesystem manifests | Run state, episode inventory, checksums, transcripts, and generated media |
