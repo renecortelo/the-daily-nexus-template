@@ -7,7 +7,7 @@ import json
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
 
 BLOCKED_LINK_TERMS = (
     "unsubscribe",
@@ -188,10 +188,17 @@ def normalize_url(value: str) -> str:
         for key, val in parse_qsl(parts.query, keep_blank_values=True)
         if not key.lower().startswith("utm_") and key.lower() not in TRACKING_PARAMETERS
     ]
-    netloc = parts.hostname.lower()
+    try:
+        hostname = parts.hostname.encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        return ""
+    netloc = f"[{hostname}]" if ":" in hostname else hostname
     if parts.port and parts.port != 443:
         netloc = f"{netloc}:{parts.port}"
-    path = re.sub(r"/{2,}", "/", parts.path or "/")
+    path = quote(
+        re.sub(r"/{2,}", "/", parts.path or "/"),
+        safe="/%:@!$&'()*+,;=-._~",
+    )
     return urlunsplit(("https", netloc, path, urlencode(query, doseq=True), ""))
 
 

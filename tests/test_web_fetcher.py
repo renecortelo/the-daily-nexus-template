@@ -74,6 +74,23 @@ class WebFetcherTests(TestCase):
             fetcher.fetch("https://example.test/story")
 
     @patch("audiodigest.web_fetcher.assert_public_https_url")
+    def test_accented_article_path_is_ascii_encoded_before_open(self, _assert_safe):
+        fetcher = SafeArticleFetcher(ArticleSettings())
+        fetcher.opener = MagicMock()
+        fetcher.opener.open.side_effect = UnicodeEncodeError(
+            "ascii", "cafè", 3, 4, "ordinal not in range"
+        )
+
+        with (
+            patch.object(fetcher, "_allowed_by_robots", return_value=True),
+            self.assertRaisesRegex(ArticleFetchError, "could not be encoded safely"),
+        ):
+            fetcher.fetch("https://example.test/cafè")
+
+        request = fetcher.opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, "https://example.test/caf%C3%A8")
+
+    @patch("audiodigest.web_fetcher.assert_public_https_url")
     def test_mid_download_timeout_is_reported_as_article_fetch_error(self, _assert_safe):
         response = MagicMock()
         response.headers.get_content_type.return_value = "text/html"

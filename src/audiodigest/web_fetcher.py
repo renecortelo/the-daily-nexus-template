@@ -107,7 +107,7 @@ class SafeArticleFetcher:
             if exc.code in {401, 403}:
                 return False
             return True
-        except (OSError, urllib.error.URLError, http.client.HTTPException):
+        except (OSError, urllib.error.URLError, http.client.HTTPException, UnicodeError):
             return True
         try:
             with response:
@@ -168,6 +168,8 @@ class SafeArticleFetcher:
                 raise ArticleFetchError(f"HTTP {exc.code}") from exc
             except urllib.error.URLError as exc:
                 raise ArticleFetchError(str(exc.reason)) from exc
+            except UnicodeError as exc:
+                raise ArticleFetchError("article URL could not be encoded safely") from exc
             except (OSError, http.client.HTTPException) as exc:
                 raise ArticleFetchError(_network_error_message(exc)) from exc
             try:

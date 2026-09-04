@@ -33,6 +33,14 @@ class ContentTests(TestCase):
         self.assertEqual(normalize_url("http://example.com/story"), "")
         self.assertEqual(normalize_url("mailto:test@example.com"), "")
 
+    def test_normalize_url_encodes_internationalized_host_and_path(self):
+        result = normalize_url("https://notícies.example/cafè/última-hora?q=àmbit")
+
+        self.assertEqual(
+            result,
+            "https://xn--notcies-9ya.example/caf%C3%A8/%C3%BAltima-hora?q=%C3%A0mbit",
+        )
+
     def test_editorial_links_rank_headlines_over_footer(self):
         value = """
         <a href="https://example.com/">Home</a>
