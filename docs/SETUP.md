@@ -4,6 +4,7 @@
 
 Install on the Windows machine:
 
+- Git.
 - Python 3.11 or newer, with Python 3.12 recommended.
 - Node.js 20 or newer.
 - uv, the free Python package installer.

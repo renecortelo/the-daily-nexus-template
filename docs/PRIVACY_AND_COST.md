@@ -38,6 +38,11 @@ Manager, not project files. The desktop launcher can sign in or disconnect. Disc
 requests revocation at Google's fixed OAuth endpoint and then removes both local values even if
 the network request cannot be confirmed.
 
+Firebase CLI authorization is separate: its refresh token lives outside the repository in the
+Firebase CLI's per-user configuration directory, not in the application's credential-vault
+entries. Treat that profile file as secret, never copy it into the project, and use Firebase CLI
+sign-out or provider revocation when the grant is no longer needed.
+
 ## Antigravity isolation
 
 - Google OAuth is required; a Google Cloud project, API key, or Vertex credential is forbidden.

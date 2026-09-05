@@ -77,8 +77,10 @@ must also succeed.
   scope is mailbox-wide. The application enforces the selected label in code;
   deployment repository write access must therefore remain tightly controlled.
 - Gmail, Antigravity, Firebase, GitHub, and Cloudflare credentials never belong
-  in source control. Local grants use operating-system credential storage;
-  unattended grants use encrypted secrets in the operator's private repository.
+  in source control. Gmail uses operating-system credential storage,
+  Antigravity uses its own keyring, and the Firebase CLI keeps its refresh token
+  in per-user configuration outside the repository. Unattended grants use
+  encrypted secrets in the operator's private repository.
 - Encrypted GitHub Actions secrets remain stored until the operator rotates or
   deletes them. During a run, the GitHub-hosted machine temporarily handles
   selected newsletter evidence, editorial drafts, generated media, and

@@ -50,9 +50,9 @@ GitHub templates.
 | Gmail read-only OAuth | Newsletter collection | Operating-system credential vault |
 | Google AI Pro and Antigravity OAuth | Editorial generation and verification | Antigravity's operating-system keyring entry |
 | Kokoro and FFmpeg | Local speech and audio processing | No account credential |
-| Firebase Spark | Optional private web app, RSS, MP3, and PDF hosting | Local credential vault and private deployment settings |
+| Firebase Spark | Optional private web app, RSS, MP3, and PDF hosting | Firebase CLI per-user configuration, operating-system credential vault, and ignored private deployment settings |
 | Private GitHub repository | Optional unattended Linux generation | Encrypted repository secrets |
-| Cloudflare Free Worker | Optional schedule wake-up | Worker secrets; timing data only |
+| Cloudflare Free Worker | Optional schedule wake-up | Worker secret storage and timing projections; short-lived Firebase ID token only in transit |
 
 | Goal | Stop after |
 | --- | --- |

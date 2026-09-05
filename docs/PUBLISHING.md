@@ -215,9 +215,10 @@ To stop all uploads immediately:
 
 ## Free-tier guardrails
 
-Firebase Hosting currently includes 10 GB of storage and 10 GB per month of
-data transfer at no cost. V3 adds a more conservative local 1 GB hosted-tree
-limit. On Spark, the project has no billing configuration; Firebase can stop
+Firebase Hosting's Spark plan includes limited no-cost storage and data
+transfer, but provider quotas can change. V3 adds a more conservative local
+1 GB hosted-tree limit. Confirm the current official quota at the link below
+before enabling publishing. With Cloud Billing unlinked, Firebase can stop
 serving after a quota is exhausted instead of billing for overage.
 
 Never solve a quota warning by linking billing or upgrading to Blaze. Retain
