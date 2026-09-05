@@ -4,6 +4,17 @@ from unittest import TestCase
 
 
 class CloudWorkflowTests(TestCase):
+    def test_public_readiness_audits_the_pr_head_not_githubs_merge_commit(self):
+        workflow = Path(".github/workflows/public-readiness.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+        )
+        self.assertIn("--history --strict-metadata", workflow)
+
     def test_generation_secrets_exist_only_after_dependency_installation(self):
         workflow = Path(
             ".github/workflows/private-cloud-runner.yml"

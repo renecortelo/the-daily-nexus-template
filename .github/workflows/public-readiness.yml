@@ -17,6 +17,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          # GitHub's temporary PR merge commit has account-profile metadata
+          # that is not part of the public candidate. Audit the contributor's
+          # real head history; strict branch protection still requires it to be
+          # current with main before merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
