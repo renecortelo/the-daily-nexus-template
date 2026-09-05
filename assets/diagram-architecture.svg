@@ -1,118 +1,126 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="arch-title arch-desc">
-  <title id="arch-title">The Daily Nexus system architecture</title>
-  <desc id="arch-desc">Operator-controlled inputs feed a Python generation runtime that runs either on a Windows desktop or on an ephemeral Linux runner. The runtime collects and sanitizes evidence, calls Antigravity for editorial work, then applies quality gates whose approved output feeds two separate renderers: Kokoro and FFmpeg for audio, and ReportLab and PyMuPDF for the newspaper. All state stays in private local storage: SQLite, episode files, and the operating-system credential vault. An optional per-operator private deployment adds a Cloudflare timing-only clock that wakes a private GitHub Actions runner, an owner-locked Firestore queue the runner reads and writes, and Firebase Hosting that the runner publishes to.</desc>
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1181" width="380" height="1181" role="img" aria-labelledby="arch-t arch-d">
+  <title id="arch-t">The Daily Nexus system architecture</title>
+  <desc id="arch-d">A per-operator deployment, not a shared hosted service. The operator works from a Windows desktop application or an authenticated progressive web app. Control plane: the web app signs in through Firebase Authentication, reads and writes owner-locked Firestore, and synchronizes schedules or an immediate GEN wake-up with a Cloudflare Worker, whose Durable Object clock dispatches a GitHub Actions workflow in the operator's private repository when work is due. Content plane: generation runs either in the local Python runtime on Windows or in a GitHub-hosted Ubuntu Actions job, performing Gmail read-only collection, safe public-page enrichment, remote Antigravity editorial inference, quality validation, Kokoro and FFmpeg audio production, and ReportLab and PyMuPDF newspaper production. Desktop runs keep SQLite and filesystem state locally, while the Actions job claims and loads its work from Firestore. Publication goes to static Firebase Hosting, which serves the progressive web app shell and the capability-protected Apple Podcasts-compatible feed and media. After authentication the browser receives owner-scoped settings, status, references, transcript data and private media URLs, never generation credentials or raw Gmail bodies.</desc>
   <defs>
-    <marker id="ar" viewBox="0 0 9 9" refX="8.4" refY="4.5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-      <path d="M0.4,0.7 L8.4,4.5 L0.4,8.3 Z" fill="#f28c18"/>
-    </marker>
+    <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.45" stop-color="#ffb43b"/><stop offset="1" stop-color="#e0620f"/></linearGradient>
+    <clipPath id="sc"><circle cx="0" cy="0" r="14.2"/></clipPath>
+    <marker id="ar" viewBox="0 0 9 9" refX="8.4" refY="4.5" markerWidth="7.5" markerHeight="7.5" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0.4,0.7 L8.4,4.5 L0.4,8.3 Z" fill="#f28c18"/></marker>
+    <marker id="ac" viewBox="0 0 9 9" refX="8.4" refY="4.5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0.4,0.7 L8.4,4.5 L0.4,8.3 Z" fill="#b99160"/></marker>
+    <g id="sun">
+      <circle cx="0" cy="0" r="16.5" fill="#0d0805" stroke="#f28c18" stroke-width="1.5"/>
+      <g clip-path="url(#sc)">
+        <circle cx="0" cy="0.5" r="11.5" fill="url(#sg)"/>
+        <rect x="-15" y="2.2" width="30" height="1.5" fill="#0d0805"/>
+        <rect x="-15" y="5.6" width="30" height="1.9" fill="#0d0805"/>
+        <rect x="-15" y="9.4" width="30" height="2.3" fill="#0d0805"/>
+        <line x1="-15" y1="-1.6" x2="15" y2="-1.6" stroke="#ffb43b" stroke-width="1"/>
+      </g>
+      <circle cx="-13.6" cy="-1.6" r="1.7" fill="#ffb43b"/>
+      <circle cx="13.6" cy="-1.6" r="1.7" fill="#ffb43b"/>
+    </g>
     <style>
-      .dsp { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Narrow", sans-serif; letter-spacing: 0.045em; fill: #fff0c7; }
-      .mono { font-family: Consolas, "Courier New", monospace; letter-spacing: 0.08em; }
-      .wire { fill: none; stroke: #f28c18; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      .dsp { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Narrow", sans-serif; letter-spacing: 0.04em; }
+      .h { font-family: Consolas, "DejaVu Sans Mono", "Courier New", monospace; font-weight: 700; letter-spacing: 0.06em; }
+      .k { font-family: Consolas, "DejaVu Sans Mono", "Courier New", monospace; letter-spacing: 0.06em; }
+      .b { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      .acc { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      .wire { fill: none; stroke: #f28c18; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+      .ctl { fill: none; stroke: #b99160; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
-
-  <rect width="960" height="640" fill="#110b07"/>
-
-  <image x="28" y="20" width="40" height="40" href="data:image/png;base64,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"/>
-  <text class="dsp" x="80" y="36" font-size="20">THE DAILY NEXUS</text>
-  <text class="mono" x="81" y="54" font-size="9" letter-spacing="0.2em" fill="#b99160">SYSTEM ARCHITECTURE</text>
-  <line x1="26" y1="74" x2="934" y2="74" stroke="#70401f" stroke-width="1"/>
-
-  <!-- ZONE A: OPERATOR INPUTS -->
-  <rect x="26" y="94" width="180" height="206" rx="11" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="42" y="118" font-size="9" letter-spacing="0.18em" fill="#ffb43b">OPERATOR INPUTS</text>
-  <line x1="42" y1="126" x2="190" y2="126" stroke="#70401f"/>
-  <rect x="42" y="136" width="148" height="44" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="56" y="156" font-size="8.5" font-weight="700" fill="#f4e2b8">GMAIL LABEL</text>
-  <text class="mono" x="56" y="170" font-size="7.5" fill="#b99160">the exact approved label</text>
-  <rect x="42" y="188" width="148" height="44" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="56" y="208" font-size="8.5" font-weight="700" fill="#f4e2b8">EPISODE SETTINGS</text>
-  <text class="mono" x="56" y="222" font-size="7.5" fill="#b99160">date, sections, hosts</text>
-  <rect x="42" y="240" width="148" height="44" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="56" y="260" font-size="8.5" font-weight="700" fill="#f4e2b8">DATE RESEARCH</text>
-  <text class="mono" x="56" y="274" font-size="7.5" fill="#b99160">optional and sourced</text>
-
-  <!-- ZONE B: GENERATION RUNTIME -->
-  <rect x="226" y="94" width="708" height="206" rx="11" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="246" y="118" font-size="9" letter-spacing="0.18em" fill="#ffb43b">GENERATION RUNTIME — PYTHON</text>
-  <text class="mono" x="914" y="118" font-size="8" fill="#b99160" text-anchor="end">WINDOWS DESKTOP, OR AN EPHEMERAL LINUX RUNNER</text>
-  <line x1="246" y1="126" x2="914" y2="126" stroke="#70401f"/>
-
-  <rect x="246" y="140" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="260" y="160" font-size="9" font-weight="700" fill="#f4e2b8">COLLECT + SANITIZE</text>
-  <text class="mono" x="260" y="174" font-size="7.8" fill="#b99160">unwrap, filter, fetch public text</text>
-  <rect x="474" y="140" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="488" y="160" font-size="9" font-weight="700" fill="#f4e2b8">ANTIGRAVITY CALLS</text>
-  <text class="mono" x="488" y="174" font-size="7.8" fill="#b99160">stories, script, newspaper copy</text>
-  <rect x="702" y="140" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="716" y="160" font-size="9" font-weight="700" fill="#f4e2b8">QUALITY GATES</text>
-  <text class="mono" x="716" y="174" font-size="7.8" fill="#b99160">schema, coverage, facts, repeats</text>
-
-  <rect x="246" y="212" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="260" y="232" font-size="9" font-weight="700" fill="#f4e2b8">KOKORO VOICES</text>
-  <text class="mono" x="260" y="246" font-size="7.8" fill="#b99160">local speech, one pass per host</text>
-  <rect x="474" y="212" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="488" y="232" font-size="9" font-weight="700" fill="#f4e2b8">FFMPEG ASSEMBLY</text>
-  <text class="mono" x="488" y="246" font-size="7.8" fill="#b99160">join, normalize, encode, probe</text>
-  <rect x="702" y="212" width="210" height="46" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="716" y="232" font-size="9" font-weight="700" fill="#f4e2b8">REPORTLAB + PYMUPDF</text>
-  <text class="mono" x="716" y="246" font-size="7.8" fill="#b99160">newspaper PDF and previews</text>
-
-  <path class="wire" d="M 458 163 L 472 163" marker-end="url(#ar)"/>
-  <path class="wire" d="M 686 163 L 700 163" marker-end="url(#ar)"/>
-  <path class="wire" d="M 807 188 L 807 199 L 351 199 L 351 210" marker-end="url(#ar)"/>
-  <path class="wire" d="M 807 199 L 807 210" marker-end="url(#ar)"/>
-  <path class="wire" d="M 458 235 L 472 235" marker-end="url(#ar)"/>
-  <text class="mono" x="912" y="278" font-size="7.8" fill="#b99160" text-anchor="end">Approved output feeds both renderers; the spoken script is never reused as newspaper copy.</text>
-
-  <!-- ZONE C: PRIVATE LOCAL STATE -->
-  <rect x="26" y="320" width="908" height="100" rx="11" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="42" y="344" font-size="9" letter-spacing="0.18em" fill="#ffb43b">PRIVATE LOCAL STATE — NEVER COMMITTED, NEVER SENT TO A THIRD PARTY</text>
-  <line x1="42" y1="352" x2="918" y2="352" stroke="#70401f"/>
-  <rect x="42" y="360" width="277" height="48" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="56" y="380" font-size="9" font-weight="700" fill="#f4e2b8">SQLITE STATE</text>
-  <text class="mono" x="56" y="395" font-size="7.8" fill="#b99160">runs, episodes, checksums, duplicate claims</text>
-  <rect x="341" y="360" width="277" height="48" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="355" y="380" font-size="9" font-weight="700" fill="#f4e2b8">EPISODE FILES</text>
-  <text class="mono" x="355" y="395" font-size="7.8" fill="#b99160">MP3, transcript, PDF, previews, manifest</text>
-  <rect x="640" y="360" width="277" height="48" rx="7" fill="#2d190e" stroke="#70401f"/>
-  <text class="mono" x="654" y="380" font-size="9" font-weight="700" fill="#f4e2b8">OS CREDENTIAL VAULT</text>
-  <text class="mono" x="654" y="395" font-size="7.8" fill="#b99160">Gmail, Antigravity and Firebase grants</text>
-
-  <!-- ZONE D: OPTIONAL DEPLOYMENT -->
-  <rect x="26" y="440" width="908" height="160" rx="11" fill="#1a0f08" stroke="#70401f" stroke-dasharray="4 4"/>
-  <text class="mono" x="42" y="464" font-size="9" letter-spacing="0.18em" fill="#ffb43b">OPTIONAL — ONE PRIVATE DEPLOYMENT PER OPERATOR</text>
-  <text class="mono" x="918" y="464" font-size="8" fill="#b99160" text-anchor="end">SEPARATE ACCOUNTS, SEPARATE PRIVATE REPOSITORY</text>
-  <line x1="42" y1="472" x2="918" y2="472" stroke="#70401f"/>
-  <rect x="42" y="482" width="204" height="66" rx="7" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="56" y="502" font-size="8.8" font-weight="700" fill="#f4e2b8">CLOUDFLARE CLOCK</text>
-  <text class="mono" x="56" y="518" font-size="7.8" fill="#b99160">durable-object alarms holding</text>
-  <text class="mono" x="56" y="530" font-size="7.8" fill="#b99160">opaque IDs and timing only</text>
-  <rect x="266" y="482" width="204" height="66" rx="7" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="280" y="502" font-size="8.8" font-weight="700" fill="#f4e2b8">GITHUB ACTIONS</text>
-  <text class="mono" x="280" y="518" font-size="7.8" fill="#b99160">ephemeral Ubuntu job with</text>
-  <text class="mono" x="280" y="530" font-size="7.8" fill="#b99160">encrypted secrets, 60-min cap</text>
-  <rect x="490" y="482" width="204" height="66" rx="7" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="504" y="502" font-size="8.8" font-weight="700" fill="#f4e2b8">FIRESTORE</text>
-  <text class="mono" x="504" y="518" font-size="7.8" fill="#b99160">owner-locked queue, schedules</text>
-  <text class="mono" x="504" y="530" font-size="7.8" fill="#b99160">and episode metadata</text>
-  <rect x="714" y="482" width="204" height="66" rx="7" fill="#21130c" stroke="#70401f"/>
-  <text class="mono" x="728" y="502" font-size="8.8" font-weight="700" fill="#f4e2b8">FIREBASE HOSTING</text>
-  <text class="mono" x="728" y="518" font-size="7.8" fill="#b99160">app shell, private RSS, MP3</text>
-  <text class="mono" x="728" y="530" font-size="7.8" fill="#b99160">and PDF delivery</text>
-
-  <path class="wire" d="M 248 515 L 264 515" marker-end="url(#ar)"/>
-  <path class="wire" d="M 474 515 L 488 515" marker-start="url(#ar)" marker-end="url(#ar)"/>
-  <path class="wire" d="M 368 550 L 368 568 L 816 568 L 816 552" marker-end="url(#ar)"/>
-  <text class="mono" x="592" y="564" font-size="7.5" fill="#b99160" text-anchor="middle">publishes, then re-verifies the live feed</text>
-  <text class="mono" x="42" y="588" font-size="7.8" fill="#b99160">Only a due schedule or an explicit request wakes the runner. It reads and writes the owner-only queue, runs the same runtime shown above, then publishes.</text>
-
-  <!-- CROSS-ZONE FLOW -->
-  <path class="wire" d="M 208 197 L 222 197" marker-end="url(#ar)"/>
-  <path class="wire" d="M 580 302 L 580 316" marker-start="url(#ar)" marker-end="url(#ar)"/>
-  <path class="wire" d="M 580 422 L 580 436" marker-end="url(#ar)"/>
-  <text class="mono" x="590" y="313" font-size="7.5" fill="#b99160">reads and writes every run</text>
-  <text class="mono" x="590" y="433" font-size="7.5" fill="#b99160">optional publish</text>
+  <rect width="380" height="1181" fill="#110b07"/>
+  <use href="#sun" x="34" y="36"/>
+  <text class="dsp" x="60" y="31" font-size="17" fill="#fff0c7">THE DAILY NEXUS</text>
+  <text class="k" x="61" y="46" font-size="8" fill="#b99160">SYSTEM ARCHITECTURE / ONE OPERATOR</text>
+  <line x1="16" y1="60" x2="364" y2="60" stroke="#70401f"/>
+  <text class="k" x="18" y="82.5" font-size="8.5" fill="#ffb43b">OPERATOR</text>
+  <rect x="16" y="89.5" width="166" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="110" font-size="11" fill="#f4e2b8">DESKTOP APP</text>
+  <text class="b" x="29" y="122.6" font-size="9" fill="#b99160">Windows. Runs generation locally.</text>
+  <rect x="198" y="89.5" width="166" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="211" y="110" font-size="11" fill="#f4e2b8">WEB APP</text>
+  <text class="b" x="211" y="122.6" font-size="9" fill="#b99160">Browser or iPhone. Signed-in</text>
+  <text class="b" x="211" y="135.2" font-size="9" fill="#b99160">console.</text>
+  <text class="b" x="18" y="163.8" font-size="8.6" fill="#b99160">One operator, one private deployment: separate accounts, separate private repository.</text>
+  <text class="b" x="18" y="175.8" font-size="8.6" fill="#b99160">There is no shared multi-user service.</text>
+  <text class="k" x="18" y="197.7" font-size="8.5" fill="#b99160">CONTROL PLANE / SCHEDULING</text>
+  <rect x="26" y="208.7" width="328" height="45.1" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="39" y="229.2" font-size="11" fill="#f4e2b8">FIREBASE AUTH</text>
+  <text class="b" x="39" y="241.8" font-size="9" fill="#b99160">Google sign-in. The Firebase UID must match the owner document.</text>
+  <path class="ctl" d="M 190 254.8 L 190 264.8" marker-end="url(#ac)"/>
+  <rect x="26" y="266.8" width="328" height="57.7" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="39" y="287.3" font-size="11" fill="#f4e2b8">OWNER-LOCKED FIRESTORE</text>
+  <text class="b" x="39" y="299.9" font-size="9" fill="#b99160">Settings, schedules, queue and execution state, runner status, episode</text>
+  <text class="b" x="39" y="312.5" font-size="9" fill="#b99160">metadata. The Actions job claims and loads its work here.</text>
+  <path class="ctl" d="M 190 325.5 L 190 335.5" marker-end="url(#ac)"/>
+  <rect x="26" y="337.5" width="328" height="57.7" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="39" y="358" font-size="11" fill="#f4e2b8">CLOUDFLARE WORKER + CLOCK</text>
+  <text class="b" x="39" y="370.6" font-size="9" fill="#b99160">Durable Object: schedule timing and opaque IDs.</text>
+  <text class="b" x="39" y="383.2" font-size="9" fill="#b99160">Worker: the scoped, expiring dispatch token.</text>
+  <path class="ctl" d="M 190 396.2 L 190 406.2" marker-end="url(#ac)"/>
+  <rect x="26" y="408.2" width="328" height="45.1" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="39" y="428.7" font-size="11" fill="#f4e2b8">GITHUB ACTIONS / PRIVATE REPO</text>
+  <text class="b" x="39" y="441.3" font-size="9" fill="#b99160">Workflow dispatched only for due work or a GEN wake-up.</text>
+  <rect x="16" y="204.7" width="348" height="260.6" rx="8" fill="none" stroke="#70401f" stroke-dasharray="4 3"/>
+  <text class="k" x="18" y="489.8" font-size="8.5" fill="#ffb43b">CONTENT PLANE / GENERATION RUNTIME</text>
+  <rect x="16" y="496.8" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="517.3" font-size="11" fill="#f4e2b8">WINDOWS DESKTOP</text>
+  <text class="b" x="29" y="529.9" font-size="9" fill="#b99160">Local Python runtime.</text>
+  <rect x="198" y="496.8" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="211" y="517.3" font-size="11" fill="#f4e2b8">GITHUB-HOSTED JOB</text>
+  <text class="b" x="211" y="529.9" font-size="9" fill="#b99160">Ephemeral Ubuntu, private repo.</text>
+  <path class="wire" d="M 99 542.9 L 99 554.9"/>
+  <path class="wire" d="M 281 542.9 L 281 554.9"/>
+  <path class="wire" d="M 99 554.9 L 281 554.9"/>
+  <path class="wire" d="M 190 554.9 L 190 567.9" marker-end="url(#ar)"/>
+  <rect x="16" y="569.9" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="590.4" font-size="11" fill="#f4e2b8">GMAIL COLLECTION</text>
+  <text class="b" x="29" y="603" font-size="9" fill="#b99160">Read-only, the configured label and date.</text>
+  <path class="wire" d="M 190 616 L 190 627" marker-end="url(#ar)"/>
+  <rect x="16" y="629" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="649.5" font-size="11" fill="#f4e2b8">PUBLIC-PAGE ENRICHMENT</text>
+  <text class="b" x="29" y="662.1" font-size="9" fill="#b99160">Allowed pages only, with safety checks.</text>
+  <path class="wire" d="M 190 675.1 L 190 686.1" marker-end="url(#ar)"/>
+  <rect x="16" y="688.1" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="708.6" font-size="11" fill="#f4e2b8">ANTIGRAVITY</text>
+  <text class="b" x="29" y="721.2" font-size="9" fill="#b99160">Remote editorial inference.</text>
+  <path class="wire" d="M 190 734.2 L 190 745.2" marker-end="url(#ar)"/>
+  <rect x="16" y="747.2" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="767.7" font-size="11" fill="#f4e2b8">QUALITY VALIDATION</text>
+  <text class="b" x="29" y="780.3" font-size="9" fill="#b99160">Facts, coverage, structure, repetition.</text>
+  <path class="wire" d="M 190 793.3 L 190 804.3" marker-end="url(#ar)"/>
+  <path class="wire" d="M 190 807.3 L 190 819.3"/>
+  <path class="wire" d="M 99 819.3 L 281 819.3"/>
+  <path class="wire" d="M 99 819.3 L 99 832.3" marker-end="url(#ar)"/>
+  <path class="wire" d="M 281 819.3 L 281 832.3" marker-end="url(#ar)"/>
+  <rect x="16" y="834.3" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="854.8" font-size="11" fill="#f4e2b8">AUDIO</text>
+  <text class="b" x="29" y="867.4" font-size="9" fill="#b99160">Kokoro and FFmpeg.</text>
+  <rect x="198" y="834.3" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="211" y="854.8" font-size="11" fill="#f4e2b8">NEWSPAPER</text>
+  <text class="b" x="211" y="867.4" font-size="9" fill="#b99160">ReportLab and PyMuPDF.</text>
+  <path class="wire" d="M 99 880.4 L 99 892.4"/>
+  <path class="wire" d="M 281 880.4 L 281 892.4"/>
+  <path class="wire" d="M 99 892.4 L 281 892.4"/>
+  <text class="k" x="18" y="904.9" font-size="8.5" fill="#ffb43b">STATE AND DELIVERY</text>
+  <path class="wire" d="M 190 892.4 L 190 924.9" marker-end="url(#ar)"/>
+  <rect x="16" y="926.9" width="348" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="947.4" font-size="11" fill="#f4e2b8">LOCAL SQLITE + FILES</text>
+  <text class="b" x="29" y="960" font-size="9" fill="#b99160">Desktop runs keep run state, episodes and checksums on the operator's own</text>
+  <text class="b" x="29" y="972.6" font-size="9" fill="#b99160">machine.</text>
+  <path class="wire" d="M 190 985.6 L 190 996.6" marker-end="url(#ar)"/>
+  <rect x="16" y="998.6" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="1019.1" font-size="11" fill="#f4e2b8">FIREBASE HOSTING</text>
+  <text class="b" x="29" y="1031.7" font-size="9" fill="#b99160">Web app shell, private RSS, MP3, PDF, artwork and public source links.</text>
+  <path class="wire" d="M 190 1044.7 L 190 1055.7" marker-end="url(#ar)"/>
+  <rect x="16" y="1057.7" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="29" y="1078.2" font-size="11" fill="#f4e2b8">APPLE PODCASTS / ANY CLIENT</text>
+  <text class="b" x="29" y="1090.8" font-size="9" fill="#b99160">Fetches the capability-protected feed and media.</text>
+  <text class="b" x="18" y="1125.4" font-size="8.6" fill="#b99160">After sign-in the browser receives owner-scoped settings, status, references, transcript</text>
+  <text class="b" x="18" y="1137.4" font-size="8.6" fill="#b99160">data and private media URLs. It never receives generation credentials or raw Gmail</text>
+  <text class="b" x="18" y="1149.4" font-size="8.6" fill="#b99160">bodies.</text>
+  <path class="wire" d="M 20 1162.8 L 42 1162.8"/>
+  <text class="k" x="48" y="1165.8" font-size="8.2" fill="#b99160">content and media</text>
+  <path class="ctl" d="M 184 1162.8 L 206 1162.8"/>
+  <text class="k" x="212" y="1165.8" font-size="8.2" fill="#b99160">control and scheduling</text>
 </svg>
