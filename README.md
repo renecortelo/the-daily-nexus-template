@@ -8,10 +8,11 @@ It includes:
 
 - a Windows desktop application;
 - an installable web app for desktop and iPhone;
-- local Kokoro speech synthesis and FFmpeg audio processing;
+- Kokoro speech synthesis and FFmpeg audio processing inside the selected
+  private runtime;
 - a private Apple Podcasts-compatible RSS feed;
-- optional unattended generation with a private GitHub Actions runner and a
-  timing-only Cloudflare Worker.
+- optional unattended generation with a GitHub-hosted Actions job in the
+  operator's private repository and a Cloudflare Worker clock.
 
 Each successful run produces a narrated MP3, a synchronized transcript, source
 references, a reader-oriented PDF newspaper, preview images, metadata, and—when
@@ -23,14 +24,17 @@ publishing is enabled—an updated private RSS feed.
 
 The model writes and checks editorial structures; it does not synthesize the
 voice. Kokoro generates speech, while the PDF renderer builds a separate
-reader-facing edition rather than copying the spoken script. See the
+reader-facing edition rather than copying the spoken script. The script
+verifier can request up to three evidence-grounded repair drafts. See the
 [technical overview](docs/TECHNICAL_OVERVIEW.md) for the stages, boundaries,
 technology choices, and current limitations.
 
 ## Read this first
 
-This repository is a **public source template**. It contains no working account,
-token, project ID, email address, private feed, newsletter, episode, or deployment.
+This repository is a **public source template**. It contains no real account or
+personal email, deployable project ID, working credential, private feed,
+newsletter, episode, or deployment. Reserved examples and neutral placeholders
+are included so the setup can be followed safely.
 
 For local-only use, you may clone it directly. For the web app, publishing, or
 cloud automation, select **Use this template**, create a **new private repository**,
@@ -55,7 +59,7 @@ GitHub templates.
 | Generate and play locally | Local desktop setup |
 | Add a private Apple feed | Firebase publishing setup |
 | Use the authenticated web app | Firebase Authentication and Firestore setup |
-| Generate while the PC is off | Private GitHub runner and Cloudflare clock setup |
+| Generate while the PC is off | Private-repository GitHub Actions and Cloudflare clock setup |
 
 You may stop after any stage; the later services are optional.
 
@@ -76,6 +80,7 @@ for reviewing provider billing settings.
 
 On Windows 10 or 11, install:
 
+- Git;
 - Python 3.11 or newer (3.12 recommended);
 - Node.js 20 or newer;
 - [uv](https://docs.astral.sh/uv/);
@@ -84,6 +89,7 @@ On Windows 10 or 11, install:
 With Windows Package Manager:
 
 ```powershell
+winget install --exact --id Git.Git
 winget install --exact --id Python.Python.3.12
 winget install --exact --id OpenJS.NodeJS.LTS
 winget install --exact --id astral-sh.uv
@@ -122,6 +128,9 @@ user-facing product is The Daily Nexus.
 2. Apply it only to newsletters you approve, preferably with exact-sender filters.
 3. Inspect the label and make sure it contains no personal, confidential, or
    transactional mail.
+4. If you chose a custom label, open the desktop app while signed out, enter
+   the exact value under **HOST + EPISODE CONTROLS > GMAIL SOURCE LABEL**, and
+   choose **SAVE + VERIFY** before Gmail authentication.
 
 Only messages with the exact configured label are read.
 
@@ -210,7 +219,26 @@ new private deployment repository, never in this public template:
    %LOCALAPPDATA%\AudioDigest\secrets\client_secret_web_runner.json
    ```
 
-4. Put only your deployment values in the ignored `config.toml`:
+4. Authenticate the Firebase CLI, deploy the owner-only Firestore rules, and
+   deploy the web shell. The cloud clock is optional at this stage and the
+   initial web deployment does not require an owner UID:
+
+   ```powershell
+   .\scripts\authenticate-firebase.ps1
+
+   & "$env:LOCALAPPDATA\AudioDigest\node-tools\node_modules\.bin\firebase.cmd" `
+     deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
+
+   .\scripts\deploy-private-web-console.ps1 `
+     -ProjectId YOUR_FIREBASE_PROJECT_ID
+   ```
+
+5. Open the new `web.app` address and sign in once. Firebase Authentication now
+   lists that user and UID. In Firestore, add one document to the `owners`
+   collection whose document ID is exactly that UID. A harmless field such as
+   `active = true` is enough; do not store an email or name in the document.
+6. Put only your deployment values, including that UID, in the ignored
+   `config.toml`:
 
    ```toml
    [web]
@@ -224,23 +252,6 @@ new private deployment repository, never in this public template:
    poll_minutes = 5
    ```
 
-5. Authenticate the Firebase CLI, deploy the owner-only Firestore rules, and
-   deploy the web shell. The cloud clock is optional at this stage:
-
-   ```powershell
-   .\scripts\authenticate-firebase.ps1
-
-   & "$env:LOCALAPPDATA\AudioDigest\node-tools\node_modules\.bin\firebase.cmd" `
-     deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
-
-   .\scripts\deploy-private-web-console.ps1 `
-     -ProjectId YOUR_FIREBASE_PROJECT_ID
-   ```
-
-6. Open the new `web.app` address and sign in once. Firebase Authentication now
-   lists that user and UID. In Firestore, add one document to the `owners`
-   collection whose document ID is exactly that UID. A harmless field such as
-   `active = true` is enough; do not store an email or name in the document.
 7. Authenticate the unattended owner session, then reload the web app:
 
    ```powershell
@@ -278,9 +289,18 @@ computer to remain on. The Worker URL is public but its browser commands require
 owner authentication. This release supports the standard `web.app` Hosting
 origin and standard `workers.dev` endpoint, not custom domains.
 
-The Cloudflare component stores timing and opaque schedule IDs only. Newsletter
-content and generation credentials stay out of Cloudflare. GitHub receives them
-only for a due private run and removes temporary copies after success or failure.
+The Cloudflare Durable Object stores timing and opaque schedule IDs only. The
+Worker environment also holds the scoped, expiring GitHub dispatch token and
+temporarily receives a Firebase ID token on authenticated browser requests; the
+application does not persist that ID token. Newsletter content and generation
+credentials stay out of Cloudflare.
+
+Encrypted generation secrets persist in the operator's private GitHub
+repository until the operator rotates or deletes them. During a due run, the
+GitHub-hosted machine temporarily processes selected newsletter evidence,
+editorial drafts, rendered media, and materialized secret files. Cleanup removes
+the job's temporary files and no Actions artifact is uploaded, but GitHub retains
+workflow logs according to the repository's retention settings.
 
 Use the detailed guides in this order:
 
@@ -293,15 +313,22 @@ Use the detailed guides in this order:
 The application deliberately separates the data paths. Each service you connect
 sees only a narrow slice of the run:
 
-![Raw newsletters, OAuth grants, local configuration, the verified script and the rendered archive stay on your machine. Across the trust boundary, Gmail sees a query for the configured label, public websites see an ordinary HTTPS request, Antigravity sees the selected source text, Firebase sees the finished media, GitHub sees encrypted secrets, and Cloudflare sees opaque schedule IDs and times only.](assets/diagram-trust-boundary.svg)
+![The desktop or ephemeral private runtime coordinates Gmail collection, public-page enrichment, Antigravity editorial work, Kokoro and FFmpeg audio, and PDF rendering. Unattended runs temporarily process source and output data on a GitHub-hosted machine. Firebase hosts published media and owner-scoped operational data; Cloudflare stores schedule timing while its Worker holds the dispatch credential.](assets/diagram-trust-boundary.svg)
+
+The written boundaries below are authoritative: unattended generation is not a
+machine-only data path, and the connected providers receive the limited data
+needed to perform their roles.
 
 - The Gmail OAuth grant is mailbox-wide read-only access. Application logic
   queries only the configured label. A trusted repository writer could modify a
   private workflow to misuse that read scope, so keep deployments single-owner
   or restrict write access rigorously.
 - Antigravity receives the selected source text; generation is not offline.
-- Raw newsletters, OAuth grants, scripts, local paths, and detailed errors are
-  not published to Firebase.
+- Firebase Hosting receives the published RSS, MP3, PDF, artwork, and public
+  source links. Owner-locked Firestore stores generation and schedule settings,
+  queue/execution status, episode metadata, source counts, references, and a
+  timed transcript. It does not receive raw Gmail bodies, OAuth secrets, local
+  filesystem paths, Antigravity request files, or detailed local exceptions.
 - Apple/private-feed access is private by possession, not account authentication.
 - Repository collaborators with write access can change workflows; grant access
   only to trusted operators.
@@ -317,7 +344,8 @@ features and [SECURITY.md](SECURITY.md) before reporting a vulnerability.
 - Firebase must remain on Spark with no billing account attached.
 - GitHub Actions has finite included private minutes and must stop at the `$0` budget.
 - Cloudflare must remain on Free with no paid add-ons.
-- Kokoro, FFmpeg, ReportLab, and PyMuPDF run locally or on the private runner.
+- Kokoro, FFmpeg, ReportLab, and PyMuPDF run on the desktop or ephemeral
+  GitHub-hosted machine; no external text-to-speech API is used.
 - Do not resolve a quota warning by adding a payment method or enabling billing.
 
 ## Development checks
@@ -325,7 +353,7 @@ features and [SECURITY.md](SECURITY.md) before reporting a vulnerability.
 ```powershell
 .\scripts\test.ps1
 & "$env:LOCALAPPDATA\AudioDigest\venv\Scripts\python.exe" `
-  .\scripts\audit-public-readiness.py --history
+  .\scripts\audit-public-readiness.py --history --strict-metadata
 ```
 
 The public-readiness workflow repeats the source/history audit, lint, browser

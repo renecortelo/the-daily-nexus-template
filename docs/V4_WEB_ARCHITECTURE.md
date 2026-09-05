@@ -17,9 +17,11 @@ The browser can:
 - play published private episodes and open the matching newspaper;
 - install the responsive interface on iPhone from Safari.
 
-The browser never receives Gmail, Antigravity, or Firebase deployment
-credentials; newsletter bodies; article text; model inputs; local paths; or
-detailed logs.
+After owner authorization, the browser receives schedule/generation settings,
+status records, references, timed transcripts, and private media URLs so it can
+operate the console. It never receives raw Gmail bodies, article bodies,
+Antigravity request files, Gmail/Antigravity/Firebase deployment credentials,
+local runtime paths, or detailed runner logs.
 
 ## Authentication and authorization
 
@@ -35,11 +37,13 @@ The cloud runner uses four independent revocable grants:
 - a Firebase owner refresh token for owner-scoped Firestore;
 - a Firebase CLI refresh token for static Hosting and rule deployment.
 
-They are stored only as encrypted GitHub Actions secrets. A workflow step writes
-them to owner-only temporary files. Later steps receive file paths, not secret
-environment variables. The cleanup step removes the files, and GitHub destroys
-the ephemeral Linux machine after the job. The workflow never uploads logs,
-runtime artifacts, audio, or source material to GitHub.
+They persist as encrypted GitHub Actions secrets until the operator rotates or
+deletes them. A workflow step writes temporary owner-only copies. Later steps
+receive file paths, not secret environment variables. Cleanup removes the
+copies, and GitHub destroys the ephemeral Linux machine after the job. The
+workflow uploads no Actions artifact, audio, or source bundle, but the
+GitHub-hosted machine processes selected source text and generated output during
+the run, and GitHub retains workflow logs according to repository settings.
 
 Repository collaborators with write access can modify workflows and can
 therefore cause encrypted secrets to be used. Give write access only to a fully
@@ -60,7 +64,9 @@ schedule parameters.
 The PWA writes a timing-only `clockSchedules` projection atomically with a
 full schedule. Firestore rules require its timing to match the authoritative
 schedule. The Worker uses the browser's short-lived Firebase ID token only to
-ask owner-locked Firestore for that projection. It does not store the token.
+ask owner-locked Firestore for that projection. Application code does not store
+the token. The Worker environment separately retains the scoped GitHub dispatch
+token as a Cloudflare secret until it is rotated or deleted.
 
 The workflow receives an opaque ID and the original local occurrence date, then
 reloads the full owner-only schedule. A late alarm therefore cannot start an
@@ -105,12 +111,15 @@ All operational documents live below `/users/{ownerUid}`:
 - `clockSchedules`: timing-only projection used by the Cloudflare alarm;
 - `runRequests`: manual queue state;
 - `executions`: immutable schedule/date claims and final state;
-- `episodes`: date, title, duration, status, and private published URLs;
+- `episodes`: date, title, duration, status, private published URLs, bounded
+  source counts, up to 100 public references, and up to 500 timed transcript
+  segments;
 - `runner/status`: a short state and timestamp.
 
-No newsletter text, script, transcript, newspaper content, Gmail message ID,
-email credential, Antigravity request, or detailed exception is stored in
-Firestore.
+Firestore does not store raw Gmail bodies, article bodies, the structured script
+file, newspaper body copy, Gmail message IDs, OAuth credentials, Antigravity
+request files, local paths, or detailed local exceptions. The timed transcript
+does contain the spoken narration and must be treated as private editorial data.
 
 ## Existing-feed preservation
 

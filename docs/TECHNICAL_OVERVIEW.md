@@ -7,7 +7,11 @@ reading surface; it does not perform model inference in the browser.
 
 ## System architecture
 
-![Operator inputs feed a Python generation runtime that runs on a Windows desktop or an ephemeral Linux runner: collect and sanitize, Antigravity calls, quality gates, then Kokoro and FFmpeg for audio and ReportLab and PyMuPDF for the newspaper. All state stays in private local storage. An optional per-operator deployment adds a Cloudflare timing-only clock, a private GitHub Actions runner, an owner-locked Firestore queue and Firebase Hosting.](../assets/diagram-architecture.svg)
+![Operator inputs feed a Python generation runtime on a Windows desktop or an ephemeral GitHub-hosted Linux machine: collect and sanitize, Antigravity calls, quality gates, then Kokoro and FFmpeg for audio and ReportLab and PyMuPDF for the newspaper. A per-operator deployment can add a Cloudflare clock, an Actions workflow in a private repository, owner-locked Firestore data, and Firebase Hosting.](../assets/diagram-architecture.svg)
+
+The deployment boundary is described precisely below: an unattended run uses
+a GitHub-hosted machine and owner-locked cloud services, so it is not a purely
+local data path.
 
 Every deployment belongs to one operator. Sharing the source means another
 operator creates a separate private repository, credentials, Firebase project,
@@ -19,12 +23,12 @@ deployment.
 | Stage | Process | Main output or control |
 | --- | --- | --- |
 | 1 | Query Gmail for the exact label and selected date; optionally load date-specific research | Approved newsletter bodies and evidence records |
-| 2 | Decode supported tracking wrappers locally, reject utility links, enforce HTTPS/public-address checks, respect robots rules, and retrieve readable public pages | Newsletter-first evidence enriched with safe public text |
+| 2 | Decode supported tracking wrappers inside the runtime, reject utility links, enforce HTTPS/public-address checks, check robots rules for the original URL and every redirect destination, and retrieve readable public pages | Newsletter-first evidence enriched with safe public text |
 | 3 | Ask Antigravity for structured story extraction, classification, ranking, and duplicate consolidation | Evidence-linked story records |
 | 4 | Generate the configured solo or two-host podcast script with ordered or content-derived sections | Structured host dialogue and show notes |
 | 5 | Verify coverage and factual support; repair rejected drafts within bounded attempts | Approved spoken script |
 | 6 | Generate and quality-check an independent reader-facing newspaper, targeting two pages with a third page allowed only for readable overflow | Structured newspaper JSON, PDF, and page previews |
-| 7 | Synthesize each host locally with Kokoro, assemble segments, preserve transcript timing, and normalize the MP3 with FFmpeg | MP3 and timed transcript |
+| 7 | Synthesize each host with Kokoro inside the selected private runtime, assemble segments, preserve transcript timing, and normalize the MP3 with FFmpeg | MP3 and timed transcript |
 | 8 | Finalize locally or publish an incremental Firebase Hosting release, then fetch the remote RSS feed and verify the new episode | Local archive or remotely verified private feed |
 
 Temporary source payloads are removed in the pipeline's cleanup path. A run is
@@ -38,9 +42,10 @@ must also succeed.
   and bounded newspaper quality review. Inputs are limited to selected evidence
   and explicit instructions. Responses must pass local schema and quality
   validation.
-- **Kokoro** is the local neural text-to-speech engine. Host voice selection is
-  separate from editorial tone. It receives approved dialogue, not Gmail OAuth
-  credentials.
+- **Kokoro** is the bundled neural text-to-speech engine. It runs on the desktop
+  or ephemeral GitHub-hosted machine rather than through an external TTS API.
+  Host voice selection is separate from editorial tone. It receives approved
+  dialogue, not Gmail OAuth credentials.
 - **FFmpeg and ffprobe** assemble speech segments, normalize loudness, encode the
   MP3, and inspect duration. Playback speed adjustment uses FFmpeg so pitch can
   be preserved.
@@ -61,9 +66,9 @@ must also succeed.
 | Local state | SQLite and filesystem manifests | Run state, episode inventory, checksums, transcripts, and generated media |
 | Desktop | Python Tkinter | Generation, preferences, playback, reading, authentication, and publishing controls |
 | Web | HTML, CSS, and vanilla JavaScript PWA | Owner sign-in, queue/schedule controls, playback, transcript/references, and PDF reading |
-| Private web data | Firebase Authentication, Firestore, and static Hosting | Owner authorization, minimal queue metadata, application shell, RSS, MP3, and PDF delivery |
-| Automation | GitHub Actions on Ubuntu | Ephemeral generation using encrypted secrets and a one-hour job limit |
-| Scheduling | Cloudflare Worker and SQLite-backed Durable Object alarms | Stores timing-only projections and dispatches the private workflow when due |
+| Private web data | Firebase Authentication, Firestore, and static Hosting | Owner authorization; generation/schedule parameters; queue, execution, source, reference, transcript, and episode metadata; application shell; RSS, MP3, and PDF delivery |
+| Automation | GitHub Actions on Ubuntu | Ephemeral generation in a private repository using persistent encrypted secrets and a one-hour job limit |
+| Scheduling | Cloudflare Worker and SQLite-backed Durable Object alarms | Stores timing projections; holds a scoped dispatch secret; accepts short-lived owner tokens; dispatches the private workflow when due |
 | Quality and security | unittest, Ruff, Gitleaks, CodeQL, and Dependabot | Regression, lint, secret-history, static-analysis, and dependency-alert checks |
 
 ## Privacy and security boundaries
@@ -74,6 +79,12 @@ must also succeed.
 - Gmail, Antigravity, Firebase, GitHub, and Cloudflare credentials never belong
   in source control. Local grants use operating-system credential storage;
   unattended grants use encrypted secrets in the operator's private repository.
+- Encrypted GitHub Actions secrets remain stored until the operator rotates or
+  deletes them. During a run, the GitHub-hosted machine temporarily handles
+  selected newsletter evidence, editorial drafts, generated media, and
+  materialized secret files. Cleanup removes temporary files and the workflow
+  uploads no Actions artifact, while GitHub retains workflow logs according to
+  repository settings.
 - Antigravity calls require `useG1Credits=false` and
   `enableTelemetry=false`. Known paid model credentials, Vertex credentials,
   and Google service-account credentials cause startup to stop.
@@ -83,11 +94,18 @@ must also succeed.
   newsletter evidence.
 - The web session uses session-only Firebase persistence and signs out after 15
   minutes of inactivity. Firestore authorization requires a matching owner UID.
+- Owner-locked Firestore stores the full generation/schedule parameters needed
+  by the runner, queue and execution state, episode metadata, source counts,
+  references, and timed transcript segments. Raw Gmail message bodies, OAuth
+  secrets, local filesystem paths, and Antigravity request files are excluded.
 - The Apple-compatible RSS address is a capability URL, not user authentication.
   Anyone who obtains it can fetch the feed, so it must be handled like a
   password and rotated after exposure.
-- Cloudflare sees only schedule timing and opaque IDs. It never receives Gmail
-  labels, newsletter text, episode settings, model credentials, or feed media.
+- The Cloudflare Durable Object stores schedule timing and opaque IDs. Its
+  Worker environment also stores a scoped, expiring GitHub dispatch token and
+  temporarily receives the browser's short-lived Firebase ID token; application
+  code does not persist that ID token. It does not receive Gmail labels,
+  newsletter text, episode settings, model credentials, or feed media.
 
 ## Adoption requirements and limitations
 

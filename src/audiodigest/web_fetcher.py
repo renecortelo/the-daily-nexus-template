@@ -145,7 +145,9 @@ class SafeArticleFetcher:
             if is_tracking_url(current):
                 raise ArticleFetchError("tracking link was not fetched")
             assert_public_https_url(current)
-            if redirect_count == 0 and not self._allowed_by_robots(current):
+            # A redirect can cross origins or move to a path with different
+            # robots rules. Re-evaluate every destination before requesting it.
+            if not self._allowed_by_robots(current):
                 raise ArticleFetchError("robots.txt disallows this article")
             request = urllib.request.Request(  # noqa: S310 - URL is HTTPS and public-checked above.
                 current,

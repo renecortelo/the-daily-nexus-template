@@ -195,7 +195,8 @@ plays in Apple Podcasts:
 1. Open **GEN > Episode Preferences**.
 2. Set publishing to **Automatic after a successful run**.
 3. Choose **Save + Verify**.
-4. Turn off **Local-only test** for any run that should publish.
+4. Clear **Keep this run local (overrides automatic publishing)** for any run
+   that should publish.
 5. Start the generation normally.
 
 The eight-stage run then collects, writes, verifies, renders the PDF, renders

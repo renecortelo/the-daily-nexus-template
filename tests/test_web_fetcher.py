@@ -1,4 +1,5 @@
 import gzip
+import urllib.error
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -115,3 +116,37 @@ class WebFetcherTests(TestCase):
             fetcher.fetch("https://tracking.tldrnewsletter.com/opaque-token")
 
         fetcher.opener.open.assert_not_called()
+
+    @patch("audiodigest.web_fetcher.assert_public_https_url")
+    def test_redirect_destination_is_checked_against_its_robots_rules(self, _assert_safe):
+        headers = MagicMock()
+        headers.get.return_value = "https://destination.test/private/story"
+        redirect = urllib.error.HTTPError(
+            "https://origin.test/story",
+            302,
+            "Found",
+            headers,
+            None,
+        )
+        fetcher = SafeArticleFetcher(ArticleSettings())
+        fetcher.opener = MagicMock()
+        fetcher.opener.open.side_effect = [redirect]
+
+        with (
+            patch.object(
+                fetcher,
+                "_allowed_by_robots",
+                side_effect=[True, False],
+            ) as allowed,
+            self.assertRaisesRegex(ArticleFetchError, "robots.txt disallows"),
+        ):
+            fetcher.fetch("https://origin.test/story")
+
+        self.assertEqual(
+            [call.args[0] for call in allowed.call_args_list],
+            [
+                "https://origin.test/story",
+                "https://destination.test/private/story",
+            ],
+        )
+        fetcher.opener.open.assert_called_once()

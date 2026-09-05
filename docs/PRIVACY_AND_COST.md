@@ -6,26 +6,32 @@
    bodies through `gmail.readonly`.
 2. The selected episode date—not an email address or Gmail content—is sent to Wikimedia to
    retrieve On This Day and date-specific Current Events evidence.
-3. Public article URLs are fetched locally without login cookies. Known newsletter tracking
-   wrappers are never opened: locally decodable destinations are converted to direct public
-   URLs, while opaque trackers and utility pages are ignored.
-4. Selected newsletter/article/research text is placed briefly in an isolated local request file and
-   processed through the Antigravity CLI using the existing Google AI Pro account.
-5. The final host dialogue is synthesized locally with Kokoro.
-6. The matching two-page digest and both previews are rendered locally with
-   ReportLab and PyMuPDF. The current renderer does not download external images;
-   it uses only the bundled TDN mark.
+3. Public article URLs are fetched inside the active private runtime without login cookies.
+   Known newsletter tracking wrappers are never opened: decodable destinations are converted
+   to direct public URLs, while opaque trackers and utility pages are ignored. HTTPS,
+   public-address, size, timeout, and robots checks apply to the original request and every
+   redirect destination.
+4. Selected newsletter/article/research text is placed briefly in an isolated request file and
+   processed through the Antigravity CLI using the existing Google AI Pro account. On an
+   unattended run, that file and its output exist temporarily on a GitHub-hosted machine.
+5. The final host dialogue is synthesized with Kokoro inside the desktop or ephemeral runner.
+6. The matching two-page-first digest and previews are rendered in the same private runtime
+   with ReportLab and PyMuPDF. The current renderer does not download external images; it uses
+   only bundled project artwork.
 7. When publishing is enabled, only the final MP3, 2-3 page PDF, RSS metadata,
    bundled cover, and public source links go to Firebase Hosting.
-8. V4 stores only owner-scoped schedule parameters, queue state, minimal runner
-   state, and published episode metadata in Firestore. A separate
+8. V4 stores owner-scoped generation and schedule parameters, queue and execution state,
+   brief runner status, and published episode metadata in Firestore. Episode documents also
+   include bounded source counts, up to 100 public references, and up to 500 timed transcript
+   segments whose text can contain the spoken narration. A separate
    `clockSchedules` collection contains timing only (opaque schedule ID,
    enabled state, timezone, time, and weekdays) for the private Cloudflare
-   alarm. Raw newsletters, scripts, credentials, local paths, and detailed
-   errors remain outside Firebase.
+   alarm. Raw Gmail bodies, OAuth credentials, Antigravity request files, local paths, and
+   detailed local errors remain outside Firebase.
 
-Personal email and attachments are rejected by configuration. Do not reuse the source label for
-confidential correspondence.
+Attachments are not read. The application cannot determine whether a message was labeled by
+mistake, so do not reuse the source label for personal, confidential, transactional, or
+sensitive correspondence.
 
 Gmail refresh tokens and the cached connected-account email are stored in Windows Credential
 Manager, not project files. The desktop launcher can sign in or disconnect. Disconnecting first
@@ -67,13 +73,21 @@ Apple Podcasts client can still buffer episode media during playback.
 The web session uses session-only Firebase persistence plus a 15-minute idle
 sign-out. The unattended Linux runner uses separate encrypted GitHub Actions
 secrets for Gmail, Antigravity, Firebase owner access, and Firebase deployment.
-Secrets are materialized only into owner-only temporary files on an ephemeral
-machine and can be revoked independently. Antigravity's session is inserted
-into an ephemeral Secret Service keyring only while the generation command is
-running, then cleared. The separate Cloudflare Free clock has only an expiring,
-single-repository GitHub Actions-dispatch token and timing-only schedule data;
-it does not receive any of those generation secrets. Repository write access is
-therefore restricted to the trusted operator.
+Those encrypted repository secrets persist until the operator rotates or deletes
+them. A job materializes temporary owner-only copies on an ephemeral machine;
+cleanup removes the copies, and the grants can be revoked independently.
+Antigravity's session is inserted into an ephemeral Secret Service keyring only
+while the generation command is running, then cleared. The workflow uploads no
+Actions artifact, but GitHub retains workflow logs according to repository
+settings, so private source text must never be deliberately printed.
+
+The Cloudflare Durable Object stores only timing projections and opaque IDs.
+Separately, the Worker environment stores an expiring, single-repository GitHub
+Actions-dispatch token. Authenticated browser requests temporarily supply a
+short-lived Firebase ID token; application code verifies it and does not persist
+it. Cloudflare does not receive the Gmail, Antigravity, or Firebase deployment
+secrets. Repository and Cloudflare access must therefore remain restricted to
+the trusted operator.
 
 ## Charge prevention
 
@@ -88,7 +102,7 @@ Startup aborts if it sees:
 
 V4 uses only static Hosting, Authentication, and Firestore's free quota. The
 morning scheduler is a timing-only Cloudflare Free Durable Object that wakes a
-private Linux GitHub Actions workflow only for due work; no Firebase Function
+GitHub-hosted workflow in the private repository only for due work; no Firebase Function
 or Cloud Scheduler job is created. The workflow has no public-repository
 production path and uploads no private artifacts. No timer-based GitHub poll is
 configured, so idle Actions minutes are not consumed. Generation credentials do

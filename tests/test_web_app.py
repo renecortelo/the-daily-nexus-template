@@ -74,6 +74,17 @@ class WebAppSecurityTests(TestCase):
         self.assertNotIn("schedule-clock-note", page)
         self.assertNotIn("The web app stores parameters", page)
 
+    def test_schedule_timezone_uses_the_browser_iana_zone(self):
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        page = Path("web/index.html").read_text(encoding="utf-8")
+
+        self.assertIn("function setupTimezonePicker()", source)
+        self.assertIn('Intl.supportedValuesOf("timeZone")', source)
+        self.assertIn('resolvedOptions().timeZone || "UTC"', source)
+        self.assertIn('timezone: String(data.timezone || "UTC")', source)
+        self.assertNotIn('data.timezone || "Europe/Madrid"', source)
+        self.assertIn('<option value="UTC">UTC</option>', page)
+
     def test_firebase_config_remains_static_spark_compatible(self):
         validate_firebase_json(Path("firebase.json"))
         config = json.loads(Path("firebase.json").read_text(encoding="utf-8"))

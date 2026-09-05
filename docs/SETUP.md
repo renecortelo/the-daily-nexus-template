@@ -91,7 +91,8 @@ isolated workspace.
 
 The script then opens Gmail's consent flow. Select the intended Gmail account and grant the
 single read-only scope. If you are not using the default label, first open the launcher while
-signed out, enter the exact label under **Episode preferences**, and save it. If Google shows
+signed out, enter the exact label under **HOST + EPISODE CONTROLS > GMAIL SOURCE LABEL**,
+and choose **SAVE + VERIFY**. If Google shows
 **Google hasn't verified this app**, choose
 **Advanced**, continue to AudioDigest, review the scope, and allow it. The script succeeds only
 after it finds the configured label.
@@ -106,8 +107,10 @@ The **GEN** preferences panel controls:
 
 - The exact Gmail source label. When signed in, saving verifies that the label exists before
   changing the configuration.
-- One host (Dalia) or two hosts (Dalia and Nox).
-- One of six local Kokoro voices for each host, with male and female choices.
+- One host (Dalia or Nox) or two hosts (Dalia and Nox).
+- One of three descriptive delivery personalities for each active presenter.
+  The underlying Kokoro voices are constrained to female voices for Dalia and
+  male voices for Nox, and technical model names remain hidden.
 - One of five editorial tones for each host: neutral, dry wit, fun, warm, or very formal.
 - Manual or automatic publishing. Manual is the safe default.
 
@@ -141,8 +144,8 @@ is configured.
 Leave `publish_enabled = false`.
 
 Open **The Daily Nexus** from the desktop. Keep
-**Local-only test (never publish this run)** selected and press
-**Create yesterday's episode**.
+**Keep this run local (overrides automatic publishing)** selected, choose the
+date directly or press **YESTERDAY**, and then press **RUN**.
 
 The launcher may refresh the connected account's email address, but it does not read newsletter
 messages until an episode run is started. It does not install a background service, poll Gmail,
