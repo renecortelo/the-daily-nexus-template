@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 862" width="380" height="862" role="img" aria-labelledby="pipe-t pipe-d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1080" width="380" height="1080" role="img" aria-labelledby="pipe-t pipe-d">
   <title id="pipe-t">The Daily Nexus generation pipeline</title>
-  <desc id="pipe-d">Eight stages run top to bottom. One: load approved Gmail newsletters for the selected date plus optional daily research. Two: build newsletter-first evidence and enrich it from allowed public pages, applying HTTPS, public-address, response-size and timeout limits, with robots rules checked on the original URL and on every redirect destination. Three: extract, rank, consolidate and deduplicate evidence-backed stories. Four: draft the host script. Five: verify factual support, coverage, structure and repetition, where a rejected script receives up to three verifier-guided repair attempts. The run then branches: stage six writes the newspaper independently from the verified evidence, never by copying the audio script, targeting two pages and permitting at most three; stage seven renders Kokoro multi-voice audio and the timed transcript from the approved script inside the selected private runtime. Both branches rejoin at stage eight, which finalizes locally or publishes to Firebase and then remotely verifies the RSS entry and the media enclosure. An optional band shows the same eight stages running unattended after a Cloudflare alarm or a manual GEN wake-up dispatches a GitHub Actions job in the operator's private repository, ending in Firebase publication and an Apple-compatible feed.</desc>
+  <desc id="pipe-d">Eight stages run top to bottom. One: load approved Gmail newsletters for the selected date plus optional daily research. Two: build newsletter-first evidence and enrich it from allowed public pages, applying HTTPS, public-address, response-size, timeout and redirect-count limits, with robots rules checked on the original URL and on every redirect destination. Three: extract, rank, consolidate and deduplicate evidence-backed stories. Four: draft the host script. Five: verify factual support, coverage, structure and repetition, where a rejected script receives up to three verifier-guided repair attempts. The run then branches: stage six writes the newspaper independently from the verified evidence, never by copying the audio script, targeting two pages and permitting at most three; stage seven renders Kokoro multi-voice audio and the timed transcript from the approved script inside the selected private runtime. Both branches rejoin at stage eight, which finalizes locally or, when publishing is enabled, publishes to Firebase and then remotely verifies the RSS entry and the media enclosure. An optional band shows the same eight stages running unattended after a Cloudflare alarm or a manual GEN wake-up dispatches a GitHub Actions job in the operator's private repository.</desc>
   <defs>
     <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.45" stop-color="#ffb43b"/><stop offset="1" stop-color="#e0620f"/></linearGradient>
     <clipPath id="sc"><circle cx="0" cy="0" r="14.2"/></clipPath>
@@ -28,89 +28,93 @@
       .ctl { fill: none; stroke: #b99160; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
-  <rect width="380" height="862" fill="#110b07"/>
-  <use href="#sun" x="34" y="36"/>
-  <text class="dsp" x="60" y="31" font-size="17" fill="#fff0c7">THE DAILY NEXUS</text>
-  <text class="k" x="61" y="46" font-size="8" fill="#b99160">GENERATION PIPELINE / EIGHT STAGES</text>
-  <line x1="16" y1="60" x2="364" y2="60" stroke="#70401f"/>
-  <rect x="16" y="74" width="348" height="58.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="83" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="94" font-size="9.5" fill="#110b07" text-anchor="middle">1</text>
-  <text class="h" x="55" y="94.5" font-size="11" fill="#f4e2b8">COLLECT</text>
-  <text class="b" x="29" y="107.6" font-size="9.5" fill="#b99160">Approved Gmail newsletters for the selected date, plus optional daily</text>
-  <text class="b" x="29" y="120.7" font-size="9.5" fill="#b99160">research.</text>
-  <path class="wire" d="M 190 133.7 L 190 144.7" marker-end="url(#ar)"/>
-  <rect x="16" y="146.7" width="348" height="70.8" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="155.7" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="166.7" font-size="9.5" fill="#110b07" text-anchor="middle">2</text>
-  <text class="h" x="55" y="167.2" font-size="11" fill="#f4e2b8">ENRICH SAFELY</text>
-  <text class="b" x="29" y="180.3" font-size="9.5" fill="#b99160">Newsletter-first evidence, enriched from allowed public pages.</text>
-  <text class="b" x="29" y="192.9" font-size="9" fill="#ffb43b">HTTPS, public-address, response-size and timeout limits. Robots rules are checked</text>
-  <text class="b" x="29" y="205.5" font-size="9" fill="#ffb43b">on the original URL and on every redirect destination.</text>
-  <path class="wire" d="M 190 218.5 L 190 229.5" marker-end="url(#ar)"/>
-  <rect x="16" y="231.5" width="348" height="45.6" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="240.5" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="251.5" font-size="9.5" fill="#110b07" text-anchor="middle">3</text>
-  <text class="h" x="55" y="252" font-size="11" fill="#f4e2b8">RANK STORIES</text>
-  <text class="b" x="29" y="265.1" font-size="9.5" fill="#b99160">Extract, rank, consolidate and deduplicate evidence-backed stories.</text>
-  <path class="wire" d="M 190 278.1 L 190 289.1" marker-end="url(#ar)"/>
-  <rect x="16" y="291.1" width="348" height="45.6" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="300.1" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="311.1" font-size="9.5" fill="#110b07" text-anchor="middle">4</text>
-  <text class="h" x="55" y="311.6" font-size="11" fill="#f4e2b8">DRAFT SCRIPT</text>
-  <text class="b" x="29" y="324.7" font-size="9.5" fill="#b99160">Write the solo or two-host dialogue.</text>
-  <path class="wire" d="M 190 337.7 L 190 348.7" marker-end="url(#ar)"/>
-  <rect x="16" y="350.7" width="348" height="58.2" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="359.7" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="370.7" font-size="9.5" fill="#110b07" text-anchor="middle">5</text>
-  <text class="h" x="55" y="371.2" font-size="11" fill="#f4e2b8">VERIFY</text>
-  <text class="b" x="29" y="384.3" font-size="9.5" fill="#b99160">Factual support, coverage, structure and repetition.</text>
-  <text class="b" x="29" y="396.9" font-size="9" fill="#ffb43b">A rejected script gets up to three verifier-guided repair attempts.</text>
-  <path class="wire" d="M 190 409.9 L 190 421.9"/>
-  <path class="wire" d="M 99 421.9 L 281 421.9"/>
-  <path class="wire" d="M 99 421.9 L 99 434.9" marker-end="url(#ar)"/>
-  <path class="wire" d="M 281 421.9 L 281 434.9" marker-end="url(#ar)"/>
-  <rect x="16" y="436.9" width="166" height="97.5" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="445.9" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="456.9" font-size="9.5" fill="#110b07" text-anchor="middle">6</text>
-  <text class="h" x="55" y="457.4" font-size="11" fill="#f4e2b8">NEWSPAPER</text>
-  <text class="b" x="29" y="470" font-size="9" fill="#ffb43b">in: verified evidence</text>
-  <text class="b" x="29" y="483.1" font-size="9.5" fill="#b99160">Written independently, never by</text>
-  <text class="b" x="29" y="496.2" font-size="9.5" fill="#b99160">copying the script.</text>
-  <text class="b" x="29" y="509.3" font-size="9.5" fill="#b99160">Two pages target, three</text>
-  <text class="b" x="29" y="522.4" font-size="9.5" fill="#b99160">maximum.</text>
-  <rect x="198" y="436.9" width="166" height="97.5" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="211" y="445.9" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="220.5" y="456.9" font-size="9.5" fill="#110b07" text-anchor="middle">7</text>
-  <text class="h" x="237" y="457.4" font-size="11" fill="#f4e2b8">AUDIO</text>
-  <text class="b" x="211" y="470" font-size="9" fill="#ffb43b">in: approved script</text>
-  <text class="b" x="211" y="483.1" font-size="9.5" fill="#b99160">Kokoro multi-voice speech and</text>
-  <text class="b" x="211" y="496.2" font-size="9.5" fill="#b99160">the timed transcript.</text>
-  <text class="b" x="211" y="509.3" font-size="9.5" fill="#b99160">Rendered inside the selected</text>
-  <text class="b" x="211" y="522.4" font-size="9.5" fill="#b99160">runtime.</text>
-  <path class="wire" d="M 99 535.4 L 99 547.4"/>
-  <path class="wire" d="M 281 535.4 L 281 547.4"/>
-  <path class="wire" d="M 99 547.4 L 281 547.4"/>
-  <path class="wire" d="M 190 547.4 L 190 560.4" marker-end="url(#ar)"/>
-  <rect x="16" y="562.4" width="348" height="58.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <rect x="29" y="571.4" width="19" height="15" rx="4.5" fill="#f28c18"/>
-  <text class="h" x="38.5" y="582.4" font-size="9.5" fill="#110b07" text-anchor="middle">8</text>
-  <text class="h" x="55" y="582.9" font-size="11" fill="#f4e2b8">DELIVER</text>
-  <text class="b" x="29" y="596" font-size="9.5" fill="#b99160">Finalize locally, or publish to Firebase and then remotely verify the RSS</text>
-  <text class="b" x="29" y="609.1" font-size="9.5" fill="#b99160">entry and the media enclosure.</text>
-  <text class="k" x="30" y="661.6" font-size="8.5" fill="#ffb43b">OPTIONAL - THE SAME EIGHT STAGES, UNATTENDED</text>
-  <rect x="28" y="668.6" width="324" height="24" rx="6" fill="#2d190e" stroke="#70401f"/>
-  <text class="k" x="40" y="684.1" font-size="8.6" fill="#f4e2b8">CLOUDFLARE ALARM, OR A GEN WAKE-UP</text>
-  <path class="wire" d="M 190 693.6 L 190 701.6" marker-end="url(#ar)"/>
-  <rect x="28" y="703.6" width="324" height="24" rx="6" fill="#2d190e" stroke="#70401f"/>
-  <text class="k" x="40" y="719.1" font-size="8.6" fill="#f4e2b8">GITHUB ACTIONS JOB / PRIVATE REPO</text>
-  <path class="wire" d="M 190 728.6 L 190 736.6" marker-end="url(#ar)"/>
-  <rect x="28" y="738.6" width="324" height="24" rx="6" fill="#2d190e" stroke="#70401f"/>
-  <text class="k" x="40" y="754.1" font-size="8.6" fill="#f4e2b8">THE SAME EIGHT STAGES ABOVE</text>
-  <path class="wire" d="M 190 763.6 L 190 771.6" marker-end="url(#ar)"/>
-  <rect x="28" y="773.6" width="324" height="24" rx="6" fill="#2d190e" stroke="#70401f"/>
-  <text class="k" x="40" y="789.1" font-size="8.6" fill="#f4e2b8">FIREBASE PUBLISH / APPLE-COMPATIBLE FEED</text>
-  <rect x="16" y="641.1" width="348" height="168.5" rx="8" fill="none" stroke="#70401f" stroke-dasharray="4 3"/>
-  <text class="b" x="18" y="832.2" font-size="8.6" fill="#b99160">Stages run inside one private runtime: the Windows desktop, or the GitHub-hosted</text>
-  <text class="b" x="18" y="844.2" font-size="8.6" fill="#b99160">machine. The newspaper is never derived from the audio script.</text>
+  <rect width="380" height="1080" fill="#110b07"/>
+  <use href="#sun" x="36" y="38"/>
+  <text class="dsp" x="64" y="34" font-size="21" fill="#fff0c7">THE DAILY NEXUS</text>
+  <text class="k" x="65" y="52" font-size="11" fill="#b99160">GENERATION PIPELINE / EIGHT STAGES</text>
+  <line x1="16" y1="68" x2="364" y2="68" stroke="#70401f"/>
+  <rect x="16" y="84" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="94" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="107.5" font-size="11.5" fill="#110b07" text-anchor="middle">1</text>
+  <text class="h" x="60" y="107.5" font-size="12.5" fill="#f4e2b8">COLLECT</text>
+  <text class="b" x="30" y="123.62" font-size="11" fill="#b99160">Approved Gmail newsletters for the selected date, plus optional</text>
+  <text class="b" x="30" y="139.24" font-size="11" fill="#b99160">daily research.</text>
+  <path class="wire" d="M 190 154.24 L 190 167.24" marker-end="url(#ar)"/>
+  <rect x="16" y="169.24" width="348" height="116.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="179.24" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="192.74" font-size="11.5" fill="#110b07" text-anchor="middle">2</text>
+  <text class="h" x="60" y="192.74" font-size="12.5" fill="#f4e2b8">ENRICH SAFELY</text>
+  <text class="b" x="30" y="208.86" font-size="11" fill="#b99160">Newsletter-first evidence, enriched from allowed public pages.</text>
+  <text class="b" x="30" y="224.48" font-size="11" fill="#ffb43b">HTTPS, public-address, response-size, timeout and redirect-count</text>
+  <text class="b" x="30" y="240.1" font-size="11" fill="#ffb43b">limits.</text>
+  <text class="b" x="30" y="255.72" font-size="11" fill="#ffb43b">Robots rules are checked on the original URL and every redirect</text>
+  <text class="b" x="30" y="271.34" font-size="11" fill="#ffb43b">destination.</text>
+  <path class="wire" d="M 190 286.34 L 190 299.34" marker-end="url(#ar)"/>
+  <rect x="16" y="301.34" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="311.34" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="324.84" font-size="11.5" fill="#110b07" text-anchor="middle">3</text>
+  <text class="h" x="60" y="324.84" font-size="12.5" fill="#f4e2b8">RANK STORIES</text>
+  <text class="b" x="30" y="340.96" font-size="11" fill="#b99160">Extract, rank, consolidate and deduplicate evidence-backed</text>
+  <text class="b" x="30" y="356.58" font-size="11" fill="#b99160">stories.</text>
+  <path class="wire" d="M 190 371.58 L 190 384.58" marker-end="url(#ar)"/>
+  <rect x="16" y="386.58" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="396.58" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="410.08" font-size="11.5" fill="#110b07" text-anchor="middle">4</text>
+  <text class="h" x="60" y="410.08" font-size="12.5" fill="#f4e2b8">DRAFT SCRIPT</text>
+  <text class="b" x="30" y="426.2" font-size="11" fill="#b99160">Write the solo or two-host dialogue.</text>
+  <path class="wire" d="M 190 441.2 L 190 454.2" marker-end="url(#ar)"/>
+  <rect x="16" y="456.2" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="466.2" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="479.7" font-size="11.5" fill="#110b07" text-anchor="middle">5</text>
+  <text class="h" x="60" y="479.7" font-size="12.5" fill="#f4e2b8">VERIFY</text>
+  <text class="b" x="30" y="495.82" font-size="11" fill="#b99160">Factual support, coverage, structure and repetition.</text>
+  <text class="b" x="30" y="511.44" font-size="11" fill="#ffb43b">A rejected script gets up to three verifier-guided repair attempts.</text>
+  <path class="wire" d="M 190 526.44 L 190 539.44"/>
+  <path class="wire" d="M 99 539.44 L 281 539.44"/>
+  <path class="wire" d="M 99 539.44 L 99 554.44" marker-end="url(#ar)"/>
+  <path class="wire" d="M 281 539.44 L 281 554.44" marker-end="url(#ar)"/>
+  <rect x="16" y="556.44" width="166" height="116.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="566.44" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="579.94" font-size="11.5" fill="#110b07" text-anchor="middle">6</text>
+  <text class="h" x="60" y="579.94" font-size="12.5" fill="#f4e2b8">NEWSPAPER</text>
+  <text class="b" x="30" y="596.06" font-size="11" fill="#ffb43b">in: verified evidence</text>
+  <text class="b" x="30" y="611.68" font-size="11" fill="#b99160">Written independently,</text>
+  <text class="b" x="30" y="627.3" font-size="11" fill="#b99160">never by copying the script.</text>
+  <text class="b" x="30" y="642.92" font-size="11" fill="#b99160">Two pages target, three</text>
+  <text class="b" x="30" y="658.54" font-size="11" fill="#b99160">maximum.</text>
+  <rect x="198" y="556.44" width="166" height="116.1" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="212" y="566.44" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="223.5" y="579.94" font-size="11.5" fill="#110b07" text-anchor="middle">7</text>
+  <text class="h" x="242" y="579.94" font-size="12.5" fill="#f4e2b8">AUDIO</text>
+  <text class="b" x="212" y="596.06" font-size="11" fill="#ffb43b">in: approved script</text>
+  <text class="b" x="212" y="611.68" font-size="11" fill="#b99160">Kokoro multi-voice speech</text>
+  <text class="b" x="212" y="627.3" font-size="11" fill="#b99160">and the timed transcript.</text>
+  <text class="b" x="212" y="642.92" font-size="11" fill="#b99160">Rendered inside the</text>
+  <text class="b" x="212" y="658.54" font-size="11" fill="#b99160">selected runtime.</text>
+  <path class="wire" d="M 99 673.54 L 99 686.54"/>
+  <path class="wire" d="M 281 673.54 L 281 686.54"/>
+  <path class="wire" d="M 99 686.54 L 281 686.54"/>
+  <path class="wire" d="M 190 686.54 L 190 701.54" marker-end="url(#ar)"/>
+  <rect x="16" y="703.54" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <rect x="30" y="713.54" width="23" height="18" rx="5.5" fill="#f28c18"/>
+  <text class="h" x="41.5" y="727.04" font-size="11.5" fill="#110b07" text-anchor="middle">8</text>
+  <text class="h" x="60" y="727.04" font-size="12.5" fill="#f4e2b8">DELIVER</text>
+  <text class="b" x="30" y="743.16" font-size="11" fill="#b99160">Finalize locally. If publishing is enabled, release to Firebase and</text>
+  <text class="b" x="30" y="758.78" font-size="11" fill="#b99160">then remotely verify the RSS entry and the media enclosure.</text>
+  <text class="k" x="32" y="818.78" font-size="11" fill="#ffb43b">OPTIONAL - THE SAME EIGHT STAGES, UNATTENDED</text>
+  <rect x="30" y="827.78" width="320" height="30" rx="7" fill="#2d190e" stroke="#70401f"/>
+  <text class="k" x="43" y="847.28" font-size="11" fill="#f4e2b8">CLOUDFLARE ALARM, OR A GEN WAKE-UP</text>
+  <path class="wire" d="M 190 858.78 L 190 868.78" marker-end="url(#ar)"/>
+  <rect x="30" y="870.78" width="320" height="30" rx="7" fill="#2d190e" stroke="#70401f"/>
+  <text class="k" x="43" y="890.28" font-size="11" fill="#f4e2b8">GITHUB ACTIONS JOB / PRIVATE REPO</text>
+  <path class="wire" d="M 190 901.78 L 190 911.78" marker-end="url(#ar)"/>
+  <rect x="30" y="913.78" width="320" height="30" rx="7" fill="#2d190e" stroke="#70401f"/>
+  <text class="k" x="43" y="933.28" font-size="11" fill="#f4e2b8">THE SAME EIGHT STAGES ABOVE</text>
+  <path class="wire" d="M 190 944.78 L 190 954.78" marker-end="url(#ar)"/>
+  <rect x="30" y="956.78" width="320" height="30" rx="7" fill="#2d190e" stroke="#70401f"/>
+  <text class="k" x="43" y="976.28" font-size="11" fill="#f4e2b8">FIREBASE PUBLISH / APPLE-COMPATIBLE FEED</text>
+  <rect x="16" y="794.78" width="348" height="205" rx="8" fill="none" stroke="#70401f" stroke-dasharray="4 3"/>
+  <text class="b" x="18" y="1026.78" font-size="11" fill="#b99160">Stages run inside one private runtime: the Windows desktop, or the</text>
+  <text class="b" x="18" y="1042.4" font-size="11" fill="#b99160">GitHub-hosted machine. The newspaper is never derived from the</text>
+  <text class="b" x="18" y="1058.02" font-size="11" fill="#b99160">audio script.</text>
 </svg>

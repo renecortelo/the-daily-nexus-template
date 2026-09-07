@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 920" width="380" height="920" role="img" aria-labelledby="trust-t trust-d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1224" width="380" height="1224" role="img" aria-labelledby="trust-t trust-d">
   <title id="trust-t">What each party receives</title>
   <desc id="trust-d">The run happens in one of two places: the operator's Windows desktop, or an ephemeral GitHub-hosted Ubuntu machine in the operator's private deployment repository. Kokoro, FFmpeg, ReportLab and PyMuPDF operate inside whichever runtime is selected, so an unattended run is not a machine-only path: selected newsletter text, article evidence, prompts, drafts, the MP3, the PDF, the transcript and temporary credential copies exist on the GitHub-hosted machine while the job runs. Gmail is granted the mailbox-wide read-only scope although application code queries only the configured label and date. Public websites receive ordinary HTTPS requests without newsletter login cookies, though normal connection metadata remains visible to them. Antigravity receives selected newsletter, article and daily-research evidence plus editorial instructions, and disabling telemetry does not make its inference offline. GitHub keeps Actions secrets encrypted in the private repository until they are rotated or deleted; temporary runner files are removed and no Actions artifact is uploaded, but GitHub retains workflow logs according to repository settings. Firebase Hosting receives the web app shell, RSS, MP3, PDF, artwork and public source links. Owner-locked Firestore receives generation and schedule parameters, queue, execution and runner state, episode metadata, source counts, up to one hundred references and up to five hundred timed transcript segments containing spoken editorial content, but not raw Gmail bodies, OAuth credentials, Gmail message identifiers, Antigravity request files, local paths or detailed local exceptions. The Cloudflare Durable Object stores schedule timing and opaque identifiers, while the Worker environment separately holds a scoped expiring GitHub dispatch token and transiently receives a short-lived Firebase identity token during authenticated synchronization; Cloudflare receives no newsletter text, Gmail credentials, episode media or editorial parameters. The podcast feed is a capability URL, so anyone holding it has access and it should be handled like a password, and Apple Podcasts or another client can retrieve and cache the feed and media.</desc>
   <defs>
@@ -28,71 +28,80 @@
       .ctl { fill: none; stroke: #b99160; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
-  <rect width="380" height="920" fill="#110b07"/>
-  <use href="#sun" x="34" y="36"/>
-  <text class="dsp" x="60" y="31" font-size="17" fill="#fff0c7">THE DAILY NEXUS</text>
-  <text class="k" x="61" y="46" font-size="8" fill="#b99160">WHAT EACH PARTY RECEIVES</text>
-  <line x1="16" y1="60" x2="364" y2="60" stroke="#70401f"/>
-  <text class="k" x="18" y="82.5" font-size="8.5" fill="#ffb43b">THE RUN HAPPENS IN ONE OF TWO PLACES</text>
-  <rect x="16" y="89.5" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="110" font-size="11" fill="#f4e2b8">WINDOWS DESKTOP</text>
-  <text class="b" x="29" y="122.6" font-size="9" fill="#b99160">The operator's own computer.</text>
-  <rect x="198" y="89.5" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="211" y="110" font-size="11" fill="#f4e2b8">GITHUB-HOSTED JOB</text>
-  <text class="b" x="211" y="122.6" font-size="9" fill="#b99160">Ephemeral Ubuntu, private repo.</text>
-  <rect x="16" y="144.6" width="348" height="82.9" rx="8" fill="#2d190e" stroke="#f28c18"/>
-  <text class="h" x="29" y="165.1" font-size="11" fill="#f4e2b8">NOT A MACHINE-ONLY PATH</text>
-  <text class="b" x="29" y="177.7" font-size="9" fill="#f4e2b8">Kokoro, FFmpeg, ReportLab and PyMuPDF run inside whichever runtime is selected.</text>
-  <text class="b" x="29" y="190.3" font-size="9" fill="#f4e2b8">During an unattended run the selected newsletter text, article evidence, prompts,</text>
-  <text class="b" x="29" y="202.9" font-size="9" fill="#f4e2b8">drafts, the MP3, the PDF, the transcript and temporary credential copies exist on</text>
-  <text class="b" x="29" y="215.5" font-size="9" fill="#f4e2b8">the GitHub-hosted machine.</text>
-  <text class="k" x="18" y="252" font-size="8.5" fill="#ffb43b">WHAT CROSSES TO EACH PARTY</text>
-  <rect x="16" y="259" width="348" height="58.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 270.3 L 36 274.5 L 29 278.7 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="279.5" font-size="11" fill="#f4e2b8">GOOGLE GMAIL</text>
-  <text class="b" x="29" y="292.6" font-size="9.5" fill="#b99160">Mailbox-wide read-only scope. Application code queries only the</text>
-  <text class="b" x="29" y="305.7" font-size="9.5" fill="#b99160">configured label and date.</text>
-  <rect x="16" y="326.7" width="348" height="58.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 338 L 36 342.2 L 29 346.4 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="347.2" font-size="11" fill="#f4e2b8">PUBLIC WEBSITES</text>
-  <text class="b" x="29" y="360.3" font-size="9.5" fill="#b99160">Ordinary HTTPS requests, without newsletter login cookies. Normal</text>
-  <text class="b" x="29" y="373.4" font-size="9.5" fill="#b99160">connection metadata is still visible to the site.</text>
-  <rect x="16" y="394.4" width="348" height="71.3" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 405.7 L 36 409.9 L 29 414.1 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="414.9" font-size="11" fill="#f4e2b8">ANTIGRAVITY</text>
-  <text class="b" x="29" y="428" font-size="9.5" fill="#b99160">Selected newsletter, article and daily-research evidence, plus editorial</text>
-  <text class="b" x="29" y="441.1" font-size="9.5" fill="#b99160">instructions.</text>
-  <text class="b" x="29" y="453.7" font-size="9" fill="#ffb43b">Telemetry off is not offline inference.</text>
-  <rect x="16" y="474.7" width="348" height="71.3" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 486 L 36 490.2 L 29 494.4 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="495.2" font-size="11" fill="#f4e2b8">GITHUB</text>
-  <text class="b" x="29" y="508.3" font-size="9.5" fill="#b99160">Actions secrets stay encrypted in the private repository until rotated or</text>
-  <text class="b" x="29" y="521.4" font-size="9.5" fill="#b99160">deleted. Temporary runner files are removed and no artifact is uploaded.</text>
-  <text class="b" x="29" y="534" font-size="9" fill="#ffb43b">Workflow logs are retained per repository settings.</text>
-  <rect x="16" y="555" width="348" height="45.6" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 566.3 L 36 570.5 L 29 574.7 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="575.5" font-size="11" fill="#f4e2b8">FIREBASE HOSTING</text>
-  <text class="b" x="29" y="588.6" font-size="9.5" fill="#b99160">The web app shell, RSS, MP3, PDF, artwork and public source links.</text>
-  <rect x="16" y="609.6" width="348" height="97" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 620.9 L 36 625.1 L 29 629.3 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="630.1" font-size="11" fill="#f4e2b8">FIRESTORE / OWNER-LOCKED</text>
-  <text class="b" x="29" y="643.2" font-size="9.5" fill="#b99160">Generation and schedule parameters, queue, execution and runner state,</text>
-  <text class="b" x="29" y="656.3" font-size="9.5" fill="#b99160">episode metadata, source counts, up to 100 references and up to 500</text>
-  <text class="b" x="29" y="669.4" font-size="9.5" fill="#b99160">timed transcript segments. The transcript holds spoken editorial content.</text>
-  <text class="b" x="29" y="682" font-size="9" fill="#e35d35">Not sent: raw Gmail bodies, OAuth credentials, Gmail message IDs, Antigravity</text>
-  <text class="b" x="29" y="694.6" font-size="9" fill="#e35d35">request files, local paths, detailed local exceptions.</text>
-  <rect x="16" y="715.6" width="348" height="84.4" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 726.9 L 36 731.1 L 29 735.3 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="736.1" font-size="11" fill="#f4e2b8">CLOUDFLARE</text>
-  <text class="b" x="29" y="749.2" font-size="9.5" fill="#b99160">Durable Object: schedule timing and opaque IDs. Worker environment: a</text>
-  <text class="b" x="29" y="762.3" font-size="9.5" fill="#b99160">scoped, expiring GitHub dispatch token, and transiently a short-lived</text>
-  <text class="b" x="29" y="775.4" font-size="9.5" fill="#b99160">Firebase ID token during authenticated sync.</text>
-  <text class="b" x="29" y="788" font-size="9" fill="#e35d35">Not sent: newsletter text, Gmail credentials, episode media, editorial parameters.</text>
-  <rect x="16" y="809" width="348" height="58.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <path d="M 29 820.3 L 36 824.5 L 29 828.7 Z" fill="#f28c18"/>
-  <text class="h" x="43" y="829.5" font-size="11" fill="#f4e2b8">APPLE PODCASTS / ANY CLIENT</text>
-  <text class="b" x="29" y="842.6" font-size="9.5" fill="#b99160">The feed is a capability URL: whoever holds it has access, so handle it like</text>
-  <text class="b" x="29" y="855.7" font-size="9.5" fill="#b99160">a password. A client can fetch and cache the feed and media.</text>
-  <text class="b" x="18" y="890.3" font-size="8.6" fill="#b99160">Revoking access happens at each provider. Deleting a file or a repository does not revoke</text>
-  <text class="b" x="18" y="902.3" font-size="8.6" fill="#b99160">a grant.</text>
+  <rect width="380" height="1224" fill="#110b07"/>
+  <use href="#sun" x="36" y="38"/>
+  <text class="dsp" x="64" y="34" font-size="21" fill="#fff0c7">THE DAILY NEXUS</text>
+  <text class="k" x="65" y="52" font-size="11" fill="#b99160">WHAT EACH PARTY RECEIVES</text>
+  <line x1="16" y1="68" x2="364" y2="68" stroke="#70401f"/>
+  <text class="k" x="18" y="95" font-size="11" fill="#ffb43b">THE RUN HAPPENS IN ONE OF TWO PLACES</text>
+  <rect x="16" y="104" width="166" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="127.5" font-size="12.5" fill="#f4e2b8">WINDOWS DESKTOP</text>
+  <text class="b" x="30" y="143.62" font-size="11" fill="#b99160">The operator's own</text>
+  <text class="b" x="30" y="159.24" font-size="11" fill="#b99160">computer.</text>
+  <rect x="198" y="104" width="166" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="127.5" font-size="12.5" fill="#f4e2b8">GITHUB-HOSTED JOB</text>
+  <text class="b" x="212" y="143.62" font-size="11" fill="#b99160">Ephemeral Ubuntu, private</text>
+  <text class="b" x="212" y="159.24" font-size="11" fill="#b99160">repo.</text>
+  <rect x="16" y="185.24" width="348" height="116.1" rx="8" fill="#2d190e" stroke="#f28c18"/>
+  <text class="h" x="30" y="208.74" font-size="12.5" fill="#f4e2b8">NOT A MACHINE-ONLY PATH</text>
+  <text class="b" x="30" y="224.86" font-size="11" fill="#f4e2b8">Kokoro, FFmpeg, ReportLab and PyMuPDF run inside whichever</text>
+  <text class="b" x="30" y="240.48" font-size="11" fill="#f4e2b8">runtime is selected.</text>
+  <text class="b" x="30" y="256.1" font-size="11" fill="#f4e2b8">During an unattended run the selected newsletter text, article</text>
+  <text class="b" x="30" y="271.72" font-size="11" fill="#f4e2b8">evidence, prompts, drafts, the MP3, the PDF, the transcript and</text>
+  <text class="b" x="30" y="287.34" font-size="11" fill="#f4e2b8">temporary credential copies exist on the GitHub-hosted machine.</text>
+  <text class="k" x="18" y="330.34" font-size="11" fill="#ffb43b">WHAT CROSSES TO EACH PARTY</text>
+  <rect x="16" y="339.34" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 352.84 L 38 357.84 L 30 362.84 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="362.84" font-size="12.5" fill="#f4e2b8">GOOGLE GMAIL</text>
+  <text class="b" x="30" y="378.96" font-size="11" fill="#b99160">Mailbox-wide read-only scope. Application code queries only the</text>
+  <text class="b" x="30" y="394.58" font-size="11" fill="#b99160">configured label and date.</text>
+  <rect x="16" y="419.58" width="348" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 433.08 L 38 438.08 L 30 443.08 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="443.08" font-size="12.5" fill="#f4e2b8">PUBLIC WEBSITES</text>
+  <text class="b" x="30" y="459.2" font-size="11" fill="#b99160">Ordinary HTTPS requests, without newsletter login cookies.</text>
+  <text class="b" x="30" y="474.82" font-size="11" fill="#b99160">Normal connection metadata is still visible to the site.</text>
+  <rect x="16" y="499.82" width="348" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 513.32 L 38 518.32 L 30 523.32 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="523.32" font-size="12.5" fill="#f4e2b8">ANTIGRAVITY</text>
+  <text class="b" x="30" y="539.44" font-size="11" fill="#b99160">Selected newsletter, article and daily-research evidence, plus</text>
+  <text class="b" x="30" y="555.06" font-size="11" fill="#b99160">editorial instructions.</text>
+  <text class="b" x="30" y="570.68" font-size="11" fill="#ffb43b">Telemetry off is not offline inference.</text>
+  <rect x="16" y="595.68" width="348" height="100.48" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 609.18 L 38 614.18 L 30 619.18 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="619.18" font-size="12.5" fill="#f4e2b8">GITHUB</text>
+  <text class="b" x="30" y="635.3" font-size="11" fill="#b99160">Actions secrets stay encrypted in the private repository until</text>
+  <text class="b" x="30" y="650.92" font-size="11" fill="#b99160">rotated or deleted.</text>
+  <text class="b" x="30" y="666.54" font-size="11" fill="#b99160">Temporary runner files are removed and no artifact is uploaded.</text>
+  <text class="b" x="30" y="682.16" font-size="11" fill="#ffb43b">Workflow logs are retained per repository settings.</text>
+  <rect x="16" y="707.16" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 720.66 L 38 725.66 L 30 730.66 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="730.66" font-size="12.5" fill="#f4e2b8">FIREBASE HOSTING</text>
+  <text class="b" x="30" y="746.78" font-size="11" fill="#b99160">The web app shell, RSS, MP3, PDF, artwork and public source links.</text>
+  <rect x="16" y="771.78" width="348" height="147.34" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 785.28 L 38 790.28 L 30 795.28 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="795.28" font-size="12.5" fill="#f4e2b8">FIRESTORE / OWNER-LOCKED</text>
+  <text class="b" x="30" y="811.4" font-size="11" fill="#b99160">Generation and schedule parameters, queue, execution and</text>
+  <text class="b" x="30" y="827.02" font-size="11" fill="#b99160">runner state, episode metadata and source counts.</text>
+  <text class="b" x="30" y="842.64" font-size="11" fill="#b99160">Up to 100 references and up to 500 timed transcript segments.</text>
+  <text class="b" x="30" y="858.26" font-size="11" fill="#b99160">The transcript holds spoken editorial content.</text>
+  <text class="b" x="30" y="873.88" font-size="11" fill="#e35d35">Not sent: raw Gmail bodies, OAuth credentials, Gmail message</text>
+  <text class="b" x="30" y="889.5" font-size="11" fill="#e35d35">IDs, Antigravity request files, local paths, detailed local</text>
+  <text class="b" x="30" y="905.12" font-size="11" fill="#e35d35">exceptions.</text>
+  <rect x="16" y="930.12" width="348" height="131.72" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 943.62 L 38 948.62 L 30 953.62 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="953.62" font-size="12.5" fill="#f4e2b8">CLOUDFLARE</text>
+  <text class="b" x="30" y="969.74" font-size="11" fill="#b99160">Durable Object: schedule timing and opaque IDs.</text>
+  <text class="b" x="30" y="985.36" font-size="11" fill="#b99160">Worker environment: a scoped, expiring GitHub dispatch token,</text>
+  <text class="b" x="30" y="1000.98" font-size="11" fill="#b99160">and transiently a short-lived Firebase ID token during</text>
+  <text class="b" x="30" y="1016.6" font-size="11" fill="#b99160">authenticated sync.</text>
+  <text class="b" x="30" y="1032.22" font-size="11" fill="#e35d35">Not sent: newsletter text, Gmail credentials, episode media,</text>
+  <text class="b" x="30" y="1047.84" font-size="11" fill="#e35d35">editorial parameters.</text>
+  <rect x="16" y="1072.84" width="348" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <path d="M 30 1086.34 L 38 1091.34 L 30 1096.34 Z" fill="#f28c18"/>
+  <text class="h" x="46" y="1096.34" font-size="12.5" fill="#f4e2b8">APPLE PODCASTS / ANY CLIENT</text>
+  <text class="b" x="30" y="1112.46" font-size="11" fill="#b99160">The feed is a capability URL: whoever holds it has access, so</text>
+  <text class="b" x="30" y="1128.08" font-size="11" fill="#b99160">handle it like a password.</text>
+  <text class="b" x="30" y="1143.7" font-size="11" fill="#b99160">A client can fetch and cache the feed and media.</text>
+  <text class="b" x="18" y="1186.7" font-size="11" fill="#b99160">Revoking access happens at each provider. Deleting a file or a</text>
+  <text class="b" x="18" y="1202.32" font-size="11" fill="#b99160">repository does not revoke a grant.</text>
 </svg>

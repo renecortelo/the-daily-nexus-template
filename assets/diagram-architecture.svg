@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1181" width="380" height="1181" role="img" aria-labelledby="arch-t arch-d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1614" width="380" height="1614" role="img" aria-labelledby="arch-t arch-d">
   <title id="arch-t">The Daily Nexus system architecture</title>
-  <desc id="arch-d">A per-operator deployment, not a shared hosted service. The operator works from a Windows desktop application or an authenticated progressive web app. Control plane: the web app signs in through Firebase Authentication, reads and writes owner-locked Firestore, and synchronizes schedules or an immediate GEN wake-up with a Cloudflare Worker, whose Durable Object clock dispatches a GitHub Actions workflow in the operator's private repository when work is due. Content plane: generation runs either in the local Python runtime on Windows or in a GitHub-hosted Ubuntu Actions job, performing Gmail read-only collection, safe public-page enrichment, remote Antigravity editorial inference, quality validation, Kokoro and FFmpeg audio production, and ReportLab and PyMuPDF newspaper production. Desktop runs keep SQLite and filesystem state locally, while the Actions job claims and loads its work from Firestore. Publication goes to static Firebase Hosting, which serves the progressive web app shell and the capability-protected Apple Podcasts-compatible feed and media. After authentication the browser receives owner-scoped settings, status, references, transcript data and private media URLs, never generation credentials or raw Gmail bodies.</desc>
+  <desc id="arch-d">A per-operator deployment, not a shared hosted service. Control plane: the web app signs in through Firebase Authentication, and once authenticated it talks separately to two services. It reads and writes owner-locked Firestore for settings, schedules, the queue, executions and status, and it synchronizes schedule timing or requests an immediate GEN wake-up with the Cloudflare clock. Cloudflare dispatches a GitHub Actions workflow in the operator's private repository. That workflow talks directly to Firestore to claim an execution, read its parameters and update its state, and it starts the GitHub-hosted Ubuntu generation runtime. Separately, the desktop application drives the local Windows runtime directly. Both runtimes then run the same content plane: Gmail read-only collection, safe public-page enrichment, remote Antigravity editorial inference, quality validation, and finally two parallel producers, Kokoro with FFmpeg for audio and ReportLab with PyMuPDF for the newspaper. Delivery then splits into two independent outcomes. A run can finish locally, where a desktop run keeps SQLite state, the manifest, MP3, PDF and transcript on the operator's machine while a GitHub-hosted run keeps nothing because its temporary files are removed. Independently, and only when publishing is enabled, the run releases to static Firebase Hosting, which serves the capability-protected Apple Podcasts-compatible feed and media. Firebase is not a required step for a local-only run.</desc>
   <defs>
     <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.45" stop-color="#ffb43b"/><stop offset="1" stop-color="#e0620f"/></linearGradient>
     <clipPath id="sc"><circle cx="0" cy="0" r="14.2"/></clipPath>
@@ -28,99 +28,129 @@
       .ctl { fill: none; stroke: #b99160; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
-  <rect width="380" height="1181" fill="#110b07"/>
-  <use href="#sun" x="34" y="36"/>
-  <text class="dsp" x="60" y="31" font-size="17" fill="#fff0c7">THE DAILY NEXUS</text>
-  <text class="k" x="61" y="46" font-size="8" fill="#b99160">SYSTEM ARCHITECTURE / ONE OPERATOR</text>
-  <line x1="16" y1="60" x2="364" y2="60" stroke="#70401f"/>
-  <text class="k" x="18" y="82.5" font-size="8.5" fill="#ffb43b">OPERATOR</text>
-  <rect x="16" y="89.5" width="166" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="110" font-size="11" fill="#f4e2b8">DESKTOP APP</text>
-  <text class="b" x="29" y="122.6" font-size="9" fill="#b99160">Windows. Runs generation locally.</text>
-  <rect x="198" y="89.5" width="166" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="211" y="110" font-size="11" fill="#f4e2b8">WEB APP</text>
-  <text class="b" x="211" y="122.6" font-size="9" fill="#b99160">Browser or iPhone. Signed-in</text>
-  <text class="b" x="211" y="135.2" font-size="9" fill="#b99160">console.</text>
-  <text class="b" x="18" y="163.8" font-size="8.6" fill="#b99160">One operator, one private deployment: separate accounts, separate private repository.</text>
-  <text class="b" x="18" y="175.8" font-size="8.6" fill="#b99160">There is no shared multi-user service.</text>
-  <text class="k" x="18" y="197.7" font-size="8.5" fill="#b99160">CONTROL PLANE / SCHEDULING</text>
-  <rect x="26" y="208.7" width="328" height="45.1" rx="8" fill="#2d190e" stroke="#70401f"/>
-  <text class="h" x="39" y="229.2" font-size="11" fill="#f4e2b8">FIREBASE AUTH</text>
-  <text class="b" x="39" y="241.8" font-size="9" fill="#b99160">Google sign-in. The Firebase UID must match the owner document.</text>
-  <path class="ctl" d="M 190 254.8 L 190 264.8" marker-end="url(#ac)"/>
-  <rect x="26" y="266.8" width="328" height="57.7" rx="8" fill="#2d190e" stroke="#70401f"/>
-  <text class="h" x="39" y="287.3" font-size="11" fill="#f4e2b8">OWNER-LOCKED FIRESTORE</text>
-  <text class="b" x="39" y="299.9" font-size="9" fill="#b99160">Settings, schedules, queue and execution state, runner status, episode</text>
-  <text class="b" x="39" y="312.5" font-size="9" fill="#b99160">metadata. The Actions job claims and loads its work here.</text>
-  <path class="ctl" d="M 190 325.5 L 190 335.5" marker-end="url(#ac)"/>
-  <rect x="26" y="337.5" width="328" height="57.7" rx="8" fill="#2d190e" stroke="#70401f"/>
-  <text class="h" x="39" y="358" font-size="11" fill="#f4e2b8">CLOUDFLARE WORKER + CLOCK</text>
-  <text class="b" x="39" y="370.6" font-size="9" fill="#b99160">Durable Object: schedule timing and opaque IDs.</text>
-  <text class="b" x="39" y="383.2" font-size="9" fill="#b99160">Worker: the scoped, expiring dispatch token.</text>
-  <path class="ctl" d="M 190 396.2 L 190 406.2" marker-end="url(#ac)"/>
-  <rect x="26" y="408.2" width="328" height="45.1" rx="8" fill="#2d190e" stroke="#70401f"/>
-  <text class="h" x="39" y="428.7" font-size="11" fill="#f4e2b8">GITHUB ACTIONS / PRIVATE REPO</text>
-  <text class="b" x="39" y="441.3" font-size="9" fill="#b99160">Workflow dispatched only for due work or a GEN wake-up.</text>
-  <rect x="16" y="204.7" width="348" height="260.6" rx="8" fill="none" stroke="#70401f" stroke-dasharray="4 3"/>
-  <text class="k" x="18" y="489.8" font-size="8.5" fill="#ffb43b">CONTENT PLANE / GENERATION RUNTIME</text>
-  <rect x="16" y="496.8" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="517.3" font-size="11" fill="#f4e2b8">WINDOWS DESKTOP</text>
-  <text class="b" x="29" y="529.9" font-size="9" fill="#b99160">Local Python runtime.</text>
-  <rect x="198" y="496.8" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="211" y="517.3" font-size="11" fill="#f4e2b8">GITHUB-HOSTED JOB</text>
-  <text class="b" x="211" y="529.9" font-size="9" fill="#b99160">Ephemeral Ubuntu, private repo.</text>
-  <path class="wire" d="M 99 542.9 L 99 554.9"/>
-  <path class="wire" d="M 281 542.9 L 281 554.9"/>
-  <path class="wire" d="M 99 554.9 L 281 554.9"/>
-  <path class="wire" d="M 190 554.9 L 190 567.9" marker-end="url(#ar)"/>
-  <rect x="16" y="569.9" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="590.4" font-size="11" fill="#f4e2b8">GMAIL COLLECTION</text>
-  <text class="b" x="29" y="603" font-size="9" fill="#b99160">Read-only, the configured label and date.</text>
-  <path class="wire" d="M 190 616 L 190 627" marker-end="url(#ar)"/>
-  <rect x="16" y="629" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="649.5" font-size="11" fill="#f4e2b8">PUBLIC-PAGE ENRICHMENT</text>
-  <text class="b" x="29" y="662.1" font-size="9" fill="#b99160">Allowed pages only, with safety checks.</text>
-  <path class="wire" d="M 190 675.1 L 190 686.1" marker-end="url(#ar)"/>
-  <rect x="16" y="688.1" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="708.6" font-size="11" fill="#f4e2b8">ANTIGRAVITY</text>
-  <text class="b" x="29" y="721.2" font-size="9" fill="#b99160">Remote editorial inference.</text>
-  <path class="wire" d="M 190 734.2 L 190 745.2" marker-end="url(#ar)"/>
-  <rect x="16" y="747.2" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="767.7" font-size="11" fill="#f4e2b8">QUALITY VALIDATION</text>
-  <text class="b" x="29" y="780.3" font-size="9" fill="#b99160">Facts, coverage, structure, repetition.</text>
-  <path class="wire" d="M 190 793.3 L 190 804.3" marker-end="url(#ar)"/>
-  <path class="wire" d="M 190 807.3 L 190 819.3"/>
-  <path class="wire" d="M 99 819.3 L 281 819.3"/>
-  <path class="wire" d="M 99 819.3 L 99 832.3" marker-end="url(#ar)"/>
-  <path class="wire" d="M 281 819.3 L 281 832.3" marker-end="url(#ar)"/>
-  <rect x="16" y="834.3" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="854.8" font-size="11" fill="#f4e2b8">AUDIO</text>
-  <text class="b" x="29" y="867.4" font-size="9" fill="#b99160">Kokoro and FFmpeg.</text>
-  <rect x="198" y="834.3" width="166" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="211" y="854.8" font-size="11" fill="#f4e2b8">NEWSPAPER</text>
-  <text class="b" x="211" y="867.4" font-size="9" fill="#b99160">ReportLab and PyMuPDF.</text>
-  <path class="wire" d="M 99 880.4 L 99 892.4"/>
-  <path class="wire" d="M 281 880.4 L 281 892.4"/>
-  <path class="wire" d="M 99 892.4 L 281 892.4"/>
-  <text class="k" x="18" y="904.9" font-size="8.5" fill="#ffb43b">STATE AND DELIVERY</text>
-  <path class="wire" d="M 190 892.4 L 190 924.9" marker-end="url(#ar)"/>
-  <rect x="16" y="926.9" width="348" height="57.7" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="947.4" font-size="11" fill="#f4e2b8">LOCAL SQLITE + FILES</text>
-  <text class="b" x="29" y="960" font-size="9" fill="#b99160">Desktop runs keep run state, episodes and checksums on the operator's own</text>
-  <text class="b" x="29" y="972.6" font-size="9" fill="#b99160">machine.</text>
-  <path class="wire" d="M 190 985.6 L 190 996.6" marker-end="url(#ar)"/>
-  <rect x="16" y="998.6" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="1019.1" font-size="11" fill="#f4e2b8">FIREBASE HOSTING</text>
-  <text class="b" x="29" y="1031.7" font-size="9" fill="#b99160">Web app shell, private RSS, MP3, PDF, artwork and public source links.</text>
-  <path class="wire" d="M 190 1044.7 L 190 1055.7" marker-end="url(#ar)"/>
-  <rect x="16" y="1057.7" width="348" height="45.1" rx="8" fill="#21130c" stroke="#70401f"/>
-  <text class="h" x="29" y="1078.2" font-size="11" fill="#f4e2b8">APPLE PODCASTS / ANY CLIENT</text>
-  <text class="b" x="29" y="1090.8" font-size="9" fill="#b99160">Fetches the capability-protected feed and media.</text>
-  <text class="b" x="18" y="1125.4" font-size="8.6" fill="#b99160">After sign-in the browser receives owner-scoped settings, status, references, transcript</text>
-  <text class="b" x="18" y="1137.4" font-size="8.6" fill="#b99160">data and private media URLs. It never receives generation credentials or raw Gmail</text>
-  <text class="b" x="18" y="1149.4" font-size="8.6" fill="#b99160">bodies.</text>
-  <path class="wire" d="M 20 1162.8 L 42 1162.8"/>
-  <text class="k" x="48" y="1165.8" font-size="8.2" fill="#b99160">content and media</text>
-  <path class="ctl" d="M 184 1162.8 L 206 1162.8"/>
-  <text class="k" x="212" y="1165.8" font-size="8.2" fill="#b99160">control and scheduling</text>
+  <rect width="380" height="1614" fill="#110b07"/>
+  <use href="#sun" x="36" y="38"/>
+  <text class="dsp" x="64" y="34" font-size="21" fill="#fff0c7">THE DAILY NEXUS</text>
+  <text class="k" x="65" y="52" font-size="11" fill="#b99160">SYSTEM ARCHITECTURE / ONE OPERATOR</text>
+  <line x1="16" y1="68" x2="364" y2="68" stroke="#70401f"/>
+  <text class="k" x="18" y="95" font-size="11" fill="#b99160">CONTROL PLANE / SCHEDULING</text>
+  <rect x="24" y="112" width="332" height="53.62" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="38" y="135.5" font-size="12.5" fill="#f4e2b8">WEB APP</text>
+  <text class="b" x="38" y="151.62" font-size="11" fill="#b99160">Browser or iPhone. The signed-in owner console.</text>
+  <path class="ctl" d="M 190 166.62 L 190 179.62" marker-end="url(#ac)"/>
+  <rect x="24" y="181.62" width="332" height="53.62" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="38" y="205.12" font-size="12.5" fill="#f4e2b8">FIREBASE AUTH</text>
+  <text class="b" x="38" y="221.24" font-size="11" fill="#b99160">Google sign-in. The owner UID gates everything below.</text>
+  <path class="ctl" d="M 190 236.24 L 190 249.24"/>
+  <path class="ctl" d="M 104 249.24 L 276 249.24"/>
+  <path class="ctl" d="M 104 249.24 L 104 264.24" marker-start="url(#ac)" marker-end="url(#ac)"/>
+  <path class="ctl" d="M 276 249.24 L 276 264.24" marker-start="url(#ac)" marker-end="url(#ac)"/>
+  <rect x="24" y="266.24" width="160" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="38" y="289.74" font-size="12.5" fill="#f4e2b8">FIRESTORE</text>
+  <text class="b" x="38" y="305.86" font-size="11" fill="#b99160">Owner-locked. Settings,</text>
+  <text class="b" x="38" y="321.48" font-size="11" fill="#b99160">schedules, queue,</text>
+  <text class="b" x="38" y="337.1" font-size="11" fill="#b99160">executions and status.</text>
+  <rect x="196" y="266.24" width="160" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="210" y="289.74" font-size="12.5" fill="#f4e2b8">CLOUDFLARE CLOCK</text>
+  <text class="b" x="210" y="305.86" font-size="11" fill="#b99160">Durable Object timing and</text>
+  <text class="b" x="210" y="321.48" font-size="11" fill="#b99160">opaque IDs. The Worker</text>
+  <text class="b" x="210" y="337.1" font-size="11" fill="#b99160">holds the dispatch token.</text>
+  <path class="ctl" d="M 276 352.1 L 276 382.1" marker-end="url(#ac)"/>
+  <path class="ctl" d="M 104 352.1 L 104 382.1" marker-start="url(#ac)" marker-end="url(#ac)"/>
+  <text class="k" x="284" y="372.1" font-size="11" fill="#b99160">dispatch</text>
+  <text class="k" x="112" y="372.1" font-size="11" fill="#b99160">claim / read / update</text>
+  <rect x="24" y="384.1" width="332" height="53.62" rx="8" fill="#2d190e" stroke="#70401f"/>
+  <text class="h" x="38" y="407.6" font-size="12.5" fill="#f4e2b8">GITHUB ACTIONS</text>
+  <text class="b" x="38" y="423.72" font-size="11" fill="#b99160">Workflow in the operator's private repository.</text>
+  <rect x="16" y="104" width="348" height="345.72" rx="8" fill="none" stroke="#70401f" stroke-dasharray="4 3"/>
+  <text class="k" x="18" y="476.72" font-size="11" fill="#ffb43b">CONTENT PLANE / RUNTIMES</text>
+  <rect x="16" y="503.72" width="166" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="527.22" font-size="12.5" fill="#f4e2b8">DESKTOP APP</text>
+  <text class="b" x="30" y="543.34" font-size="11" fill="#b99160">Windows. Drives the local</text>
+  <text class="b" x="30" y="558.96" font-size="11" fill="#b99160">runtime.</text>
+  <path class="wire" d="M 190 437.72 L 190 492.72 L 281 492.72 L 281 587.96" marker-end="url(#ar)"/>
+  <path class="wire" d="M 99 573.96 L 99 587.96" marker-end="url(#ar)"/>
+  <rect x="16" y="589.96" width="166" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="613.46" font-size="12.5" fill="#f4e2b8">WINDOWS RUNTIME</text>
+  <text class="b" x="30" y="629.58" font-size="11" fill="#b99160">Local Python generation.</text>
+  <rect x="198" y="589.96" width="166" height="69.24" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="613.46" font-size="12.5" fill="#f4e2b8">GITHUB-HOSTED JOB</text>
+  <text class="b" x="212" y="629.58" font-size="11" fill="#b99160">Ephemeral Ubuntu Actions</text>
+  <text class="b" x="212" y="645.2" font-size="11" fill="#b99160">job.</text>
+  <path class="wire" d="M 99 660.2 L 99 673.2"/>
+  <path class="wire" d="M 281 660.2 L 281 673.2"/>
+  <path class="wire" d="M 99 673.2 L 281 673.2"/>
+  <path class="wire" d="M 190 673.2 L 190 688.2" marker-end="url(#ar)"/>
+  <rect x="16" y="690.2" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="713.7" font-size="12.5" fill="#f4e2b8">GMAIL COLLECTION</text>
+  <text class="b" x="30" y="729.82" font-size="11" fill="#b99160">Read-only, the configured label and date.</text>
+  <path class="wire" d="M 190 744.82 L 190 757.82" marker-end="url(#ar)"/>
+  <rect x="16" y="759.82" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="783.32" font-size="12.5" fill="#f4e2b8">PUBLIC-PAGE ENRICHMENT</text>
+  <text class="b" x="30" y="799.44" font-size="11" fill="#b99160">Allowed pages only, with safety checks.</text>
+  <path class="wire" d="M 190 814.44 L 190 827.44" marker-end="url(#ar)"/>
+  <rect x="16" y="829.44" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="852.94" font-size="12.5" fill="#f4e2b8">ANTIGRAVITY</text>
+  <text class="b" x="30" y="869.06" font-size="11" fill="#b99160">Remote editorial inference.</text>
+  <path class="wire" d="M 190 884.06 L 190 897.06" marker-end="url(#ar)"/>
+  <rect x="16" y="899.06" width="348" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="922.56" font-size="12.5" fill="#f4e2b8">QUALITY VALIDATION</text>
+  <text class="b" x="30" y="938.68" font-size="11" fill="#b99160">Facts, coverage, structure, repetition.</text>
+  <path class="wire" d="M 190 953.68 L 190 966.68" marker-end="url(#ar)"/>
+  <path class="wire" d="M 190 969.68 L 190 982.68"/>
+  <path class="wire" d="M 99 982.68 L 281 982.68"/>
+  <path class="wire" d="M 99 982.68 L 99 997.68" marker-end="url(#ar)"/>
+  <path class="wire" d="M 281 982.68 L 281 997.68" marker-end="url(#ar)"/>
+  <rect x="16" y="999.68" width="166" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="1023.18" font-size="12.5" fill="#f4e2b8">AUDIO</text>
+  <text class="b" x="30" y="1039.3" font-size="11" fill="#b99160">Kokoro and FFmpeg.</text>
+  <rect x="198" y="999.68" width="166" height="53.62" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="1023.18" font-size="12.5" fill="#f4e2b8">NEWSPAPER</text>
+  <text class="b" x="212" y="1039.3" font-size="11" fill="#b99160">ReportLab and PyMuPDF.</text>
+  <path class="wire" d="M 99 1054.3 L 99 1067.3"/>
+  <path class="wire" d="M 281 1054.3 L 281 1067.3"/>
+  <path class="wire" d="M 99 1067.3 L 281 1067.3"/>
+  <text class="k" x="18" y="1083.3" font-size="11" fill="#ffb43b">DELIVERY / TWO OUTCOMES</text>
+  <path class="wire" d="M 190 1067.3 L 190 1107.3" marker-end="url(#ar)"/>
+  <path class="wire" d="M 190 1110.3 L 190 1123.3"/>
+  <path class="wire" d="M 99 1123.3 L 281 1123.3"/>
+  <path class="wire" d="M 99 1123.3 L 99 1138.3" marker-end="url(#ar)"/>
+  <path class="wire" d="M 281 1123.3 L 281 1138.3" marker-end="url(#ar)"/>
+  <rect x="16" y="1140.3" width="166" height="147.34" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="30" y="1163.8" font-size="11.5" fill="#f4e2b8">LOCAL FINALIZATION</text>
+  <text class="b" x="30" y="1179.92" font-size="11" fill="#b99160">A desktop run keeps SQLite</text>
+  <text class="b" x="30" y="1195.54" font-size="11" fill="#b99160">state, the manifest, MP3,</text>
+  <text class="b" x="30" y="1211.16" font-size="11" fill="#b99160">PDF and transcript on the</text>
+  <text class="b" x="30" y="1226.78" font-size="11" fill="#b99160">operator's machine.</text>
+  <text class="b" x="30" y="1242.4" font-size="11" fill="#ffb43b">A GitHub-hosted run keeps</text>
+  <text class="b" x="30" y="1258.02" font-size="11" fill="#ffb43b">nothing: its temporary files</text>
+  <text class="b" x="30" y="1273.64" font-size="11" fill="#ffb43b">are removed.</text>
+  <rect x="198" y="1140.3" width="166" height="147.34" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="1163.8" font-size="11" fill="#f4e2b8">OPTIONAL PUBLICATION</text>
+  <text class="b" x="212" y="1179.92" font-size="11" fill="#b99160">Only when publishing is</text>
+  <text class="b" x="212" y="1195.54" font-size="11" fill="#b99160">enabled. A desktop run can</text>
+  <text class="b" x="212" y="1211.16" font-size="11" fill="#b99160">publish on request; a cloud</text>
+  <text class="b" x="212" y="1226.78" font-size="11" fill="#b99160">run publishes after its</text>
+  <text class="b" x="212" y="1242.4" font-size="11" fill="#b99160">checks pass.</text>
+  <text class="k" x="99" y="1304.64" font-size="11" fill="#b99160" text-anchor="middle">run ends here</text>
+  <path class="wire" d="M 281 1288.64 L 281 1307.64" marker-end="url(#ar)"/>
+  <rect x="198" y="1309.64" width="166" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="1333.14" font-size="12.5" fill="#f4e2b8">FIREBASE HOSTING</text>
+  <text class="b" x="212" y="1349.26" font-size="11" fill="#b99160">Static releases: the app</text>
+  <text class="b" x="212" y="1364.88" font-size="11" fill="#b99160">shell, private RSS, MP3, PDF</text>
+  <text class="b" x="212" y="1380.5" font-size="11" fill="#b99160">and artwork.</text>
+  <path class="wire" d="M 281 1395.5 L 281 1409.5" marker-end="url(#ar)"/>
+  <rect x="198" y="1411.5" width="166" height="84.86" rx="8" fill="#21130c" stroke="#70401f"/>
+  <text class="h" x="212" y="1435" font-size="12.5" fill="#f4e2b8">APPLE PODCASTS</text>
+  <text class="b" x="212" y="1451.12" font-size="11" fill="#b99160">Any client fetches the</text>
+  <text class="b" x="212" y="1466.74" font-size="11" fill="#b99160">capability-protected feed</text>
+  <text class="b" x="212" y="1482.36" font-size="11" fill="#b99160">and media.</text>
+  <text class="b" x="18" y="1525.36" font-size="11" fill="#b99160">Firebase is not a required step: a local-only run finishes on the left.</text>
+  <text class="b" x="18" y="1540.98" font-size="11" fill="#b99160">After sign-in the browser receives owner-scoped settings, status,</text>
+  <text class="b" x="18" y="1556.6" font-size="11" fill="#b99160">references, transcript data and private media URLs, never generation</text>
+  <text class="b" x="18" y="1572.22" font-size="11" fill="#b99160">credentials or raw Gmail bodies.</text>
+  <path class="wire" d="M 20 1590.84 L 46 1590.84"/>
+  <text class="k" x="53" y="1594.84" font-size="11" fill="#b99160">content</text>
+  <path class="ctl" d="M 136 1590.84 L 162 1590.84"/>
+  <text class="k" x="169" y="1594.84" font-size="11" fill="#b99160">control / scheduling</text>
 </svg>
