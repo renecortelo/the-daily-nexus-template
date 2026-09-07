@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 1614" width="380" height="1614" role="img" aria-labelledby="arch-t arch-d">
   <title id="arch-t">The Daily Nexus system architecture</title>
-  <desc id="arch-d">A per-operator deployment, not a shared hosted service. Control plane: the web app signs in through Firebase Authentication, and once authenticated it talks separately to two services. It reads and writes owner-locked Firestore for settings, schedules, the queue, executions and status, and it synchronizes schedule timing or requests an immediate GEN wake-up with the Cloudflare clock. Cloudflare dispatches a GitHub Actions workflow in the operator's private repository. That workflow talks directly to Firestore to claim an execution, read its parameters and update its state, and it starts the GitHub-hosted Ubuntu generation runtime. Separately, the desktop application drives the local Windows runtime directly. Both runtimes then run the same content plane: Gmail read-only collection, safe public-page enrichment, remote Antigravity editorial inference, quality validation, and finally two parallel producers, Kokoro with FFmpeg for audio and ReportLab with PyMuPDF for the newspaper. Delivery then splits into two independent outcomes. A run can finish locally, where a desktop run keeps SQLite state, the manifest, MP3, PDF and transcript on the operator's machine while a GitHub-hosted run keeps nothing because its temporary files are removed. Independently, and only when publishing is enabled, the run releases to static Firebase Hosting, which serves the capability-protected Apple Podcasts-compatible feed and media. Firebase is not a required step for a local-only run.</desc>
+  <desc id="arch-d">A per-operator deployment, not a shared hosted service. Control plane: the web app signs in through Firebase Authentication. The owner UID gates access to private web data and cloud requests. Once authenticated, the app talks separately to two services. It reads and writes owner-locked Firestore for settings, schedules, the queue, executions and status, and it synchronizes schedule timing or requests an immediate GEN wake-up with the Cloudflare clock. Cloudflare dispatches a GitHub Actions workflow in the operator's private repository. That workflow talks directly to Firestore to claim an execution, read its parameters and update its state, and it starts the GitHub-hosted Ubuntu generation runtime. Separately, the desktop application drives the local Windows runtime directly. Both runtimes then run the same content plane: Gmail read-only collection, safe public-page enrichment, remote Antigravity editorial inference, quality validation, and finally two parallel producers, Kokoro with FFmpeg for audio and ReportLab with PyMuPDF for the newspaper. Delivery then splits into two independent outcomes. A run can finish locally, where a desktop run keeps SQLite state, the manifest, MP3, PDF and transcript on the operator's machine while no generated output files persist on the ephemeral GitHub-hosted runner after cleanup; GitHub Actions may retain workflow logs according to the repository's retention settings. Independently, and only when publishing is enabled, the run releases to static Firebase Hosting, which serves the capability-protected Apple Podcasts-compatible feed and media. Firebase is not a required step for a local-only run.</desc>
   <defs>
     <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.45" stop-color="#ffb43b"/><stop offset="1" stop-color="#e0620f"/></linearGradient>
     <clipPath id="sc"><circle cx="0" cy="0" r="14.2"/></clipPath>
@@ -40,7 +40,7 @@
   <path class="ctl" d="M 190 166.62 L 190 179.62" marker-end="url(#ac)"/>
   <rect x="24" y="181.62" width="332" height="53.62" rx="8" fill="#2d190e" stroke="#70401f"/>
   <text class="h" x="38" y="205.12" font-size="12.5" fill="#f4e2b8">FIREBASE AUTH</text>
-  <text class="b" x="38" y="221.24" font-size="11" fill="#b99160">Google sign-in. The owner UID gates everything below.</text>
+  <text class="b" x="38" y="221.24" font-size="11" fill="#b99160">Google sign-in. UID gates private data and cloud requests.</text>
   <path class="ctl" d="M 190 236.24 L 190 249.24"/>
   <path class="ctl" d="M 104 249.24 L 276 249.24"/>
   <path class="ctl" d="M 104 249.24 L 104 264.24" marker-start="url(#ac)" marker-end="url(#ac)"/>
@@ -122,9 +122,9 @@
   <text class="b" x="30" y="1195.54" font-size="11" fill="#b99160">state, the manifest, MP3,</text>
   <text class="b" x="30" y="1211.16" font-size="11" fill="#b99160">PDF and transcript on the</text>
   <text class="b" x="30" y="1226.78" font-size="11" fill="#b99160">operator's machine.</text>
-  <text class="b" x="30" y="1242.4" font-size="11" fill="#ffb43b">A GitHub-hosted run keeps</text>
-  <text class="b" x="30" y="1258.02" font-size="11" fill="#ffb43b">nothing: its temporary files</text>
-  <text class="b" x="30" y="1273.64" font-size="11" fill="#ffb43b">are removed.</text>
+  <text class="b" x="30" y="1242.4" font-size="11" fill="#ffb43b">No generated output files</text>
+  <text class="b" x="30" y="1258.02" font-size="11" fill="#ffb43b">persist on the ephemeral</text>
+  <text class="b" x="30" y="1273.64" font-size="11" fill="#ffb43b">runner after cleanup.</text>
   <rect x="198" y="1140.3" width="166" height="147.34" rx="8" fill="#21130c" stroke="#70401f"/>
   <text class="h" x="212" y="1163.8" font-size="11" fill="#f4e2b8">OPTIONAL PUBLICATION</text>
   <text class="b" x="212" y="1179.92" font-size="11" fill="#b99160">Only when publishing is</text>
