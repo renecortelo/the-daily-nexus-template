@@ -20,7 +20,7 @@ publishing is enabled—an updated private RSS feed.
 
 ## How it works
 
-![Four phases run left to right: Collect reads the approved Gmail label and allowed public pages; Editorial extracts stories, drafts the host script and fact-checks it; the run then splits into two independent tracks, a Read edition and a Listen track; Deliver stages the episode locally and can publish a private feed. An optional band shows the same run happening unattended.](assets/diagram-pipeline.svg)
+![Eight stages run top to bottom: collect approved Gmail newsletters and optional daily research; enrich newsletter-first evidence from safe public pages; rank and deduplicate stories; draft and verify the host script; branch into an independently written newspaper and Kokoro audio with a timed transcript; then finalize locally or, when enabled, publish and remotely verify the Firebase-hosted private feed. An optional band shows the same pipeline running unattended after a Cloudflare alarm or GEN wake-up dispatches a private GitHub Actions job.](assets/diagram-pipeline.svg)
 
 The model writes and checks editorial structures; it does not synthesize the
 voice. Kokoro generates speech, while the PDF renderer builds a separate
