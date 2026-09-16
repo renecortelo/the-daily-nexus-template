@@ -356,7 +356,12 @@ def _combined_metadata(
 
 
 def _normalize_newspaper_percentages(value: Any, *, key: str = "") -> Any:
-    if key in {"source_urls", "sources"}:
+    normalized_key = key.casefold()
+    if (
+        normalized_key in {"source_urls", "sources", "id"}
+        or normalized_key.endswith("_id")
+        or normalized_key.endswith("_ids")
+    ):
         return value
     if isinstance(value, str):
         if "https://" in value or "http://" in value:
@@ -382,6 +387,66 @@ def _normalize_newspaper_percentages(value: Any, *, key: str = "") -> Any:
             for item_key, item_value in value.items()
         }
     return value
+
+
+def _rebuild_newspaper_citations(
+    issue: NewspaperIssue,
+    stories: list[Story],
+) -> None:
+    """Replace model-supplied citation URLs with verified story URLs.
+
+    Story IDs remain the source of truth for coverage. Callers validate those
+    IDs before invoking this repair, then this function derives every URL from
+    the matching verified records. This prevents a plausible-looking URL (or
+    an opaque tracking link) invented by the model from reaching the saved
+    edition while retaining source order from the evidence set.
+    """
+
+    story_urls = {
+        story.story_id: [
+            url for url in story.source_urls if url.startswith("https://")
+        ]
+        for story in stories
+    }
+
+    def urls_for(story_ids: list[str]) -> list[str]:
+        urls: list[str] = []
+        seen: set[str] = set()
+        for story_id in story_ids:
+            for url in story_urls[story_id]:
+                if url in seen:
+                    continue
+                seen.add(url)
+                urls.append(url)
+        return urls
+
+    cited_story_ids: list[str] = []
+    cited_seen: set[str] = set()
+
+    def remember(story_ids: list[str]) -> None:
+        for story_id in story_ids:
+            if story_id not in cited_seen:
+                cited_seen.add(story_id)
+                cited_story_ids.append(story_id)
+
+    for article in issue.articles:
+        article.source_urls = urls_for(article.story_ids)
+        remember(article.story_ids)
+    for brief in issue.briefs:
+        brief.source_urls = urls_for(brief.story_ids)
+        remember(brief.story_ids)
+    for item in issue.executive_summary:
+        remember(item.story_ids)
+    for visual in issue.visuals:
+        visual_story_ids = [
+            story_id
+            for item in visual.items
+            for story_id in item.story_ids
+        ]
+        visual.source_urls = urls_for(visual_story_ids)
+        remember(visual_story_ids)
+
+    issue.sources = urls_for(cited_story_ids)
 
 
 def _bullet_repeats_article(bullet: str, article_text: str) -> bool:
@@ -1453,6 +1518,7 @@ Return JSON only:
                         "visual contains unsupported story IDs: "
                         f"{sorted(unsupported_visual_ids)}"
                     )
+            _rebuild_newspaper_citations(issue, stories)
             used_urls = {
                 url
                 for values in (

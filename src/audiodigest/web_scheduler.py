@@ -21,6 +21,26 @@ from audiodigest.web_runner import FirebaseWebRunnerClient, WebRunnerError
 MANUAL_REQUEST_EXPIRY_DAYS = 2
 
 
+class TerminalTaskFailure(RuntimeError):
+    """A claimed cloud task failed after its terminal status was recorded.
+
+    The dedicated exception lets the GitHub wrapper distinguish a normal,
+    non-retryable generation failure from an infrastructure failure that
+    happened before a task could be claimed safely.
+    """
+
+    exit_code = 20
+
+    def __init__(self, *, execution_id: str, episode_date: date, error_name: str):
+        super().__init__(f"{error_name}: claimed generation task failed")
+        self.result = {
+            "status": "failed",
+            "execution_id": execution_id,
+            "episode_date": episode_date.isoformat(),
+            "error_type": error_name,
+        }
+
+
 def _targeted_schedule_episode_date(
     schedule: ScheduledJob,
     *,
@@ -468,7 +488,11 @@ def _execute_generation(
                 },
             )
         _runner_status(client, state="error", detail=remote_detail)
-        raise
+        raise TerminalTaskFailure(
+            execution_id=execution_id,
+            episode_date=episode_date,
+            error_name=error_name,
+        ) from exc
 
 
 def run_web_runner_tick(

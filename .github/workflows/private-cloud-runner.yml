@@ -210,7 +210,7 @@ jobs:
         if: >-
           always()
           && steps.continuation_probe.outputs.run == 'true'
-          && steps.generate.conclusion != 'failure'
+          && steps.generate.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -227,3 +227,10 @@ jobs:
           gh api --method POST \
             "/repos/${GH_REPO}/actions/workflows/private-cloud-runner.yml/dispatches" \
             -f "ref=${GH_REF}"
+
+      - name: Report a terminal generation failure
+        if: always() && steps.generate.outputs.task_failed == 'true'
+        shell: bash
+        run: |
+          echo "A claimed generation task failed after its terminal status was recorded." >&2
+          exit 1

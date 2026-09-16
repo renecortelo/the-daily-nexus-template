@@ -16,7 +16,7 @@ from audiodigest.publishing_setup import (
     enable_private_publishing,
 )
 from audiodigest.web_runner import authenticate_web_runner, unpair_web_runner
-from audiodigest.web_scheduler import run_web_runner_tick
+from audiodigest.web_scheduler import TerminalTaskFailure, run_web_runner_tick
 
 
 def _date(value: str) -> date:
@@ -245,13 +245,16 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
     if args.command == "web-runner":
-        _print_result(
-            run_web_runner_tick(
+        try:
+            result = run_web_runner_tick(
                 settings,
                 schedule_id=args.schedule_id,
                 schedule_date=args.schedule_date,
             )
-        )
+        except TerminalTaskFailure as exc:
+            _print_result(exc.result)
+            raise SystemExit(exc.exit_code) from None
+        _print_result(result)
         return
     if args.command == "run":
         result = Pipeline(settings).run(
