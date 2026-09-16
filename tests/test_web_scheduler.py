@@ -8,6 +8,7 @@ from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
 from audiodigest.web_runner import WebRunnerError
 from audiodigest.web_scheduler import (
+    GenerationInterrupted,
     TerminalTaskFailure,
     _execute_generation,
     _next_publication_sequence,
@@ -342,3 +343,41 @@ class WebSchedulerTests(TestCase):
             ]
             self.assertTrue(any("inspect the private local runner log" in item for item in details))
             self.assertTrue(all("C:\\secret" not in item for item in details))
+
+    def test_interrupted_generation_is_recorded_as_terminal_failure(self):
+        class InterruptedPipeline:
+            def __init__(self, _settings):
+                pass
+
+            def run(self, **_kwargs):
+                raise GenerationInterrupted("generation interrupted by signal 15")
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            request = {
+                "document_id": "request-interrupted",
+                "requestedDate": "2026-07-27",
+                "requestedAt": "2026-07-27T02:00:00Z",
+                "status": "queued",
+                "parameters": schedule_payload()["parameters"],
+            }
+            client = _FakeWebClient([], [request])
+            with self.assertRaises(TerminalTaskFailure) as failure:
+                run_web_runner_tick(
+                    self._settings(Path(name)),
+                    now=datetime(2026, 7, 27, 3, 0, tzinfo=UTC),
+                    client=client,
+                    pipeline_factory=InterruptedPipeline,
+                )
+            self.assertEqual(
+                "GenerationInterrupted", failure.exception.result["error_type"]
+            )
+            self.assertEqual(
+                "failed",
+                client.execution_statuses[("request-request-interrupted", "2026-07-27")],
+            )
+            request_writes = [
+                item[2]
+                for item in client.writes
+                if item[0] == "runRequests" and item[1] == "request-interrupted"
+            ]
+            self.assertEqual("failed", request_writes[-1]["status"])

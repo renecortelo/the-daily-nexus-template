@@ -102,7 +102,7 @@ class CloudWorkflowTests(TestCase):
         )
         self.assertIn("daily-nexus-ephemeral-runner", wrapper)
         self.assertNotIn('eval "$keyring_environment"', wrapper)
-        self.assertIn("batch_limit=2", wrapper)
+        self.assertIn("batch_limit=1", wrapper)
         self.assertIn("batch_budget_seconds", wrapper)
 
     def test_generic_queue_continuation_uses_only_the_ephemeral_actions_token(self):
