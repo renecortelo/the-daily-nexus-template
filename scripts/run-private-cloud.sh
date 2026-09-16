@@ -30,7 +30,16 @@ cleanup_keyring() {
   secret-tool clear service gemini username antigravity >/dev/null 2>&1
   rm -f "$credential_path"
 }
-trap cleanup_keyring EXIT HUP INT TERM
+
+task_failed=false
+record_task_failure_output() {
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf 'task_failed=%s\n' "$task_failed" >> "$GITHUB_OUTPUT"
+  fi
+}
+
+trap 'record_task_failure_output; cleanup_keyring' EXIT
+trap 'exit 130' HUP INT TERM
 
 # The disposable-password keyring exists only inside this single ephemeral runner.
 # GitHub destroys the machine after the job, and the final workflow cleanup
@@ -68,6 +77,21 @@ batch_budget_seconds=$((25 * 60))
 batch_started=$SECONDS
 completed_tasks=0
 
+run_generation_task() {
+  local output
+  local status
+  set +e
+  output="$("$@" 2>&1)"
+  status=$?
+  set -e
+  generation_result="$output"
+  if (( status == 20 )); then
+    task_failed=true
+    return 0
+  fi
+  return "$status"
+}
+
 # The Cloudflare alarm carries one opaque schedule occurrence.  Keep that
 # dispatch isolated: a delayed alarm must not consume an unrelated manual
 # request, and a manual batch must not accidentally inherit the clock inputs.
@@ -76,8 +100,8 @@ if [[ -n "${TDN_SCHEDULE_ID:-}" ]]; then
   if [[ -n "${TDN_SCHEDULE_DATE:-}" ]]; then
     runner_args+=(--schedule-date "$TDN_SCHEDULE_DATE")
   fi
-  result="$("${runner_args[@]}")"
-  printf '%s\n' "$result"
+  run_generation_task "${runner_args[@]}"
+  printf '%s\n' "$generation_result"
   exit 0
 fi
 
@@ -91,8 +115,9 @@ while (( completed_tasks < batch_limit )); do
     echo "Private batch time budget reached; remaining queue work will continue on the next cloud check."
     break
   fi
-  result="$(python -m audiodigest --config config.toml.cloud web-runner)"
-  printf '%s\n' "$result"
+  run_generation_task python -m audiodigest --config config.toml.cloud web-runner
+  printf '%s\n' "$generation_result"
+  result="$generation_result"
   if grep -q '"status": "idle"' <<< "$result"; then
     break
   fi

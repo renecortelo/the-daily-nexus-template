@@ -14,6 +14,7 @@ from audiodigest.editorial import (
     _deduplicate_newspaper_articles,
     _exact_highlight_candidates,
     _newspaper_article_limits,
+    _normalize_newspaper_percentages,
     _normalize_script_section_order,
     _remove_enforced_script_order_issues,
     _repair_newspaper_decorations,
@@ -29,6 +30,23 @@ from audiodigest.models import (
 
 
 class EditorialPreferenceTests(TestCase):
+    def test_percentage_normalization_preserves_story_metadata_ids(self):
+        normalized = _normalize_newspaper_percentages(
+            {
+                "story_ids": ["operating-margin-percent"],
+                "body": "The operating margin improved by 50 percent.",
+            }
+        )
+
+        self.assertEqual(
+            ["operating-margin-percent"],
+            normalized["story_ids"],
+        )
+        self.assertEqual(
+            "The operating margin improved by 50%.",
+            normalized["body"],
+        )
+
     def test_newspaper_article_scale_adapts_to_the_requested_edition(self):
         settings = SimpleNamespace(
             podcast=SimpleNamespace(newspaper_edition_scale="focused")
@@ -411,7 +429,7 @@ class EditorialPreferenceTests(TestCase):
     def test_newspaper_validator_requires_priority_story_coverage(self):
         story = Story.from_dict(
             {
-                "story_id": "priority-ai",
+                "story_id": "priority-ai-percent",
                 "section": "AI",
                 "headline": "A measured AI deployment",
                 "facts": ["The supplied evidence documented the deployment."],
@@ -445,7 +463,7 @@ class EditorialPreferenceTests(TestCase):
                         "The documented system moved from controlled testing "
                         "into live operations."
                     ),
-                    "story_ids": ["priority-ai"],
+                    "story_ids": ["priority-ai-percent"],
                 },
                 {
                     "value": "IMPACT",
@@ -454,7 +472,7 @@ class EditorialPreferenceTests(TestCase):
                         "Production use makes reliable performance evidence "
                         "materially more consequential."
                     ),
-                    "story_ids": ["priority-ai"],
+                    "story_ids": ["priority-ai-percent"],
                 },
                 {
                     "value": "WATCH",
@@ -463,7 +481,7 @@ class EditorialPreferenceTests(TestCase):
                         "The supplied evidence does not yet establish "
                         "long-term production results."
                     ),
-                    "story_ids": ["priority-ai"],
+                    "story_ids": ["priority-ai-percent"],
                 },
             ],
             "articles": [
@@ -472,7 +490,7 @@ class EditorialPreferenceTests(TestCase):
                     "title": "A measured deployment",
                     "standfirst": "A system moved into production.",
                     "body": "The source documented the operational change.",
-                    "story_ids": ["priority-ai"],
+                    "story_ids": ["priority-ai-percent"],
                     "source_urls": ["https://example.com/report"],
                     "bullet_points": [],
                 }
@@ -488,13 +506,13 @@ class EditorialPreferenceTests(TestCase):
                             "value": "SHIFT",
                             "label": "System deployment",
                             "detail": "System moved into live production.",
-                            "story_ids": ["priority-ai"],
+                            "story_ids": ["priority-ai-percent"],
                         },
                         {
                             "value": "WATCH",
                             "label": "Performance evidence",
                             "detail": "Results are still being measured.",
-                            "story_ids": ["priority-ai"],
+                            "story_ids": ["priority-ai-percent"],
                         },
                     ],
                     "source_urls": ["https://example.com/report"],
@@ -550,6 +568,41 @@ class EditorialPreferenceTests(TestCase):
             "The source documented a 50% operating improvement.",
             normalized_issue.articles[0].body,
         )
+
+        invented_citations = copy.deepcopy(data)
+        tracker_url = "https://tracker.invalid/click/opaque-token"
+        invented_citations["articles"][0]["source_urls"] = [tracker_url]
+        invented_citations["briefs"] = [
+            {
+                "text": "The live deployment creates a separate measurement requirement.",
+                "story_ids": ["priority-ai-percent"],
+                "source_urls": [tracker_url],
+            }
+        ]
+        invented_citations["visuals"][0]["source_urls"] = [tracker_url]
+        invented_citations["sources"] = [f"Tracker - {tracker_url}"]
+        repaired_citations = validator(invented_citations)
+        self.assertEqual(
+            ["https://example.com/report"],
+            repaired_citations.articles[0].source_urls,
+        )
+        self.assertEqual(
+            ["https://example.com/report"],
+            repaired_citations.briefs[0].source_urls,
+        )
+        self.assertEqual(
+            ["https://example.com/report"],
+            repaired_citations.visuals[0].source_urls,
+        )
+        self.assertEqual(
+            ["https://example.com/report"],
+            repaired_citations.sources,
+        )
+
+        unsupported_citation = copy.deepcopy(invented_citations)
+        unsupported_citation["briefs"][0]["story_ids"] = ["unsupported-story"]
+        with self.assertRaisesRegex(ValueError, "unsupported story IDs"):
+            validator(unsupported_citation)
 
     def test_newspaper_gets_an_independent_quality_review(self):
         antigravity = Mock()
