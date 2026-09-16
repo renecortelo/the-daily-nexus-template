@@ -69,11 +69,13 @@ if ! secret-tool lookup service gemini username antigravity >/dev/null; then
   exit 1
 fi
 
-# Two typical 20–30 minute episodes can fit inside the protected one-hour
-# workflow limit. A conservative elapsed-time guard leaves a clean margin for
-# final publishing and cleanup; remaining work stays queued for the next poll.
-batch_limit=2
-batch_budget_seconds=$((25 * 60))
+# A single 20–30 minute episode can occasionally take longer during article
+# retrieval or local audio rendering. Process one task per protected Actions
+# run, then let the credential-free continuation dispatch the next queued
+# task. This avoids a second episode inheriting too little of the one-hour
+# job limit and being cancelled halfway through.
+batch_limit=1
+batch_budget_seconds=$((45 * 60))
 batch_started=$SECONDS
 completed_tasks=0
 

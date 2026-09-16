@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import signal
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -39,6 +40,34 @@ class TerminalTaskFailure(RuntimeError):
             "episode_date": episode_date.isoformat(),
             "error_type": error_name,
         }
+
+
+class GenerationInterrupted(RuntimeError):
+    """A protected runner received a cancellation signal before completion."""
+
+
+def _raise_generation_interrupted(signum: int, _frame: object) -> None:
+    raise GenerationInterrupted(f"generation interrupted by signal {signum}")
+
+
+def _install_generation_interrupt_handlers() -> dict[int, object]:
+    """Convert CI cancellation into a terminal Firestore task status."""
+
+    previous: dict[int, object] = {}
+    for candidate in (signal.SIGTERM, signal.SIGINT):
+        try:
+            previous[candidate] = signal.signal(
+                candidate,
+                _raise_generation_interrupted,
+            )
+        except (AttributeError, ValueError):
+            continue
+    return previous
+
+
+def _restore_generation_interrupt_handlers(previous: dict[int, object]) -> None:
+    for candidate, handler in previous.items():
+        signal.signal(candidate, handler)
 
 
 def _targeted_schedule_episode_date(
@@ -408,6 +437,7 @@ def _execute_generation(
                 "updatedAt": datetime.now(UTC),
             },
         )
+    previous_signal_handlers = _install_generation_interrupt_handlers()
     try:
         result = pipeline_factory(configured).run(
             requested_date=episode_date,
@@ -493,6 +523,8 @@ def _execute_generation(
             episode_date=episode_date,
             error_name=error_name,
         ) from exc
+    finally:
+        _restore_generation_interrupt_handlers(previous_signal_handlers)
 
 
 def run_web_runner_tick(
