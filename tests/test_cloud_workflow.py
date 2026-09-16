@@ -128,19 +128,29 @@ class CloudWorkflowTests(TestCase):
         self.assertIn("always() && steps.probe.outputs.run == 'true'", workflow)
         self.assertIn("always() && steps.continuation_prepare.outcome == 'success'", workflow)
         self.assertIn("steps.continuation_probe.outputs.run == 'true'", workflow)
-        self.assertIn("steps.generate.conclusion != 'failure'", workflow)
+        self.assertIn("steps.generate.outcome == 'success'", workflow)
         self.assertIn("--phase probe", workflow[continuation_prepare:dispatch])
         self.assertIn(
             "PYTHONPATH=src python -m audiodigest.cloud_probe",
             workflow[continuation_probe:continuation_cleanup],
         )
 
-    def test_failed_generation_cannot_dispatch_a_continuation(self):
+    def test_terminal_task_failure_can_dispatch_continuation_before_reporting(self):
         workflow = Path(
             ".github/workflows/private-cloud-runner.yml"
         ).read_text(encoding="utf-8")
         dispatch = workflow[workflow.index("Dispatch a remaining generic queue batch"):]
-        self.assertIn("steps.generate.conclusion != 'failure'", dispatch)
+        report = workflow.index("Report a terminal generation failure")
+        self.assertIn("steps.generate.outcome == 'success'", dispatch)
+        self.assertIn("steps.generate.outputs.task_failed == 'true'", workflow)
+        self.assertLess(workflow.index("Dispatch a remaining generic queue batch"), report)
+
+    def test_wrapper_distinguishes_terminal_task_failure_from_infrastructure_failure(self):
+        wrapper = Path("scripts/run-private-cloud.sh").read_text(encoding="utf-8")
+        self.assertIn("status == 20", wrapper)
+        self.assertIn("task_failed=true", wrapper)
+        self.assertIn("return \"$status\"", wrapper)
+        self.assertIn("task_failed=%s", wrapper)
 
     def test_clock_runs_continue_with_a_fresh_generic_dispatch(self):
         workflow = Path(

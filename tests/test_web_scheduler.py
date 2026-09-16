@@ -8,6 +8,7 @@ from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
 from audiodigest.web_runner import WebRunnerError
 from audiodigest.web_scheduler import (
+    TerminalTaskFailure,
     _execute_generation,
     _next_publication_sequence,
     run_web_runner_tick,
@@ -324,13 +325,16 @@ class WebSchedulerTests(TestCase):
                 "parameters": schedule_payload()["parameters"],
             }
             client = _FakeWebClient([], [request])
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(TerminalTaskFailure) as failure:
                 run_web_runner_tick(
                     self._settings(Path(name)),
                     now=datetime(2026, 7, 27, 3, 0, tzinfo=UTC),
                     client=client,
                     pipeline_factory=FailingPipeline,
                 )
+            self.assertEqual("failed", failure.exception.result["status"])
+            self.assertEqual("RuntimeError", failure.exception.result["error_type"])
+            self.assertNotIn("secret", str(failure.exception.result))
             details = [
                 item[2].get("detail", "")
                 for item in client.writes
