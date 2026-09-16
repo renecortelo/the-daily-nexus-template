@@ -258,6 +258,24 @@ def _history_blobs() -> Iterable[tuple[str, str, bytes]]:
         raise RuntimeError("Git history audit could not read repository objects")
 
 
+def _is_public_github_commit_identity(name: str, email: str) -> bool:
+    """Allow only GitHub's non-contact commit identities in strict history mode.
+
+    GitHub writes these immutable public identities when it creates a squash
+    commit.  They do not contain a private mailbox, API credential, or local
+    account path; every other personal author name remains a strict finding.
+    """
+
+    if name == "GitHub" and email == "noreply@github.com":
+        return True
+    return bool(
+        re.fullmatch(
+            r"[0-9]+\+[A-Za-z0-9-]{1,39}@users\.noreply\.github\.com",
+            email,
+        )
+    )
+
+
 def scan_history(*, strict_metadata: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     for object_id, path, raw in _history_blobs():
@@ -286,7 +304,12 @@ def scan_history(*, strict_metadata: bool = False) -> list[Finding]:
                 findings.append(
                     Finding(f"personal commit-{role} email", f"commit:{commit[:12]}")
                 )
-            if strict_metadata and name and name not in SAFE_AUTHOR_NAMES:
+            if (
+                strict_metadata
+                and name
+                and name not in SAFE_AUTHOR_NAMES
+                and not _is_public_github_commit_identity(name, email)
+            ):
                 findings.append(
                     Finding(
                         f"unexpected commit-{role} name",
