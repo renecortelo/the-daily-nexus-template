@@ -74,8 +74,9 @@ Do this after the cloud-clock source is pushed to the private repository.
 
    ```powershell
    Set-Location .\cloud-clock
-   npx wrangler@4 login
-   npx wrangler@4 deploy
+   npm ci
+   npx --no-install wrangler login
+   npx --no-install wrangler deploy
    ```
 
    Wrangler prints a URL shaped like
@@ -85,11 +86,11 @@ Do this after the cloud-clock source is pushed to the private repository.
    value into a chat, source file, or commit:
 
    ```powershell
-   npx wrangler@4 secret put TDN_GITHUB_DISPATCH_TOKEN
-   npx wrangler@4 secret put TDN_GITHUB_REPOSITORY
-   npx wrangler@4 secret put TDN_FIREBASE_PROJECT_ID
-   npx wrangler@4 secret put TDN_OWNER_UID
-   npx wrangler@4 secret put TDN_ALLOWED_ORIGIN
+   npx --no-install wrangler secret put TDN_GITHUB_DISPATCH_TOKEN
+   npx --no-install wrangler secret put TDN_GITHUB_REPOSITORY
+   npx --no-install wrangler secret put TDN_FIREBASE_PROJECT_ID
+   npx --no-install wrangler secret put TDN_OWNER_UID
+   npx --no-install wrangler secret put TDN_ALLOWED_ORIGIN
    ```
 
    Use the following values only at the private prompt:

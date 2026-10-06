@@ -2113,7 +2113,7 @@ class NewspaperRenderer:
         edition_name: str = "",
     ) -> NewspaperResult:
         try:
-            import fitz
+            import pymupdf as fitz
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfgen import canvas
         except ImportError as exc:

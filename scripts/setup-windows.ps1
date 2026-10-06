@@ -22,7 +22,7 @@ function Test-CompatiblePython {
     )
     try {
         & $Command @PrefixArguments -c `
-            "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" `
+            "import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] < (3, 13) else 1)" `
             *> $null
         return $LASTEXITCODE -eq 0
     } catch {
@@ -46,7 +46,7 @@ if (-not $Python -and (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 if (-not $Python) {
     throw @"
-Python 3.11 or newer is not installed. The Microsoft Store app alias is not a Python runtime.
+Python 3.11 or 3.12 is required. The audio models do not support Python 3.13 yet.
 Install Python 3.12, close and reopen PowerShell, then rerun this script.
 With Windows Package Manager:
   winget install --exact --id Python.Python.3.12
@@ -64,12 +64,21 @@ With Windows Package Manager:
 }
 
 $UvCommand = Get-Command uv -ErrorAction SilentlyContinue
+$LocalUvPath = Join-Path $VenvDir 'Scripts\uv.exe'
+if (Test-Path -LiteralPath $LocalUvPath) { $UvCommand = Get-Command $LocalUvPath }
 if (-not $UvCommand) {
     throw @"
 The free uv package installer is required because pip TLS downloads are unreliable on this
 Windows setup. Install uv, close and reopen PowerShell, then rerun this script:
   winget install --exact --id astral-sh.uv
 "@
+}
+
+$ManagedPython = & $UvCommand.Source python find 3.12.15 --no-python-downloads 2>$null
+if ($LASTEXITCODE -eq 0 -and $ManagedPython -and
+    (Test-CompatiblePython -Command $ManagedPython)) {
+    $Python = $ManagedPython
+    $PythonPrefix = @()
 }
 
 & $Python @PythonPrefix -m venv $VenvDir
@@ -80,27 +89,21 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $VenvPython)) {
 
 Push-Location $ProjectDir
 try {
-    & $UvCommand.Source pip install `
-        --python $VenvPython `
-        --link-mode hardlink `
-        --editable ".[audio,dev]"
+    $PreviousProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
+    $env:UV_PROJECT_ENVIRONMENT = $VenvDir
+    & $UvCommand.Source sync --frozen --python $VenvPython --extra audio --extra dev
     if ($LASTEXITCODE -ne 0) {
         throw "uv could not install the AudioDigest Python packages. Review the error above."
     }
 } finally {
+    $env:UV_PROJECT_ENVIRONMENT = $PreviousProjectEnvironment
     Pop-Location
 }
 
 New-Item -ItemType Directory -Force -Path $NodeToolsDir | Out-Null
-$PackageConfig = Get-Content -Raw -LiteralPath (Join-Path $ProjectDir "package.json") |
-    ConvertFrom-Json
-$FirebaseVersion = $PackageConfig.devDependencies.'firebase-tools'
-$FirebasePackage = "firebase-tools@$FirebaseVersion"
-npm install `
-    --prefix $NodeToolsDir `
-    --no-save `
-    --no-package-lock `
-    $FirebasePackage
+Copy-Item -LiteralPath (Join-Path $ProjectDir "package.json") -Destination $NodeToolsDir
+Copy-Item -LiteralPath (Join-Path $ProjectDir "package-lock.json") -Destination $NodeToolsDir
+npm ci --prefix $NodeToolsDir --ignore-scripts --no-fund --no-audit
 if ($LASTEXITCODE -ne 0) {
     throw "Could not install the local Firebase tool. Review the npm error above."
 }

@@ -2,8 +2,15 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createRequire } = require("node:module");
 
-const EXPECTED_FIREBASE_TOOLS = "15.24.0";
+// Honor the explicit, locked runtime rather than an unrelated node_modules
+// higher in the checkout. Tests also use this to avoid any real network call.
+const firebaseRequire = process.env.NODE_PATH
+  ? createRequire(path.join(path.resolve(process.env.NODE_PATH), "tdn-resolver.cjs"))
+  : require;
+
+const EXPECTED_FIREBASE_TOOLS = "15.32.1";
 let releasePhase = "startup";
 
 function fail(message) {
@@ -174,25 +181,28 @@ async function main() {
   ) {
     fail("Hosting public directory escaped the project");
   }
-  const packageInfo = require("firebase-tools/package.json");
+  const packageInfo = firebaseRequire("firebase-tools/package.json");
   if (packageInfo.version !== EXPECTED_FIREBASE_TOOLS) {
     fail("The pinned Firebase CLI version is not installed");
   }
-  const apiv2 = require("firebase-tools/lib/apiv2");
+  const apiv2 = firebaseRequire("firebase-tools/lib/apiv2");
   apiv2.setRefreshToken(process.env.FIREBASE_TOKEN);
-  const hostingApi = require("firebase-tools/lib/hosting/api");
-  const { Uploader } = require("firebase-tools/lib/deploy/hosting/uploader");
+  const hostingApi = firebaseRequire("firebase-tools/lib/hosting/api");
+  const { Uploader } = firebaseRequire("firebase-tools/lib/deploy/hosting/uploader");
   const { Client } = apiv2;
-  const { hostingApiOrigin } = require("firebase-tools/lib/api");
+  const { hostingApiOrigin } = firebaseRequire("firebase-tools/lib/api");
   releasePhase = "reading the live Hosting release";
   let channel;
   try {
     channel = await hostingApi.getChannel(projectId, projectId, "live");
   } catch (_channelError) {
-    channel = null;
+    fail("Cannot verify the live release; publishing aborted without changing Hosting");
   }
   let versionName = null;
   const sourceVersion = channel?.release?.version?.name;
+  if (channel && !sourceVersion) {
+    fail("Live channel has no verifiable source version; publishing aborted");
+  }
   if (typeof sourceVersion === "string" && sourceVersion) {
     releasePhase = "cloning the live Hosting release";
     try {
@@ -205,7 +215,7 @@ async function main() {
     } catch (_cloneError) {
       // Error details can include private Hosting metadata. The phase in the
       // final safe failure message is sufficient for troubleshooting.
-      versionName = null;
+      fail("Live release clone failed; publishing aborted to preserve existing media");
     }
   }
   if (!versionName) {

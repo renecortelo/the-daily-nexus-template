@@ -5,6 +5,8 @@ tools:
   - view_file
 mainAgent: true
 subagent: false
+inheritCustomizations: false
+inheritMcp: false
 commandExecutionPolicy: off
 ---
 

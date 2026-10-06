@@ -365,6 +365,9 @@ history must never be merged into this repository.
 For a verified component map and the exact eight-stage generation sequence, see
 [TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md).
 
+For pinned versions, security checks and safe dependency updates, see
+[MAINTENANCE.md](docs/MAINTENANCE.md).
+
 ## License and trademarks
 
 Code and original project assets are provided under the [MIT License](LICENSE).

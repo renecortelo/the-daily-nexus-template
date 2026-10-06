@@ -70,12 +70,13 @@ class CloudWorkflowTests(TestCase):
         self.assertIn("gnome-keyring", workflow)
         self.assertIn("libsecret-tools", workflow)
         self.assertIn("ffmpeg", workflow)
-        self.assertIn("https://download.pytorch.org/whl/cpu", workflow)
-        self.assertIn('"torch==2.13.0"', workflow)
-        self.assertLess(
-            workflow.index('"torch==2.13.0"'),
-            workflow.index('".[audio]"'),
-        )
+        manifest = Path("pyproject.toml").read_text(encoding="utf-8")
+        lock = Path("uv.lock").read_text(encoding="utf-8")
+        self.assertIn("https://download.pytorch.org/whl/cpu", manifest)
+        self.assertIn('"torch==2.13.0"', manifest)
+        self.assertIn('version = "2.13.0+cpu"', lock)
+        self.assertIn("uv sync --frozen --extra audio", workflow)
+        self.assertNotIn('pip install --disable-pip-version-check ".[audio]"', workflow)
 
     def test_antigravity_runs_through_the_ephemeral_keyring_wrapper(self):
         workflow = Path(

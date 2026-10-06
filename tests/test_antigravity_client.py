@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from audiodigest.antigravity_client import (
     AntigravityCLI,
+    AntigravityCLIError,
     AntigravityConfigurationError,
     AntigravityPaymentRiskError,
     _json_from_response,
@@ -18,6 +19,34 @@ from audiodigest.config import AntigravitySettings
 
 
 class AntigravityParsingTests(TestCase):
+    def test_structured_cli_error_does_not_leak_raw_diagnostics(self):
+        with self.assertRaises(AntigravityCLIError) as error:
+            _response_from_cli_output(
+                json.dumps({"error": {"code": "AGY_ERROR", "message": "private detail"}}),
+                elapsed_ms=1,
+            )
+        self.assertNotIn("private detail", str(error.exception))
+
+    def test_failed_status_never_accepts_partial_response(self):
+        with self.assertRaises(AntigravityCLIError):
+            _response_from_cli_output(
+                json.dumps({"status": "ERROR", "response": '{"approved":true}'}),
+                elapsed_ms=1,
+            )
+
+    def test_structured_billing_error_still_aborts(self):
+        with self.assertRaises(AntigravityPaymentRiskError):
+            _response_from_cli_output(
+                json.dumps({"error": {"message": "buy AI credits"}}), elapsed_ms=1,
+            )
+
+    def test_denied_tools_do_not_silently_return_a_successful_result(self):
+        with self.assertRaises(AntigravityCLIError):
+            _response_from_cli_output(
+                json.dumps({"status": "SUCCESS", "response": '{"approved":true}',
+                            "denied_actions": ["private tool request"]}), elapsed_ms=1,
+            )
+
     def test_json_fence_is_accepted(self):
         self.assertEqual(
             _json_from_response('```json\n{"approved": true}\n```'),
@@ -51,6 +80,40 @@ class AntigravityParsingTests(TestCase):
 
 
 class AntigravitySafetyTests(TestCase):
+    def test_shared_credit_setting_cannot_override_safe_legacy_settings(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            root = Path(name)
+            settings = self._settings(root)
+            settings.settings_path = root / "antigravity-cli" / "settings.json"
+            settings.settings_path.parent.mkdir()
+            settings.settings_path.write_text(
+                '{"useG1Credits":false,"enableTelemetry":false}', encoding="utf-8",
+            )
+            shared = root / "config" / "config.json"
+            shared.parent.mkdir()
+            shared.write_text('{"userSettings":{"useAiCredits":true}}', encoding="utf-8")
+            with self.assertRaises(AntigravityPaymentRiskError):
+                enforce_safe_antigravity_settings(settings)
+
+    def test_shared_missing_flags_are_filled_without_changing_unrelated_preferences(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            root = Path(name)
+            settings = self._settings(root)
+            settings.settings_path = root / "antigravity-cli" / "settings.json"
+            settings.settings_path.parent.mkdir()
+            settings.settings_path.write_text(
+                '{"useG1Credits":false,"enableTelemetry":false}', encoding="utf-8",
+            )
+            shared = root / "config" / "config.json"
+            shared.parent.mkdir()
+            shared.write_text('{"plugins":{},"userSettings":{"themeMode":"dark"}}',
+                              encoding="utf-8")
+            enforce_safe_antigravity_settings(settings)
+            value = json.loads(shared.read_text())
+            self.assertEqual(value["userSettings"]["themeMode"], "dark")
+            self.assertIs(value["userSettings"]["useAiCredits"], False)
+            self.assertIs(value["userSettings"]["telemetryEnabled"], False)
+
     def _settings(self, root: Path) -> AntigravitySettings:
         agent_path = root / "agent.md"
         agent_path.write_text("---\nname: audio-digest\n---\nRead only.", encoding="utf-8")
@@ -124,6 +187,8 @@ class AntigravitySafetyTests(TestCase):
                 self.assertIn("--add-dir", command)
                 self.assertIn("--output-format", command)
                 self.assertIn("--agent", command)
+                self.assertEqual(kwargs["env"]["AGY_CLI_HIDE_ACCOUNT_INFO"], "1")
+                self.assertEqual(kwargs["env"]["DO_NOT_TRACK"], "1")
                 self.assertEqual(command[-2], "-p")
                 return subprocess.CompletedProcess(
                     command,

@@ -231,7 +231,7 @@ class NewspaperTests(TestCase):
             self.assertTrue(result.preview_paths[1].is_file())
             self.assertGreater(result.pdf_path.stat().st_size, 1000)
             self.assertGreater(result.preview_path.stat().st_size, 1000)
-            import fitz
+            import pymupdf as fitz
 
             with fitz.open(result.pdf_path) as document:
                 self.assertEqual(2, document.page_count)
@@ -314,7 +314,7 @@ class NewspaperTests(TestCase):
 
             self.assertEqual(3, len(result.preview_paths))
             self.assertTrue(all(path.is_file() for path in result.preview_paths))
-            import fitz
+            import pymupdf as fitz
 
             with fitz.open(result.pdf_path) as document:
                 self.assertEqual(3, document.page_count)
