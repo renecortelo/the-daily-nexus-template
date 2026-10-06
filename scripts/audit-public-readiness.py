@@ -55,6 +55,7 @@ FORBIDDEN_TRACKED_NAMES = {
 }
 SAFE_EMAIL_DOMAINS = {"example.com", "github.com", "users.noreply.github.com"}
 SAFE_AUTHOR_NAMES = {
+    "Daily Nexus Contributors",
     "Dario Novelli",
     "The Daily Nexus",
     "The Daily Nexus contributors",
@@ -267,6 +268,12 @@ def _is_public_github_commit_identity(name: str, email: str) -> bool:
     """
 
     if name == "GitHub" and email == "noreply@github.com":
+        return True
+    # Dependency-update authorship is public metadata, not a personal mailbox.
+    # Permit only this bot with its matching GitHub-generated noreply address.
+    if name == "dependabot[bot]" and re.fullmatch(
+        r"[0-9]+\+dependabot\[bot\]@users\.noreply\.github\.com", email
+    ):
         return True
     return bool(
         re.fullmatch(

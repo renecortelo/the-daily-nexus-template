@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import warnings
 import wave
+from array import array
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,10 +15,18 @@ from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
 from audiodigest.progress import counts, timed_operation
+from audiodigest.speech import boundary_pause_ms, prepare_speech
 
 
 class AudioGenerationError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class _DeliveryBlock:
+    turn: DialogueTurn
+    is_heading: bool
+    phase: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +97,40 @@ def _combine_wav_chunks(chunks: list[Path], output: Path) -> None:
                     destination.writeframesraw(frames)
 
 
+def _wav_edge_silence_ms(path: Path) -> tuple[int, int]:
+    """Measure near-silent edges only; never trim or rewrite spoken samples.
+
+    Kokoro/soundfile emits mono PCM16. Unsupported formats are conservatively
+    treated as having no silence. Read at most 600 ms at either edge.
+    """
+
+    import sys
+
+    with wave.open(str(path), "rb") as source:
+        if source.getsampwidth() != 2 or source.getnchannels() != 1:
+            return 0, 0
+        rate = source.getframerate()
+        frame_count = source.getnframes()
+        edge_frames = min(frame_count, round(rate * 0.6))
+        leading = array("h", source.readframes(edge_frames))
+        source.setpos(max(0, frame_count - edge_frames))
+        trailing = array("h", source.readframes(edge_frames))
+        if sys.byteorder != "little":
+            leading.byteswap()
+            trailing.byteswap()
+
+    def silence_ms(samples) -> int:
+        # A low threshold avoids treating quiet speech as a pause. The samples
+        # stay in the file regardless: this controls added silence, not trimming.
+        silent_frames = next(
+            (index for index, sample in enumerate(samples) if abs(sample) > 32),
+            len(leading),
+        )
+        return round(silent_frames * 1000 / max(1, rate))
+
+    return silence_ms(leading), silence_ms(reversed(trailing))
+
+
 class KokoroAudioRenderer:
     def __init__(self, settings: AudioSettings, hosts: HostSettings):
         self.settings = settings
@@ -133,7 +176,7 @@ class KokoroAudioRenderer:
         for _graphemes, _phonemes, audio in pipeline(
             text,
             voice=voice,
-            speed=1.0,
+            speed=self.settings.synthesis_speed,
             split_pattern=r"\n+",
         ):
             audio_parts.append(audio)
@@ -153,16 +196,33 @@ class KokoroAudioRenderer:
             return self.hosts.secondary_voice
         raise AudioGenerationError(f"No local voice is configured for host {host_name!r}")
 
-    def _spoken_blocks(self, script: EpisodeScript) -> list[tuple[DialogueTurn, bool]]:
+    def _delivery_blocks(self, script: EpisodeScript) -> list[_DeliveryBlock]:
         lead_host = self.hosts.active_names[0]
-        blocks = [(DialogueTurn(lead_host, script.disclosure), False)]
-        blocks.extend((turn, False) for turn in script.introduction)
-        for section in script.sections:
-            blocks.append((DialogueTurn(lead_host, section.name.value), True))
-            blocks.extend((turn, False) for turn in section.dialogue)
-        blocks.extend((turn, False) for turn in script.conclusion)
-        blocks.extend((turn, False) for turn in script.sign_off)
-        return blocks
+        blocks = [_DeliveryBlock(DialogueTurn(lead_host, script.disclosure), False, "disclosure")]
+        blocks.extend(_DeliveryBlock(turn, False, "introduction") for turn in script.introduction)
+        for index, section in enumerate(script.sections):
+            phase = f"section-{index}"
+            blocks.append(_DeliveryBlock(DialogueTurn(lead_host, section.name.value), True, phase))
+            blocks.extend(_DeliveryBlock(turn, False, phase) for turn in section.dialogue)
+        blocks.extend(_DeliveryBlock(turn, False, "conclusion") for turn in script.conclusion)
+        blocks.extend(_DeliveryBlock(turn, False, "sign_off") for turn in script.sign_off)
+        return [block for block in blocks if block.turn.text.strip()]
+
+    def _spoken_blocks(self, script: EpisodeScript) -> list[tuple[DialogueTurn, bool]]:
+        blocks = self._delivery_blocks(script)
+        return [(block.turn, block.is_heading) for block in blocks]
+
+    @staticmethod
+    def _pause_after(block: _DeliveryBlock, following: _DeliveryBlock | None) -> int:
+        if following is None:
+            return 0
+        return boundary_pause_ms(
+            is_heading=block.is_heading,
+            next_is_heading=following.is_heading,
+            phase_changed=block.phase != following.phase,
+            host_changed=block.turn.host.casefold() != following.turn.host.casefold(),
+            ends_with_question=block.turn.text.rstrip().endswith(("?", '?"', "?'", "?\u201d")),
+        )
 
     @staticmethod
     def _write_silence(output: Path, milliseconds: int) -> None:
@@ -183,19 +243,14 @@ class KokoroAudioRenderer:
             chunks: list[Path] = []
             transcript_segments: list[TranscriptSegment] = []
             timeline_ms = 0
-            spoken_blocks = self._spoken_blocks(script)
-
-            sentence_silence = temp / "sentence-silence.wav"
-            section_silence = temp / "section-silence.wav"
-            self._write_silence(sentence_silence, 150)
-            self._write_silence(section_silence, 500)
+            spoken_blocks = self._delivery_blocks(script)
+            rendered: list[tuple[Path, int, int, int]] = []
             total_blocks = len(spoken_blocks)
             counts(voice_blocks=0, voice_total=total_blocks)
             print(f"Synthesizing {total_blocks} audio dialogue blocks...", flush=True)
 
-            for index, (turn, is_section_heading) in enumerate(spoken_blocks):
-                if not turn.text.strip():
-                    continue
+            for index, block in enumerate(spoken_blocks):
+                turn, is_section_heading = block.turn, block.is_heading
                 percent = int(((index + 1) / total_blocks) * 100)
                 heading_marker = " [heading]" if is_section_heading else ""
                 print(
@@ -212,7 +267,10 @@ class KokoroAudioRenderer:
                 with timed_operation("speech"):
                     self._write_speech_chunk(
                         pipelines[language_code],
-                        turn.text,
+                        prepare_speech(
+                            turn.text, is_heading=is_section_heading,
+                            pronunciations=self.settings.pronunciations,
+                        ),
                         chunk,
                         voice=voice,
                     )
@@ -221,19 +279,36 @@ class KokoroAudioRenderer:
                     speech_ms = round(
                         (speech.getnframes() / max(1, speech.getframerate())) * 1000
                     )
-                pause_ms = 500 if is_section_heading else 150
+                leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
+                rendered.append((chunk, speech_ms, leading_ms, trailing_ms))
+
+            # Both neighbouring waveforms are available now, so existing model
+            # pauses count toward the gap. Transcript timing follows actual files.
+            silences: dict[int, Path] = {}
+            for index, block in enumerate(spoken_blocks):
+                chunk, speech_ms, _leading_ms, trailing_ms = rendered[index]
+                following = spoken_blocks[index + 1] if index + 1 < total_blocks else None
+                next_leading_ms = rendered[index + 1][2] if following else 0
+                pause_ms = max(
+                    0, self._pause_after(block, following) - trailing_ms - next_leading_ms
+                )
                 transcript_segments.append(
                     TranscriptSegment(
-                        host=turn.host,
-                        text=turn.text,
+                        host=block.turn.host,
+                        text=block.turn.text,
                         start_ms=timeline_ms,
                         end_ms=timeline_ms + speech_ms + pause_ms,
-                        is_heading=is_section_heading,
+                        is_heading=block.is_heading,
                     )
                 )
                 timeline_ms += speech_ms + pause_ms
                 chunks.append(chunk)
-                chunks.append(section_silence if is_section_heading else sentence_silence)
+                if pause_ms:
+                    if pause_ms not in silences:
+                        silence = temp / f"silence-{pause_ms}.wav"
+                        self._write_silence(silence, pause_ms)
+                        silences[pause_ms] = silence
+                    chunks.append(silences[pause_ms])
 
             concat_file = temp / "concat.txt"
             concat_file.write_text(

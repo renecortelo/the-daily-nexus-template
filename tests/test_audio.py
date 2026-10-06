@@ -11,6 +11,73 @@ from audiodigest.models import EpisodeScript
 
 
 class AudioHostTests(TestCase):
+    def test_contextual_gaps_keep_original_transcript_and_match_actual_files(self):
+        script = EpisodeScript.from_dict({
+            "title": "The Daily Nexus", "hosts": ["Dalia", "Nox"],
+            "introduction": [{"host": "Dalia", "text": "An API update?"},
+                             {"host": "Nox", "text": "IT teams are testing it."}],
+            "sections": [{"name": "AI", "story_ids": ["test"],
+                          "dialogue": [{"host": "Dalia", "text": "GPU demand changed."}]}],
+            "conclusion": [{"host": "Nox", "text": "That is the evidence."}],
+            "sign_off": [{"host": "Dalia", "text": "The closing quotation stays exact."}],
+            "show_notes": [],
+        })
+        renderer = KokoroAudioRenderer(AudioSettings(), HostSettings(count=2))
+        spoken = []
+        wave_total_ms = 0
+
+        def speech(_pipeline, text, path, **_kwargs):
+            spoken.append(text)
+            # 100 ms quiet at each side, 300 ms speech, with every sample retained.
+            with wave.open(str(path), "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(24000)
+                output.writeframes(bytes(4800) + bytes([64, 0]) * 7200 + bytes(4800))
+
+        def silence(path, milliseconds):
+            with wave.open(str(path), "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(24000)
+                output.writeframes(bytes(48 * milliseconds))
+
+        def run(command, **_kwargs):
+            nonlocal wave_total_ms
+            if "-show_entries" in command:
+                return subprocess.CompletedProcess(command, 0,
+                                                   '{"format":{"duration":"120"}}', "")
+            concat = Path(command[command.index("-i") + 1])
+            for line in concat.read_text(encoding="utf-8").splitlines():
+                path = Path(line.removeprefix("file '").removesuffix("'"))
+                with wave.open(str(path), "rb") as frames:
+                    wave_total_ms += round(frames.getnframes() / frames.getframerate() * 1000)
+            Path(command[-1]).write_bytes(b"x" * 1100)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name,
+            patch("audiodigest.audio._require_binary", side_effect=lambda value: value),
+            patch.object(renderer, "_pipeline", return_value=object()),
+            patch.object(renderer, "_write_speech_chunk", side_effect=speech),
+            patch.object(renderer, "_write_silence", side_effect=silence),
+            patch("audiodigest.audio.subprocess.run", side_effect=run),
+        ):
+            result = renderer.render(script, Path(name) / "episode.mp3")
+
+        self.assertIn("[API](/ˌApˌiˈI/)", spoken[1])
+        self.assertEqual("An API update?", result.transcript_segments[1].text)
+        self.assertEqual("IT teams are testing it.", result.transcript_segments[2].text)
+        # Existing 200 ms of model silence exceeds a 160 ms question-response gap.
+        question_segment = result.transcript_segments[1]
+        self.assertEqual(500, question_segment.end_ms - question_segment.start_ms)
+        self.assertEqual(wave_total_ms, result.transcript_segments[-1].end_ms)
+        self.assertEqual(7, len(result.transcript_segments))
+        for first, second in zip(
+            result.transcript_segments, result.transcript_segments[1:], strict=False
+        ):
+            self.assertEqual(first.end_ms, second.start_ms)
+
     @staticmethod
     def _write_test_wav(path: Path) -> None:
         with wave.open(str(path), "wb") as output:

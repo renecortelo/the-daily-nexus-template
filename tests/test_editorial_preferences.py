@@ -32,6 +32,20 @@ from audiodigest.models import (
 
 
 class EditorialPreferenceTests(TestCase):
+    def test_conversation_instructions_require_useful_answers_without_extra_ai_pass(self):
+        settings = load_settings("config.example.toml")
+        settings.hosts.count = 2
+        settings.hosts.dialogue_style = "conversation"
+        engine = EditorialPipeline(settings, Mock())
+        engine.antigravity.invoke.return_value = (Mock(word_count=4000), Mock())
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
+        engine.generate_script([], date(2026, 10, 6), quote)
+        self.assertEqual(1, engine.antigravity.invoke.call_count)
+        instruction = engine.antigravity.invoke.call_args.args[0]
+        self.assertIn("response must answer it", instruction.replace("\n", " "))
+        self.assertIn("Do not force equal-length turns", instruction)
+        self.assertIn("not repeat", instruction)
+
     def test_data_scope_is_case_insensitive_without_renaming_custom_sections(self):
         self.assertEqual(
             {"DATA": DATA_SECTION_DEFINITION}, editorial_section_definitions(("AI", "DATA"))
@@ -66,6 +80,12 @@ class EditorialPreferenceTests(TestCase):
         writing = engine.antigravity.invoke.call_args_list[1].args[0]
         self.assertIn("ONE specific", writing)
         self.assertIn("Humor is optional", writing)
+        self.assertIn("Write for listening", writing)
+        self.assertIn("Do not modernize or paraphrase the approved closing quotation", writing)
+        self.assertIn("emotion/SSML tags", writing)
+        verification = engine.antigravity.invoke.call_args_list[4].args[0]
+        self.assertIn("smallest local wording repair", verification)
+
 
     def test_percentage_normalization_preserves_story_metadata_ids(self):
         normalized = _normalize_newspaper_percentages(

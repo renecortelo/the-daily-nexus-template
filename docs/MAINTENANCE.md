@@ -12,6 +12,10 @@ download URLs and integrity hashes, not deployment settings or credentials.
 - Kokoro/Misaki remain 0.9.4; Torch remains 2.13.0 CPU on Linux/Windows;
   Transformers remains 5.14.1; ReportLab remains on the tested 4.x branch.
 
+For synthesis-only pronunciation, contextual pauses, and manual local comparisons,
+see [Voice delivery](VOICE_DELIVERY.md). Current voice defaults and writing-tone
+selectors remain separate; no paid voice API or additional mandatory LLM call is used.
+
 ## Safe upgrades
 
 1. Work on a branch. Review upstream release notes and security advisories.
@@ -31,6 +35,13 @@ download URLs and integrity hashes, not deployment settings or credentials.
    the lock, without changing package URLs, versions or integrity hashes.
 6. Review and merge Dependabot proposals manually. Weekly update proposals do
    not auto-merge, deploy or invoke the private generation workflow.
+
+## Cloudflare development-tool override
+
+Miniflare's transitive `sharp` dependency is pinned to 0.35.5 to address
+[GHSA-wq5f-xc86-pv6w](https://github.com/lovell/sharp/security/advisories/GHSA-wq5f-xc86-pv6w).
+Wrangler remains at the tested version. This changes development tooling, not
+the deployed clock logic, generation schedules, or runner budgets.
 
 ## Firebase transitive overrides
 

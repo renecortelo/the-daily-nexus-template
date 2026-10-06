@@ -16,6 +16,7 @@ from audiodigest.preferences import (
     validate_gmail_label,
     voice_profile,
 )
+from audiodigest.speech import validate_pronunciations
 
 _WINDOWS_ENVIRONMENT = re.compile(r"%([^%]+)%")
 FIREBASE_FEED_VAULT_SERVICE = "TheDailyNexusFirebase"
@@ -147,6 +148,8 @@ class AudioSettings:
     target_lufs: float = -16.0
     true_peak_db: float = -1.0
     min_duration_seconds: int = 60
+    synthesis_speed: float = 1.0
+    pronunciations: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -387,6 +390,8 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
         target_lufs=float(audio_raw.get("target_lufs", -16.0)),
         true_peak_db=float(audio_raw.get("true_peak_db", -1.0)),
         min_duration_seconds=int(audio_raw.get("min_duration_seconds", 60)),
+        synthesis_speed=float(audio_raw.get("synthesis_speed", 1.0)),
+        pronunciations=validate_pronunciations(audio_raw.get("pronunciations", {})),
     )
     hosts = HostSettings(
         count=int(hosts_raw.get("count", 1)),
@@ -530,6 +535,9 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
 
 def validate_settings(settings: Settings) -> None:
     validate_gmail_label(settings.app.gmail_label)
+    if not 0.90 <= settings.audio.synthesis_speed <= 1.10:
+        raise ValueError("audio.synthesis_speed must be from 0.90 to 1.10")
+    validate_pronunciations(settings.audio.pronunciations)
     selected_voice = voice_profile(settings.audio.voice)
     if settings.audio.language_code != selected_voice.language_code:
         raise ValueError(
