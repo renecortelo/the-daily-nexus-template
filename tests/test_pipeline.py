@@ -37,7 +37,7 @@ class EpisodeIdentityTests(TestCase):
 
     def test_cloud_title_uses_readable_date_label_and_sequence(self):
         self.assertEqual(
-            "12/31/2026 The Daily Nexus - TDN All - 002",
+            "12/31/2026 The Daily Nexus - TDN All - 0002",
             _published_episode_title(
                 "The Daily Nexus - December 31, 2026",
                 episode_date=date(2026, 12, 31),
@@ -52,6 +52,14 @@ class EpisodeIdentityTests(TestCase):
             _execution_storage_key("second-run"),
         )
         self.assertTrue(_execution_storage_key("first-run").startswith("run-"))
+
+    def test_publication_sequence_does_not_wrap_after_four_digits(self):
+        for value, suffix in ((999, "0999"), (1000, "1000"), (10000, "10000")):
+            title = _published_episode_title(
+                "The Daily Nexus", episode_date=date(2026, 12, 31),
+                run_name="An edition", sequence=value,
+            )
+            self.assertTrue(title.endswith(f" - {suffix}"))
 
 
 class ArticleSummaryTests(TestCase):

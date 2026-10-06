@@ -153,7 +153,8 @@ def _published_episode_title(
 
     The GUID remains the storage and feed identity.  It must not be exposed as
     the reader-facing episode suffix: a person should be able to distinguish
-    two runs for one day from the title alone.
+    editions in one series from the title alone. Four digits are a minimum
+    width, not a limit: 10000 and later keep all their digits.
     """
     canonical_show_title = " ".join(show_title.split()) or "The Daily Nexus"
     # Editorial drafts still carry a spoken date in their working title. The
@@ -170,7 +171,7 @@ def _published_episode_title(
     safe_sequence = max(1, int(sequence))
     return (
         f"{episode_date.strftime('%m/%d/%Y')} {canonical_show_title} - {label} "
-        f"- {safe_sequence:03d}"
+        f"- {safe_sequence:04d}"
     )
 
 

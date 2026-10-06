@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import signal
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -19,6 +20,7 @@ from audiodigest.jobs import (
 )
 from audiodigest.pipeline import Pipeline
 from audiodigest.progress import ProgressReporter, increment
+from audiodigest.publisher import load_remote_publication
 from audiodigest.web_runner import FirebaseWebRunnerClient, WebRunnerError
 
 MANUAL_REQUEST_EXPIRY_DAYS = 2
@@ -321,6 +323,7 @@ def _published_metadata(
         "executionId": execution_id,
         "publicationLabel": publication_label,
         "publicationSequence": publication_sequence,
+        "publicationSequenceVersion": 2,
         "updatedAt": datetime.now(UTC),
         "schemaVersion": 1,
         "closingQuoteId": closing_quote_id,
@@ -328,16 +331,9 @@ def _published_metadata(
     return f"{episode_date.isoformat()}-{execution_id}"[:160], metadata
 
 
-def _publication_title_prefix(
-    settings: Settings,
-    *,
-    episode_date: date,
-    label: str,
-) -> str:
-    return (
-        f"{episode_date.strftime('%m/%d/%Y')} "
-        f"{settings.podcast.title} - {label} - "
-    )
+def _publication_sequence_key(label: str) -> str:
+    normalized = " ".join(label.split()).casefold()
+    return "publication-sequence-v2-" + hashlib.sha256(normalized.encode()).hexdigest()[:24]
 
 
 def _next_publication_sequence(
@@ -347,20 +343,34 @@ def _next_publication_sequence(
     episode_date: date,
     label: str,
 ) -> int:
-    """Return the next human sequence for one date and run label.
+    """Return the next all-time sequence for a series, independent of date.
 
     The immutable execution ID remains the document and media identity.  The
     compact numeric suffix is purely reader-facing and lets manually repeated
-    runs sort predictably without exposing opaque identifiers.
+    runs sort predictably without exposing opaque identifiers. Only published
+    editions count; old per-day suffixes are not interpreted as global numbers.
+    The existing cloud concurrency group serializes publication. Owner-only
+    high-water state survives archive/media retention, while the complete
+    archive recovers a number if its checkpoint write was interrupted.
     """
 
     normalized_label = " ".join(label.split()).casefold()
-    prefix = _publication_title_prefix(
-        settings,
-        episode_date=episode_date,
-        label=label,
+    title_pattern = re.compile(
+        r"^\d{2}/\d{2}/\d{4}\s+" + re.escape(settings.podcast.title)
+        + r"\s+-\s+(?P<label>.+)\s+-\s+(?P<number>\d+)$",
+        re.IGNORECASE,
     )
+    checkpoint = client.get_private_runner_document(_publication_sequence_key(label))
     highest = 0
+    if checkpoint is not None:
+        value = checkpoint.get("lastSequence")
+        if (
+            checkpoint.get("schemaVersion") != 2 or isinstance(value, bool)
+            or not isinstance(value, int) or value < 0
+        ):
+            raise WebRunnerError("publication sequence checkpoint is invalid")
+        highest = value
+    published_identities: set[str] = set()
     for item in client.list_private_collection(
         "episodes",
         field_mask=[
@@ -368,32 +378,48 @@ def _next_publication_sequence(
             "publicationLabel",
             "title",
             "publicationSequence",
+            "publicationSequenceVersion",
+            "status",
+            "audioUrl",
+            "executionId",
         ],
+        all_pages=True,
     ):
-        if str(item.get("episodeDate", "")) != episode_date.isoformat():
+        if item.get("status") != "published":
             continue
         stored_label = " ".join(
             str(item.get("publicationLabel", "")).split()
         ).casefold()
         title = str(item.get("title", "")).strip()
-        matching_label = (
-            stored_label == normalized_label
-            or title.casefold().startswith(prefix.casefold())
-        )
-        if not matching_label:
+        if not stored_label:
+            match = title_pattern.fullmatch(title)
+            stored_label = " ".join(match["label"].split()).casefold() if match else ""
+        if stored_label != normalized_label:
             continue
+        identity = (
+            item.get("audioUrl") or item.get("executionId") or item.get("document_id")
+        )
+        if not identity:
+            raise WebRunnerError("published edition lacks a stable numbering identity")
+        published_identities.add(str(identity))
         value = item.get("publicationSequence")
-        if isinstance(value, int) and value > highest:
-            highest = value
-            continue
-        suffix = (
-            title[len(prefix):].strip()
-            if title.casefold().startswith(prefix.casefold())
-            else ""
-        )
-        if suffix.isdigit():
-            highest = max(highest, int(suffix))
-    return highest + 1
+        if (
+            item.get("publicationSequenceVersion") == 2
+            and isinstance(value, int) and not isinstance(value, bool) and value > 0
+        ):
+            highest = max(highest, value)
+    # Hosting activation can succeed even if the subsequent Firestore write
+    # fails. Never reuse a new-format number already delivered to subscribers.
+    for remote in load_remote_publication(
+        settings, maximum_episodes=settings.app.retention_days + 1,
+    ):
+        match = title_pattern.fullmatch(remote.title.strip())
+        if (
+            match and len(match["number"]) >= 4
+            and " ".join(match["label"].split()).casefold() == normalized_label
+        ):
+            highest = max(highest, int(match["number"]))
+    return max(highest, len(published_identities)) + 1
 
 
 def _execution_database_path(settings: Settings, execution_id: str) -> Path:
@@ -491,6 +517,21 @@ def _execute_generation(
             publication_sequence=publication_sequence,
         )
         client.set_private_document("episodes", episode_id, metadata)
+        if metadata.get("status") == "published":
+            try:
+                client.set_private_document(
+                    "runner", _publication_sequence_key(publication_label),
+                    {
+                        "lastSequence": publication_sequence,
+                        "seriesLabel": publication_label,
+                        "schemaVersion": 2,
+                        "updatedAt": datetime.now(UTC),
+                    },
+                )
+            except WebRunnerError:
+                # The completed archive record remains the recovery source.
+                # Never turn an already published episode into an automatic retry.
+                print("Numbering checkpoint unavailable; published archive preserves the number.")
         database.finish_scheduled_execution(
             execution_id,
             episode_date,

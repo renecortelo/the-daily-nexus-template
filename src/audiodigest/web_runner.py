@@ -344,6 +344,7 @@ class FirebaseWebRunnerClient:
         field_mask: list[str] | None = None,
         limit: int = 100,
         order_by: str = "",
+        all_pages: bool = False,
     ) -> list[dict[str, Any]]:
         if collection_name not in {"schedules", "runRequests", "episodes"}:
             raise WebRunnerError("runner refused an unexpected Firestore collection")
@@ -361,26 +362,51 @@ class FirebaseWebRunnerClient:
                 f"mask.fieldPaths={urllib.parse.quote(f, safe='')}"
                 for f in field_mask
             )
-        response = _json_request(
-            f"{self._documents_root}/users/{uid}/{collection_part}?{query}",
-            bearer=self._token(),
-        )
         result: list[dict[str, Any]] = []
-        for document in response.get("documents", []):
-            if not isinstance(document, dict):
-                continue
-            name = str(document.get("name", ""))
-            document_id = name.rsplit("/", 1)[-1]
-            fields = document.get("fields", {})
-            if not document_id or not isinstance(fields, dict):
-                continue
-            result.append(
-                {
-                    "document_id": document_id,
-                    **_decode_firestore_fields(fields),
-                }
+        page_query = query
+        seen_tokens: set[str] = set()
+        for _page in range(100):
+            response = _json_request(
+                f"{self._documents_root}/users/{uid}/{collection_part}?{page_query}",
+                bearer=self._token(),
             )
-        return result
+            for document in response.get("documents", []):
+                if not isinstance(document, dict):
+                    continue
+                name = str(document.get("name", ""))
+                document_id = name.rsplit("/", 1)[-1]
+                fields = document.get("fields", {})
+                if not document_id or not isinstance(fields, dict):
+                    continue
+                result.append(
+                    {"document_id": document_id, **_decode_firestore_fields(fields)}
+                )
+            token = response.get("nextPageToken", "")
+            if not all_pages or not token:
+                return result
+            if not isinstance(token, str) or token in seen_tokens:
+                raise WebRunnerError("Firestore archive pagination did not advance")
+            seen_tokens.add(token)
+            page_query = query + "&pageToken=" + urllib.parse.quote(token, safe="")
+        raise WebRunnerError("Firestore archive exceeded the bounded pagination limit")
+
+    def get_private_runner_document(self, document_id: str) -> dict[str, Any] | None:
+        """Read owner-only runner state without exposing credentials or document paths."""
+        if not document_id or "/" in document_id or len(document_id) > 160:
+            raise WebRunnerError("runner refused an invalid Firestore document ID")
+        uid = urllib.parse.quote(self.uid, safe="")
+        document_part = urllib.parse.quote(document_id, safe="")
+        response = _json_request(
+            f"{self._documents_root}/users/{uid}/runner/{document_part}",
+            bearer=self._token(),
+            allow_not_found=True,
+        )
+        if response.get("_not_found"):
+            return None
+        fields = response.get("fields")
+        if not isinstance(fields, dict):
+            raise WebRunnerError("Firestore runner state was malformed")
+        return _decode_firestore_fields(fields)
 
     def set_private_document(
         self,

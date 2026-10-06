@@ -1383,7 +1383,7 @@ function archiveDateTitle(episodeDate) {
 
 function storedPublicationTitle(record) {
   const title = String(record.title || "").trim();
-  if (/^\d{2}\/\d{2}\/\d{4}\s+The Daily Nexus\s+-\s+.+\s+-\s+\d{3}$/i.test(title)) {
+  if (/^\d{2}\/\d{2}\/\d{4}\s+The Daily Nexus\s+-\s+.+\s+-\s+\d{3,}$/i.test(title)) {
     return title;
   }
   return "";
@@ -1432,7 +1432,7 @@ function episodeDisplayTitles(records) {
           : index + 1;
         labels.set(
           String(record.id),
-          `${archiveDateTitle(record.episodeDate)} The Daily Nexus - ${archivePublicationLabel(record)} - ${String(sequence).padStart(3, "0")}`,
+          `${archiveDateTitle(record.episodeDate)} The Daily Nexus - ${archivePublicationLabel(record)} - ${String(sequence).padStart(4, "0")}`,
         );
       });
   }
