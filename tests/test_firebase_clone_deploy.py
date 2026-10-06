@@ -33,7 +33,7 @@ class FirebaseCloneDeployTests(TestCase):
             (modules / "lib" / "hosting").mkdir(parents=True)
             (modules / "lib" / "deploy" / "hosting").mkdir(parents=True)
             (modules / "package.json").write_text(
-                json.dumps({"version": "15.24.0"}),
+                json.dumps({"version": "15.32.1"}),
                 encoding="utf-8",
             )
             log_path = root / "firebase-stub-log.jsonl"
@@ -123,7 +123,7 @@ class FirebaseCloneDeployTests(TestCase):
             self.assertTrue(any(item[0] == "upload" for item in operations))
             self.assertTrue(any(item[0] == "release" for item in operations))
 
-    def test_clone_failure_falls_back_to_creating_new_version(self):
+    def test_clone_failure_aborts_but_empty_sites_can_have_a_first_release(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node.js is not installed")
@@ -133,7 +133,7 @@ class FirebaseCloneDeployTests(TestCase):
             (modules / "lib" / "hosting").mkdir(parents=True)
             (modules / "lib" / "deploy" / "hosting").mkdir(parents=True)
             (modules / "package.json").write_text(
-                json.dumps({"version": "15.24.0"}),
+                json.dumps({"version": "15.32.1"}),
                 encoding="utf-8",
             )
             log_path = root / "firebase-stub-log.jsonl"
@@ -144,8 +144,8 @@ class FirebaseCloneDeployTests(TestCase):
             )
             (modules / "lib" / "hosting" / "api.js").write_text(
                 recorder
-                + "exports.getChannel=async()=>({release:{version:{name:"
-                "'sites/example-private-project/versions/stale'}}});"
+                + "exports.getChannel=async()=>process.env.TDN_TEST_FIRST_RELEASE ? null : "
+                "({release:{version:{name:'sites/example-private-project/versions/stale'}}});"
                 "exports.cloneVersion=async()=>{throw new Error('clone failed')};"
                 "exports.createVersion=async()=>{r(['created']);return "
                 "'sites/example-private-project/versions/fallback'};"
@@ -201,10 +201,19 @@ class FirebaseCloneDeployTests(TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertNotEqual(0, completed.returncode)
             operations = [
                 json.loads(line)
                 for line in log_path.read_text(encoding="utf-8").splitlines()
             ]
+            self.assertNotIn(["created"], operations)
+            self.assertFalse(any(item[0] in {"upload", "release"} for item in operations))
+            environment["TDN_TEST_FIRST_RELEASE"] = "1"
+            first_release = subprocess.run(
+                completed.args, cwd=Path.cwd(), env=environment,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(0, first_release.returncode, first_release.stderr)
+            operations = [json.loads(line) for line in log_path.read_text().splitlines()]
             self.assertIn(["created"], operations)
             self.assertTrue(any(item[0] == "release" for item in operations))

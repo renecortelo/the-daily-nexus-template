@@ -62,6 +62,26 @@ $SettingsJson = $Settings | ConvertTo-Json -Depth 20
 $Utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($AgySettingsFile, $SettingsJson, $Utf8WithoutBom)
 
+# New CLI builds also read shared Antigravity user preferences. Preserve every
+# unrelated preference/plugin and explicitly disable both old and current keys.
+$SharedSettingsDir = Join-Path $env:USERPROFILE '.gemini\config'
+$SharedSettingsFile = Join-Path $SharedSettingsDir 'config.json'
+$SharedSettings = [pscustomobject]@{}
+if (Test-Path -LiteralPath $SharedSettingsFile) {
+    try { $SharedSettings = Get-Content -LiteralPath $SharedSettingsFile -Raw | ConvertFrom-Json }
+    catch { throw 'Shared Antigravity config.json is malformed; no defaults will replace it.' }
+}
+$UserSettings = [pscustomobject]@{}
+if ($null -ne $SharedSettings.userSettings) { $UserSettings = $SharedSettings.userSettings }
+foreach ($Key in @('useAiCredits', 'useG1Credits', 'telemetryEnabled', 'enableTelemetry')) {
+    $UserSettings | Add-Member -NotePropertyName $Key -NotePropertyValue $false -Force
+}
+$SharedSettings | Add-Member -NotePropertyName 'userSettings' -NotePropertyValue $UserSettings -Force
+New-Item -ItemType Directory -Path $SharedSettingsDir -Force | Out-Null
+$SharedTemporary = Join-Path $SharedSettingsDir ('config.' + [guid]::NewGuid().ToString('N') + '.tmp')
+[System.IO.File]::WriteAllText($SharedTemporary, ($SharedSettings | ConvertTo-Json -Depth 100), $Utf8WithoutBom)
+Move-Item -LiteralPath $SharedTemporary -Destination $SharedSettingsFile -Force
+
 $Verified = Get-Content -LiteralPath $AgySettingsFile -Raw | ConvertFrom-Json
 if ($Verified.useG1Credits -ne $false -or $Verified.enableTelemetry -ne $false) {
     throw "Could not enforce Antigravity privacy and cost settings."

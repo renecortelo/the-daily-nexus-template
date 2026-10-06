@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75", "wheel"]
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,32 +7,52 @@ name = "audio-digest"
 version = "0.7.0"
 description = "The Daily Nexus zero-additional-cost newsletter-to-private-podcast pipeline."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "Dario Novelli" }]
 dependencies = [
   "beautifulsoup4>=4.12,<5",
-  "google-api-python-client>=2.160,<3",
-  "google-auth-httplib2>=0.2,<1",
-  "google-auth-oauthlib>=1.2,<2",
+  "google-api-python-client>=2.201,<3",
+  "google-auth>=2.60,<3",
+  "google-auth-httplib2>=0.4.4,<1",
+  "google-auth-oauthlib>=1.5,<2",
+  "cryptography>=50.0.2,<51",
+  "oauthlib>=4,<5",
+  "urllib3>=2.8,<3",
   "keyring>=25,<26",
-  "pillow>=11,<12",
-  "pymupdf>=1.26,<2",
+  "pillow>=12.3,<13",
+  "pymupdf>=1.28.2,<2",
   "reportlab>=4.4,<5",
-  "trafilatura>=2,<3",
+  "trafilatura>=2.3,<3",
 ]
 
 [project.optional-dependencies]
 audio = [
   "kokoro>=0.9.4,<1",
   "misaki[en]>=0.9.4,<1",
+  "en-core-web-sm==3.8.0",
   "numpy>=2,<3",
   "soundfile>=0.13,<1",
+  "torch==2.13.0",
+  "transformers==5.14.1",
+  "huggingface-hub>=1.25.1,<2",
 ]
 dev = [
+  "wheel==0.48.0",
+  "uv==0.12.23",
   "coverage>=7,<8",
   "ruff>=0.12,<1",
+  "pip-audit==2.10.1",
 ]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [project.scripts]
 audiodigest = "audiodigest.cli:main"

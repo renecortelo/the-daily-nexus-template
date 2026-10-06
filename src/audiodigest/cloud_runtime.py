@@ -227,6 +227,13 @@ def prepare_cloud_runtime(
                     indent=2,
                 ),
             )
+            write_private_value(
+                antigravity_root / "config" / "config.json",
+                json.dumps({"userSettings": {
+                    "useAiCredits": False, "useG1Credits": False,
+                    "telemetryEnabled": False, "enableTelemetry": False,
+                }}),
+            )
         confirmation = SparkConfirmation(
             project_id=values["project_id"],
             confirmed_at=datetime.now(UTC).isoformat(),
@@ -281,6 +288,7 @@ def cleanup_cloud_runtime(*, config_path: Path) -> None:
         config_path,
         Path.home() / ".gemini" / "settings.json",
         Path.home() / ".gemini" / "antigravity-cli" / "settings.json",
+        Path.home() / ".gemini" / "config" / "config.json",
     ):
         try:
             delete_private_value(path)

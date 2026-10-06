@@ -5,11 +5,11 @@
 Install on the Windows machine:
 
 - Git.
-- Python 3.11 or newer, with Python 3.12 recommended.
-- Node.js 20 or newer.
+- Python 3.11 or 3.12 (3.12 recommended; audio does not yet support 3.13).
+- Node.js 24 LTS.
 - uv, the free Python package installer.
 - FFmpeg and FFprobe.
-- Antigravity CLI.
+- Antigravity CLI 1.3.0 (verified installer below).
 
 Cloud-synced folders are optional and should be used only for a separately configured output
 backup. Run the application from a local clone rather than a synchronized working folder.
@@ -20,11 +20,19 @@ From this local project folder:
 Set-ExecutionPolicy -Scope Process Bypass
 winget install --exact --id astral-sh.uv
 .\scripts\setup-windows.ps1 -InstallFfmpeg
+.\scripts\install-antigravity.ps1
 ```
 
 The setup creates the Python environment and local Firebase CLI under
 `%LOCALAPPDATA%\AudioDigest`, then creates a native desktop app named **The Daily Nexus**. It does not
 configure a paid API, scheduled task, or background service.
+
+Installation uses `uv.lock` and `package-lock.json`; keep both with the source.
+For a current security-patched Python 3.12 on Windows, update uv and use
+`uv python install 3.12.15` (the official Python 3.12 security releases are
+source-only; uv supplies a managed build). Add uv's reported executable directory
+to your user PATH before running setup if no compatible Python is otherwise found.
+Do not upgrade Python to 3.13/3.14 for the current audio models.
 
 ## 2. Prepare Gmail's explicit allowlist
 

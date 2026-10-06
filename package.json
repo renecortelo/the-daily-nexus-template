@@ -3,7 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "description": "Pinned local command-line tools for AudioDigest.",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "overrides": {
+    "basic-ftp": "6.2.2",
+    "chokidar": "4.0.3",
+    "@opentelemetry/core": "2.11.0",
+    "uuid": "11.1.1"
+  },
   "devDependencies": {
-    "firebase-tools": "15.24.0"
+    "firebase-tools": "15.32.1"
   }
 }

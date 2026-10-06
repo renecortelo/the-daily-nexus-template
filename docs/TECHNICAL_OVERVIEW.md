@@ -57,7 +57,7 @@ must also succeed.
 
 | Area | Technology | Responsibility |
 | --- | --- | --- |
-| Core application | Python 3.11+ | Pipeline orchestration, validation, storage, publishing, and desktop UI |
+| Core application | Python 3.11–3.12 | Pipeline orchestration, validation, storage, publishing, and desktop UI |
 | Gmail access | Google Gmail API and OAuth 2.0 | Mailbox-wide read-only grant; application query is restricted to the configured label |
 | Editorial model access | Google Antigravity CLI with Google OAuth | Uses an existing Google AI Pro allowance; paid API keys and AI-credit fallback are rejected |
 | Speech | Kokoro, PyTorch, and Misaki | Local or ephemeral-runner voice synthesis |

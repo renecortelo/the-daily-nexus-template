@@ -47,6 +47,45 @@ PAYMENT_RISK_PATTERNS = (
 _ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
+def _shared_settings_path(settings: AntigravitySettings) -> Path | None:
+    # Only the canonical CLI layout has a shared Antigravity profile. Custom
+    # settings paths used by isolated deployments/tests must not touch home.
+    if settings.settings_path.parent.name != "antigravity-cli":
+        return None
+    return settings.settings_path.parent.parent / "config" / "config.json"
+
+
+def _safe_shared_settings(settings: AntigravitySettings, *, enforce: bool) -> None:
+    path = _shared_settings_path(settings)
+    if path is None:
+        return
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AntigravityConfigurationError("Shared Antigravity settings are unreadable") from exc
+    if not isinstance(raw, dict) or not isinstance(raw.get("userSettings", {}), dict):
+        raise AntigravityConfigurationError("Shared Antigravity settings must be an object")
+    preferences = raw.setdefault("userSettings", {})
+    for key in ("useAiCredits", "useG1Credits", "telemetryEnabled", "enableTelemetry"):
+        if preferences.get(key) is True:
+            if key in {"useAiCredits", "useG1Credits"}:
+                raise AntigravityPaymentRiskError("Shared Antigravity AI credits enabled; aborted")
+            raise AntigravityConfigurationError("Shared Antigravity telemetry enabled; aborted")
+        if not enforce and preferences.get(key) is not False:
+            raise AntigravityConfigurationError("Shared Antigravity safety flags are not explicit")
+    if enforce and any(preferences.get(key) is not False for key in
+                       ("useAiCredits", "useG1Credits", "telemetryEnabled", "enableTelemetry")):
+        preferences.update(useAiCredits=False, useG1Credits=False,
+                           telemetryEnabled=False, enableTelemetry=False)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
 def assert_safe_antigravity_settings(settings: AntigravitySettings) -> dict[str, Any]:
     try:
         raw = json.loads(settings.settings_path.read_text(encoding="utf-8-sig"))
@@ -68,6 +107,7 @@ def assert_safe_antigravity_settings(settings: AntigravitySettings) -> dict[str,
         raise AntigravityConfigurationError(
             "Antigravity enableTelemetry must be explicitly false; run aborted"
         )
+    _safe_shared_settings(settings, enforce=False)
     return raw
 
 
@@ -112,6 +152,7 @@ def enforce_safe_antigravity_settings(
             os.replace(temporary, settings.settings_path)
         finally:
             temporary.unlink(missing_ok=True)
+    _safe_shared_settings(settings, enforce=True)
     return assert_safe_antigravity_settings(settings)
 
 
@@ -196,11 +237,15 @@ def _response_from_cli_output(
         return clean, AntigravityMetadata(latency_ms=elapsed_ms)
     if not isinstance(parsed, dict):
         raise AntigravityCLIError("Antigravity CLI JSON output must be an object")
+    if parsed.get("denied_actions"):
+        raise AntigravityCLIError("Antigravity refused a tool action; incomplete result rejected")
     if parsed.get("error"):
         error = str(parsed["error"])
         if any(pattern in error.lower() for pattern in PAYMENT_RISK_PATTERNS):
             raise AntigravityPaymentRiskError(error)
-        raise AntigravityCLIError(error)
+        # CLI errors can contain account details or source excerpts. Keep these
+        # out of process monitors, Actions logs and public diagnostic reports.
+        raise AntigravityCLIError("Antigravity CLI reported an execution error")
     status = str(parsed.get("status", "")).upper()
     if status and status not in {"SUCCESS", "COMPLETED", "OK"}:
         raise AntigravityCLIError(
@@ -296,6 +341,7 @@ class AntigravityCLI:
     ) -> tuple[T, AntigravityMetadata]:
         enforce_safe_antigravity_settings(self.settings)
         env = dict(os.environ)
+        env.update({"AGY_CLI_HIDE_ACCOUNT_INFO": "1", "DO_NOT_TRACK": "1"})
         for name in (
             "OPENAI_API_KEY",
             "CODEX_API_KEY",
@@ -342,11 +388,16 @@ class AntigravityCLI:
                         "run aborted"
                     )
                 last_error = AntigravityCLIError(
-                    f"Antigravity CLI failed with exit code {completed.returncode}: "
-                    f"{detail[:1000]}"
+                    f"Antigravity CLI failed with exit code {completed.returncode}; "
+                    "raw diagnostic output withheld for privacy"
                 )
                 continue
             try:
+                if re.search(
+                    r"\b(?:truncated|truncation|print[- ]timeout|timed out|timeout expired)\b",
+                    completed.stderr, re.IGNORECASE,
+                ):
+                    raise AntigravityCLIError("Antigravity partial or timed-out result rejected")
                 response, metadata = _response_from_cli_output(
                     completed.stdout,
                     elapsed_ms=elapsed_ms,

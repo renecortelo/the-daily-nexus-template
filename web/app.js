@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import {
   GoogleAuthProvider,
   browserSessionPersistence,
@@ -9,7 +9,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut,
-} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   addDoc,
   collection,
@@ -24,7 +24,7 @@ import {
   serverTimestamp,
   setDoc,
   writeBatch,
-} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 const TYPICAL_RUN_MS = (22 * 60 + 40) * 1000;
