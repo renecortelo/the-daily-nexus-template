@@ -209,4 +209,58 @@ class WebRunnerTests(TestCase):
         self.assertIn("pageSize=40", url)
         self.assertIn("orderBy=updatedAt%20desc", url)
         self.assertIn("mask.fieldPaths=publicationSequence", url)
-        self.assertIn("pageSize=40", url)
+
+    def test_numbering_archive_follows_all_pages_and_preserves_mask(self):
+        settings = load_settings("config.example.toml")
+        settings.web.enabled = True
+        settings.web.owner_uid = "owner-uid"
+        settings.firebase.project_id = "example-private-project"
+        client = FirebaseWebRunnerClient(settings)
+        client._id_token = "short-test-token"  # noqa: S105
+        with patch("audiodigest.web_runner._json_request", side_effect=[
+            {"documents": [{"name": "episodes/first", "fields": {}}],
+             "nextPageToken": "next/page+token"},
+            {"documents": [{"name": "episodes/second", "fields": {}}]},
+        ]) as request:
+            items = client.list_private_collection(
+                "episodes", field_mask=["publicationSequenceVersion"], all_pages=True,
+            )
+        self.assertEqual(["first", "second"], [item["document_id"] for item in items])
+        self.assertIn("pageToken=next%2Fpage%2Btoken", request.call_args_list[1].args[0])
+        self.assertIn(
+            "mask.fieldPaths=publicationSequenceVersion", request.call_args_list[1].args[0],
+        )
+
+    def test_recent_history_stays_bounded_and_repeated_page_token_fails_closed(self):
+        settings = load_settings("config.example.toml")
+        settings.web.enabled = True
+        settings.web.owner_uid = "owner-uid"
+        settings.firebase.project_id = "example-private-project"
+        client = FirebaseWebRunnerClient(settings)
+        client._id_token = "short-test-token"  # noqa: S105
+        with patch("audiodigest.web_runner._json_request", return_value={
+            "documents": [], "nextPageToken": "repeated",
+        }) as request:
+            self.assertEqual([], client.list_private_collection("episodes", limit=40))
+            self.assertEqual(1, request.call_count)
+            with self.assertRaises(WebRunnerError):
+                client.list_private_collection("episodes", all_pages=True)
+            self.assertEqual(3, request.call_count)
+
+    def test_owner_only_counter_read_validates_path_and_handles_missing_state(self):
+        settings = load_settings("config.example.toml")
+        settings.web.enabled = True
+        settings.web.owner_uid = "owner-uid"
+        settings.firebase.project_id = "example-private-project"
+        client = FirebaseWebRunnerClient(settings)
+        client._id_token = "short-test-token"  # noqa: S105
+        with patch("audiodigest.web_runner._json_request", side_effect=[
+            {"_not_found": True}, {"fields": {"lastSequence": {"integerValue": "46"}}},
+        ]) as request:
+            self.assertIsNone(client.get_private_runner_document("a-counter"))
+            self.assertEqual({"lastSequence": 46}, client.get_private_runner_document("a-counter"))
+            with self.assertRaises(WebRunnerError):
+                client.get_private_runner_document("../other")
+        self.assertEqual(2, request.call_count)
+        self.assertTrue(request.call_args_list[0].kwargs["allow_not_found"])
+        self.assertIn("/runner/a-counter", request.call_args_list[0].args[0])

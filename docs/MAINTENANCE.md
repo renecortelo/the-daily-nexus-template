@@ -16,6 +16,20 @@ For synthesis-only pronunciation, contextual pauses, and manual local comparison
 see [Voice delivery](VOICE_DELIVERY.md). Current voice defaults and writing-tone
 selectors remain separate; no paid voice API or additional mandatory LLM call is used.
 
+## Publication numbering
+
+Hosted editions use one all-time counter per normalized run/series name, not
+one counter per calendar date. Titles have a minimum four-digit suffix (`0001`);
+larger values never wrap. Only published editions count, with duplicate media
+counted once. A versioned owner-only Firestore checkpoint preserves the high-water
+number after retention; a paginated archive read recovers interrupted checkpoints.
+The live feed also prevents reuse if Hosting succeeded but saving its metadata failed.
+The private cloud workflow serializes generation and publication. Failed attempts
+do not consume an episode number. Renamed historical series can be seeded into the
+current series' private checkpoint after reviewing their published archive; no
+account-specific names or migration data belong in the reusable template.
+Existing GUIDs, media URLs, publication dates and historical titles are unchanged.
+
 ## Safe upgrades
 
 1. Work on a branch. Review upstream release notes and security advisories.

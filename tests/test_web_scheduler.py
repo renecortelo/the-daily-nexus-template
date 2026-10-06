@@ -2,6 +2,7 @@ import json
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from audiodigest.web_scheduler import (
     TerminalTaskFailure,
     _execute_generation,
     _next_publication_sequence,
+    _publication_sequence_key,
     _published_metadata,
     run_web_runner_tick,
 )
@@ -22,12 +24,16 @@ from tests.test_jobs import schedule_payload
 
 
 class _FakeWebClient:
-    def __init__(self, schedules, requests=None, episodes=None):
+    def __init__(self, schedules, requests=None, episodes=None, checkpoints=None):
         self.schedules = schedules
         self.requests = requests or []
         self.episodes = episodes or []
         self.writes = []
         self.execution_statuses = {}
+        self.checkpoints = checkpoints or {}
+
+    def get_private_runner_document(self, document_id):
+        return self.checkpoints.get(document_id)
 
     def authenticate(self):
         return "test-token"
@@ -43,6 +49,8 @@ class _FakeWebClient:
 
     def set_private_document(self, collection, document_id, data):
         self.writes.append((collection, document_id, data))
+        if collection == "runner" and document_id.startswith("publication-sequence-v2-"):
+            self.checkpoints[document_id] = dict(data)
 
     def patch_private_document(self, collection, document_id, data):
         self.writes.append((collection, document_id, data))
@@ -69,6 +77,11 @@ class _FakeWebClient:
 
 
 class WebSchedulerTests(TestCase):
+    def setUp(self):
+        remote = patch("audiodigest.web_scheduler.load_remote_publication", return_value=())
+        self.remote_publication = remote.start()
+        self.addCleanup(remote.stop)
+
     def test_quote_identity_reaches_owner_metadata_even_without_optional_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = self._settings(Path(directory))
@@ -119,12 +132,14 @@ class WebSchedulerTests(TestCase):
                 episodes=[
                     {
                         "episodeDate": "2026-12-31",
+                        "status": "published", "document_id": "first",
                         "publicationLabel": "TDN All",
                         "publicationSequence": 1,
                         "title": "12/31/2026 The Daily Nexus - TDN All - 001",
                     },
                     {
                         "episodeDate": "2026-12-31",
+                        "status": "published", "document_id": "second",
                         "title": "12/31/2026 The Daily Nexus - TDN All - 002",
                     },
                 ],
@@ -138,6 +153,80 @@ class WebSchedulerTests(TestCase):
                     label="TDN All",
                 ),
             )
+
+    def test_sequence_spans_dates_and_separates_series_without_consuming_failures(self):
+        with tempfile.TemporaryDirectory() as name:
+            settings = self._settings(Path(name))
+            client = _FakeWebClient([], episodes=[
+                {"document_id": "first", "status": "published", "episodeDate": "2026-08-01",
+                 "publicationLabel": "An edition", "publicationSequence": 1},
+                {"document_id": "second", "status": "published", "episodeDate": "2026-09-01",
+                 "publicationLabel": "  AN   EDITION ", "publicationSequence": 1},
+                {"document_id": "failed", "status": "failed", "publicationLabel": "An edition"},
+                {"document_id": "other", "status": "published", "publicationLabel": "Other"},
+            ])
+            self.assertEqual(3, _next_publication_sequence(
+                settings, client, episode_date=date(2026, 10, 7), label="An edition",
+            ))
+            self.assertEqual(2, _next_publication_sequence(
+                settings, client, episode_date=date(2026, 10, 7), label="Other",
+            ))
+
+    def test_sequence_checkpoint_survives_retention_and_recovers_interrupted_write(self):
+        with tempfile.TemporaryDirectory() as name:
+            settings = self._settings(Path(name))
+            client = _FakeWebClient([], checkpoints={
+                _publication_sequence_key("An edition"): {"schemaVersion": 2, "lastSequence": 46},
+            })
+            self.assertEqual(47, _next_publication_sequence(
+                settings, client, episode_date=date(2026, 10, 7), label="An edition",
+            ))
+            client.episodes = [
+                {"document_id": "new", "status": "published", "publicationLabel": "An edition",
+                 "publicationSequenceVersion": 2, "publicationSequence": 47},
+            ]
+            self.assertEqual(48, _next_publication_sequence(
+                settings, client, episode_date=date(2026, 10, 8), label="An edition",
+            ))
+
+    def test_duplicate_media_counts_once_and_old_daily_suffix_is_not_a_global_number(self):
+        with tempfile.TemporaryDirectory() as name:
+            settings = self._settings(Path(name))
+            client = _FakeWebClient([], episodes=[
+                {"document_id": "one", "status": "published", "audioUrl": "same-media",
+                 "title": "08/01/2026 The Daily Nexus - An edition - 009"},
+                {"document_id": "duplicate", "status": "published", "audioUrl": "same-media",
+                 "title": "08/01/2026 The Daily Nexus - An edition - 010"},
+            ])
+            self.assertEqual(2, _next_publication_sequence(
+                settings, client, episode_date=date(2026, 10, 7), label="An edition",
+            ))
+
+    def test_corrupt_checkpoint_fails_closed_instead_of_resetting_numbers(self):
+        with tempfile.TemporaryDirectory() as name:
+            client = _FakeWebClient([], checkpoints={
+                _publication_sequence_key("An edition"): {"schemaVersion": 2, "lastSequence": True},
+            })
+            with self.assertRaises(WebRunnerError):
+                _next_publication_sequence(
+                    self._settings(Path(name)), client,
+                    episode_date=date(2026, 10, 7), label="An edition",
+                )
+
+    def test_feed_number_recovers_publication_when_metadata_save_failed(self):
+        with tempfile.TemporaryDirectory() as name:
+            self.remote_publication.return_value = (
+                SimpleNamespace(title="10/06/2026 The Daily Nexus - An edition - 0047"),
+                SimpleNamespace(title="10/06/2026 The Daily Nexus - Other - 0099"),
+                SimpleNamespace(title="10/06/2026 The Daily Nexus - An edition - 999"),
+            )
+            client = _FakeWebClient([], checkpoints={
+                _publication_sequence_key("An edition"): {"schemaVersion": 2, "lastSequence": 46},
+            })
+            self.assertEqual(48, _next_publication_sequence(
+                self._settings(Path(name)), client,
+                episode_date=date(2026, 10, 7), label="An edition",
+            ))
 
     def test_same_day_cloud_runs_use_isolated_temporary_databases(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
@@ -240,7 +329,7 @@ class WebSchedulerTests(TestCase):
             ) as execute:
                 result = run_web_runner_tick(
                     self._settings(Path(name)),
-                    now=datetime(2026, 7, 27, 4, 47, tzinfo=UTC),
+                    now=datetime(2026, 7, 27, 8, 0, tzinfo=UTC),
                     client=client,
                 )
             self.assertEqual("started", result["status"])

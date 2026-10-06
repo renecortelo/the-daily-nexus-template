@@ -25,6 +25,11 @@ def temporary_test_directory():
 
 
 class WebAppSecurityTests(TestCase):
+    def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        self.assertIn(r"\d{3,}$/i.test(title)", source)
+        self.assertIn('String(sequence).padStart(4, "0")', source)
+
     def test_web_auth_is_session_only_and_owner_gated(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
         styles = Path("web/styles.css").read_text(encoding="utf-8")
