@@ -36,6 +36,7 @@ from audiodigest.newspaper import (
     NewspaperRenderer,
     is_legacy_script_style_issue,
 )
+from audiodigest.progress import counts, stage, timed_operation
 from audiodigest.publisher import FirebasePublisher, PublishResult
 from audiodigest.web_fetcher import ArticleFetchError, SafeArticleFetcher, UnsafeURLError
 
@@ -49,6 +50,8 @@ class VerificationError(RuntimeError):
 
 
 def _stage(number: int, total: int, label: str) -> None:
+    if total == 8:
+        stage(number)
     print(f"Stage {number}/{total}: {label}", flush=True)
 
 
@@ -613,6 +616,7 @@ class Pipeline:
                 for source in sources
                 if source.source_type == "newsletter"
             )
+            counts(newsletters=newsletter_count, links=newsletter_links)
             print(
                 "Newsletter scan: "
                 f"{newsletter_count} Gmail newsletters scanned; "
@@ -621,6 +625,7 @@ class Pipeline:
             )
             self._enrich_articles(sources, fetch_articles=fetch_articles)
             source_mix = _evidence_mix(sources)
+            counts(articles=int(source_mix["safe_articles_retrieved"]))
             source_mix["mode"] = evidence_mode
             print(
                 "Evidence mix: "
@@ -642,6 +647,7 @@ class Pipeline:
             stories, extract_meta = self.editorial.extract_stories(sources, day)
             if not stories:
                 raise NoContentError("Antigravity found no substantive stories")
+            counts(stories=len(stories))
             source_mix = _evidence_mix(sources, stories)
             source_mix["mode"] = evidence_mode
             if not source_mix["newsletter_backed_stories"]:
@@ -771,13 +777,14 @@ class Pipeline:
             )
             newspaper_work_path = working_episode_dir / "edition.pdf"
             preview_work_path = working_episode_dir / "edition-1.png"
-            newspaper_result = NewspaperRenderer(self.settings).render(
-                newspaper,
-                day,
-                newspaper_work_path,
-                preview_work_path,
-                edition_name=run_name if execution_id else "",
-            )
+            with timed_operation("paper_render"):
+                newspaper_result = NewspaperRenderer(self.settings).render(
+                    newspaper,
+                    day,
+                    newspaper_work_path,
+                    preview_work_path,
+                    edition_name=run_name if execution_id else "",
+                )
             preview_work_paths = list(newspaper_result.preview_paths)
             in_progress_preview_paths = [
                 in_progress_dir / f"edition-{index}.png"

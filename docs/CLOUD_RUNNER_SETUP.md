@@ -106,6 +106,33 @@ For a 06:00 ready target, a start time around 03:00 leaves room for the
 normal generation duration. The Cloudflare alarm dispatches the tested
 default-branch workflow after it is configured; no GitHub cron is used.
 
+## Timing and interrupted runs
+
+The runner's hard limit remains **60 minutes for the whole job**, including
+setup and cleanup. It processes one episode per job. Failed or interrupted
+occurrences are terminal; timing diagnostics never resume or requeue them.
+
+During generation, `TDN_PROGRESS` log lines appear immediately at each stage
+and approximately once per minute. They contain only timestamps, stage numbers,
+elapsed seconds and numeric counters. Raw child output is discarded by the
+cloud log filter; newsletter text, scripts, account identities, URLs and
+credential values are not forwarded. This changes logging, not editorial or
+audio output. The existing owner-only monitor also shows the current stage,
+voice-block progress and last progress update.
+
+The final timing profile totals the time spent in each stage and measures
+model calls, voice-model loading, speech synthesis, audio encoding and PDF
+rendering separately. Operation times are included within stage times; do
+not add both sets together. The filtered log also prints a readable final
+timing summary. Only the most recent profile is retained in the
+owner-only `runner/lastProfile` document. Timing updates use no extra service
+or paid API, and status-write failures cannot trigger a generation retry.
+
+GitHub may kill a job before its final summary can be written. In that case,
+use the last heartbeat: its stage and elapsed time locate the unfinished
+work, without requiring another episode generation. A last stage is an
+observation of where execution stopped, not proof that the stage was faulty.
+
 ## Rotation and removal
 
 Disable the workflow and schedules before rotating credentials. Replace only

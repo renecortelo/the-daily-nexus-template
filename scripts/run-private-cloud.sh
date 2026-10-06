@@ -78,15 +78,37 @@ batch_limit=1
 batch_budget_seconds=$((45 * 60))
 batch_started=$SECONDS
 completed_tasks=0
+generation_status_file=""
+
+cleanup_generation_status() {
+  if [[ -n "$generation_status_file" ]]; then
+    rm -f "$generation_status_file"
+  fi
+}
+trap 'record_task_failure_output; cleanup_generation_status; cleanup_keyring' EXIT
 
 run_generation_task() {
-  local output
   local status
+  local filter_status
+  local -a pipeline_status
+  generation_status_file="$(mktemp "$RUNNER_TEMP/tdn-result.XXXXXX")"
   set +e
-  output="$("$@" 2>&1)"
-  status=$?
+  # The filter forwards only the numeric timing protocol in real time. It
+  # discards raw output instead of retaining newsletter text or credentials.
+  PYTHONUNBUFFERED=1 "$@" 2>&1 | python -u -m audiodigest.progress \
+    --result-file "$generation_status_file"
+  pipeline_status=("${PIPESTATUS[@]}")
+  status=${pipeline_status[0]}
+  filter_status=${pipeline_status[1]}
   set -e
-  generation_result="$output"
+  generation_result="$(< "$generation_status_file")"
+  cleanup_generation_status
+  generation_status_file=""
+  if (( filter_status != 0 )); then
+    echo "The protected timing stream could not complete." >&2
+    return "$filter_status"
+  fi
+  printf 'Protected task result: %s\n' "$generation_result"
   if (( status == 20 )); then
     task_failed=true
     return 0
@@ -103,7 +125,6 @@ if [[ -n "${TDN_SCHEDULE_ID:-}" ]]; then
     runner_args+=(--schedule-date "$TDN_SCHEDULE_DATE")
   fi
   run_generation_task "${runner_args[@]}"
-  printf '%s\n' "$generation_result"
   exit 0
 fi
 
@@ -118,7 +139,6 @@ while (( completed_tasks < batch_limit )); do
     break
   fi
   run_generation_task python -m audiodigest --config config.toml.cloud web-runner
-  printf '%s\n' "$generation_result"
   result="$generation_result"
   if grep -q '"status": "idle"' <<< "$result"; then
     break

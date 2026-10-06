@@ -13,6 +13,7 @@ from pathlib import Path
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
+from audiodigest.progress import counts, timed_operation
 
 
 class AudioGenerationError(RuntimeError):
@@ -189,6 +190,7 @@ class KokoroAudioRenderer:
             self._write_silence(sentence_silence, 150)
             self._write_silence(section_silence, 500)
             total_blocks = len(spoken_blocks)
+            counts(voice_blocks=0, voice_total=total_blocks)
             print(f"Synthesizing {total_blocks} audio dialogue blocks...", flush=True)
 
             for index, (turn, is_section_heading) in enumerate(spoken_blocks):
@@ -204,14 +206,17 @@ class KokoroAudioRenderer:
                 voice = self._voice_for_host(turn.host)
                 language_code = voice_profile(voice).language_code
                 if language_code not in pipelines:
-                    pipelines[language_code] = self._pipeline(language_code)
+                    with timed_operation("voice_model"):
+                        pipelines[language_code] = self._pipeline(language_code)
                 chunk = temp / f"speech-{index:04d}.wav"
-                self._write_speech_chunk(
-                    pipelines[language_code],
-                    turn.text,
-                    chunk,
-                    voice=voice,
-                )
+                with timed_operation("speech"):
+                    self._write_speech_chunk(
+                        pipelines[language_code],
+                        turn.text,
+                        chunk,
+                        voice=voice,
+                    )
+                counts(voice_blocks=index + 1)
                 with wave.open(str(chunk), "rb") as speech:
                     speech_ms = round(
                         (speech.getnframes() / max(1, speech.getframerate())) * 1000
@@ -257,13 +262,14 @@ class KokoroAudioRenderer:
                 "-y",
                 str(output),
             ]
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            with timed_operation("audio_encode"):
+                completed = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
             concat_succeeded = False
             if (
                 completed.returncode == 0
@@ -328,13 +334,14 @@ class KokoroAudioRenderer:
                     "-y",
                     str(output),
                 ]
-                fallback = subprocess.run(
-                    fallback_command,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
+                with timed_operation("audio_encode"):
+                    fallback = subprocess.run(
+                        fallback_command,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
                 if (
                     fallback.returncode != 0
                     or not output.is_file()

@@ -13,6 +13,7 @@ from typing import Any, TypeVar
 
 from audiodigest.config import AntigravitySettings
 from audiodigest.models import AntigravityMetadata, DataValidationError
+from audiodigest.progress import increment, timed_operation
 
 T = TypeVar("T")
 
@@ -310,22 +311,25 @@ class AntigravityCLI:
         current_payload = payload
         last_error: Exception | None = None
         for attempt in range(retries + 1):
+            if attempt:
+                increment("model_retries")
             rejected_response: dict[str, Any] | None = None
             request_path = self._prepare_workspace(instruction, current_payload)
             started = time.perf_counter()
             try:
-                completed = subprocess.run(
-                    self._command(request_path),
-                    cwd=self.settings.workspace_dir,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    capture_output=True,
-                    timeout=self.settings.timeout_seconds + 30,
-                    check=False,
-                    env=env,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
+                with timed_operation("model"):
+                    completed = subprocess.run(
+                        self._command(request_path),
+                        cwd=self.settings.workspace_dir,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        capture_output=True,
+                        timeout=self.settings.timeout_seconds + 30,
+                        check=False,
+                        env=env,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
             finally:
                 request_path.unlink(missing_ok=True)
                 enforce_safe_antigravity_settings(self.settings)
@@ -357,6 +361,7 @@ class AntigravityCLI:
                 AntigravityCLIError,
                 ValueError,
             ) as exc:
+                increment("model_validation_failures")
                 last_error = exc
                 if attempt < retries:
                     print(
