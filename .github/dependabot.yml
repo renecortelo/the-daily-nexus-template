@@ -2,6 +2,13 @@ version: 2
 updates:
   - package-ecosystem: uv
     directory: /
+    ignore:
+      # Transformers 5.x requires Hub 1.x; a Hub 2.x upgrade must be reviewed
+      # together with the audio stack, not proposed as an isolated update.
+      - dependency-name: huggingface-hub
+        update-types: [version-update:semver-major]
+      - dependency-name: reportlab
+        update-types: [version-update:semver-major]
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
