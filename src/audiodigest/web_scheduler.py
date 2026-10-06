@@ -17,6 +17,7 @@ from audiodigest.jobs import (
     apply_generation_parameters,
 )
 from audiodigest.pipeline import Pipeline
+from audiodigest.progress import ProgressReporter, increment
 from audiodigest.web_runner import FirebaseWebRunnerClient, WebRunnerError
 
 MANUAL_REQUEST_EXPIRY_DAYS = 2
@@ -203,17 +204,28 @@ def _runner_status(
     active_task: str = "",
     detail: str = "",
 ) -> None:
+    data = {
+        "state": state,
+        "activeTask": active_task[:120],
+        "detail": detail[:500],
+        "checkedAt": datetime.now(UTC),
+        "schemaVersion": 1,
+    }
+    if state == "running":
+        data["startedAt"] = datetime.now(UTC)
     client.set_private_document(
         "runner",
         "status",
-        {
-            "state": state,
-            "activeTask": active_task[:120],
-            "detail": detail[:500],
-            "checkedAt": datetime.now(UTC),
-            "schemaVersion": 1,
-        },
+        data,
     )
+
+
+def _save_timing_profile(client: FirebaseWebRunnerClient, profile: dict) -> None:
+    try:
+        client.set_private_document("runner", "lastProfile", profile)
+    except Exception:
+        # A status outage must not change a completed/failed execution claim.
+        increment("progress_updates_failed")
 
 
 def _published_metadata(
@@ -438,6 +450,10 @@ def _execute_generation(
             },
         )
     previous_signal_handlers = _install_generation_interrupt_handlers()
+    reporter = ProgressReporter(callback=lambda profile: client.patch_private_document(
+        "runner", "status", {"progress": profile, "checkedAt": datetime.now(UTC)},
+    ))
+    reporter.start()
     try:
         result = pipeline_factory(configured).run(
             requested_date=episode_date,
@@ -483,7 +499,12 @@ def _execute_generation(
                     "detail": request_detail,
                 },
             )
-        _runner_status(client, state="idle", detail="Last task completed.")
+        profile = reporter.finish("completed")
+        _save_timing_profile(client, profile)
+        _runner_status(
+            client, state="idle",
+            detail=f"Last task completed in {profile['elapsed_seconds']:.0f} seconds.",
+        )
         return {
             "status": str(result.get("status", "completed")),
             "execution_id": execution_id,
@@ -491,9 +512,26 @@ def _execute_generation(
         }
     except Exception as exc:
         error_name = type(exc).__name__
+        reason = {
+            "GenerationInterrupted": "interrupted",
+            "TimeoutExpired": "subprocess_timeout",
+            "AntigravityCLIError": "model_failure",
+            "VerificationError": "verification_failure",
+            "AudioGenerationError": "audio_failure",
+            "PublishError": "publish_failure",
+            "NoContentError": "no_content",
+            "AntigravityPaymentRiskError": "cost_guard",
+        }.get(error_name, "other")
+        profile = reporter.finish(
+            "interrupted" if isinstance(exc, GenerationInterrupted) else "failed",
+            reason=reason,
+        )
+        _save_timing_profile(client, profile)
         local_detail = f"{error_name}: {exc}"[:4000]
         remote_detail = (
-            f"{error_name}: generation failed; inspect the private local runner log."
+            f"Generation stopped at stage {profile['stage']}/8 ({profile['label']}) "
+            f"after {profile['elapsed_seconds']:.0f} seconds ({reason}); "
+            "inspect the private local runner log."
         )
         database.finish_scheduled_execution(
             execution_id,
@@ -524,6 +562,7 @@ def _execute_generation(
             error_name=error_name,
         ) from exc
     finally:
+        reporter.close()
         _restore_generation_interrupt_handlers(previous_signal_handlers)
 
 

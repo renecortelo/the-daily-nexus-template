@@ -403,11 +403,15 @@ class FirebaseWebRunnerClient:
         document_id: str,
         data: dict[str, Any],
     ) -> None:
-        if collection_name != "runRequests":
+        if collection_name not in {"runRequests", "runner"}:
             raise WebRunnerError("runner refused an unexpected Firestore patch")
         if not document_id or "/" in document_id or len(document_id) > 160:
             raise WebRunnerError("runner refused an invalid Firestore document ID")
         allowed_fields = {"status", "updatedAt", "startedAt", "finishedAt", "detail"}
+        if collection_name == "runner":
+            if document_id != "status":
+                raise WebRunnerError("runner refused an unexpected progress document")
+            allowed_fields = {"progress", "checkedAt"}
         if not data or any(key not in allowed_fields for key in data):
             raise WebRunnerError("runner refused an unexpected Firestore patch field")
         uid = urllib.parse.quote(self.uid, safe="")
@@ -417,7 +421,7 @@ class FirebaseWebRunnerClient:
         )
         _json_request(
             (
-                f"{self._documents_root}/users/{uid}/runRequests/"
+                f"{self._documents_root}/users/{uid}/{collection_name}/"
                 f"{document_part}?{query}"
             ),
             payload={"fields": _encode_firestore_fields(data)},

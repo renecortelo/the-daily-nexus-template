@@ -1161,9 +1161,13 @@ function updateRunnerDetail() {
     detail.textContent = [
       `ACTIVE // ${data.activeTask || "PRIVATE GENERATION"}`,
       `ELAPSED ${durationText(elapsed)}`,
+      data.progress ? `STAGE ${data.progress.stage}/8 // ${data.progress.label}` : "",
+      data.progress?.counters?.voice_total
+        ? `VOICE ${data.progress.counters.voice_blocks || 0}/${data.progress.counters.voice_total}` : "",
+      data.progress ? `LAST PROGRESS ${timeText(data.checkedAt)}` : "",
       `TYPICAL ${durationText(TYPICAL_RUN_MS)}`,
       `EST. ${durationText(remaining)} REMAINING`,
-    ].join(" // ");
+    ].filter(Boolean).join(" // ");
     return;
   }
   if (state === "error") {

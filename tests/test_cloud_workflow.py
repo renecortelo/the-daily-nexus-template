@@ -152,6 +152,14 @@ class CloudWorkflowTests(TestCase):
         self.assertIn("return \"$status\"", wrapper)
         self.assertIn("task_failed=%s", wrapper)
 
+    def test_observability_keeps_the_hard_limit_and_filters_child_output(self):
+        workflow = Path(".github/workflows/private-cloud-runner.yml").read_text()
+        wrapper = Path("scripts/run-private-cloud.sh").read_text()
+        self.assertIn("timeout-minutes: 60", workflow)
+        self.assertIn("PIPESTATUS", wrapper)
+        self.assertIn("python -u -m audiodigest.progress", wrapper)
+        self.assertNotIn('output="$("$@" 2>&1)"', wrapper)
+
     def test_clock_runs_continue_with_a_fresh_generic_dispatch(self):
         workflow = Path(
             ".github/workflows/private-cloud-runner.yml"

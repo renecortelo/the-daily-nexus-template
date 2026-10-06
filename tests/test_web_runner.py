@@ -103,6 +103,26 @@ class WebRunnerTests(TestCase):
         with self.assertRaises(WebRunnerError):
             client.set_private_document("owners", "owner-uid", {})
 
+    def test_progress_patch_cannot_overwrite_task_state_or_other_documents(self):
+        settings = load_settings(Path("config.example.toml"))
+        settings.web.enabled = True
+        settings.web.firebase_api_key = "AIza" + ("x" * 35)
+        settings.web.owner_uid = "owner-uid"
+        settings.firebase.project_id = "example-private-project"
+        settings.firebase.base_url = "https://example-private-project.web.app"
+        client = FirebaseWebRunnerClient(settings)
+        with self.assertRaises(WebRunnerError):
+            client.patch_private_document("runner", "status", {"state": "idle"})
+        with self.assertRaises(WebRunnerError):
+            client.patch_private_document("runner", "lastProfile", {"progress": {}})
+        with (
+            patch.object(client, "_token", return_value="inert-test-value"),
+            patch("audiodigest.web_runner._json_request") as request,
+        ):
+            client.patch_private_document("runner", "status", {"progress": {"stage": 7}})
+        self.assertIn("/runner/status?", request.call_args.args[0])
+        self.assertIn("updateMask.fieldPaths=progress", request.call_args.args[0])
+
     def test_authentication_requires_credential_manager_pairing(self):
         settings = load_settings(Path("config.example.toml"))
         settings.web.enabled = True

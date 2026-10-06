@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
+from audiodigest.progress import stage
 from audiodigest.web_runner import WebRunnerError
 from audiodigest.web_scheduler import (
     GenerationInterrupted,
@@ -350,6 +351,7 @@ class WebSchedulerTests(TestCase):
                 pass
 
             def run(self, **_kwargs):
+                stage(7)
                 raise GenerationInterrupted("generation interrupted by signal 15")
 
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
@@ -381,3 +383,11 @@ class WebSchedulerTests(TestCase):
                 if item[0] == "runRequests" and item[1] == "request-interrupted"
             ]
             self.assertEqual("failed", request_writes[-1]["status"])
+            profile = next(
+                item[2] for item in client.writes
+                if item[0] == "runner" and item[1] == "lastProfile"
+            )
+            self.assertEqual(7, profile["stage"])
+            self.assertEqual("interrupted", profile["status"])
+            self.assertNotIn("execution_id", profile)
+            self.assertIn("stage 7/8", request_writes[-1]["detail"])
