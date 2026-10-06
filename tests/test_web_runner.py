@@ -200,9 +200,13 @@ class WebRunnerTests(TestCase):
             items = client.list_private_collection(
                 "episodes",
                 field_mask=["episodeDate", "publicationSequence"],
+                limit=40,
+                order_by="updatedAt desc",
             )
         self.assertEqual([], items)
         url = request.call_args_list[0].args[0]
         self.assertIn("mask.fieldPaths=episodeDate", url)
+        self.assertIn("pageSize=40", url)
+        self.assertIn("orderBy=updatedAt%20desc", url)
         self.assertIn("mask.fieldPaths=publicationSequence", url)
-        self.assertIn("pageSize=100", url)
+        self.assertIn("pageSize=40", url)

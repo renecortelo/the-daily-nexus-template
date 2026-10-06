@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from audiodigest.closing_quotes import load_closing_quotes, quote_ids_from_episodes
 from audiodigest.config import Settings
 from audiodigest.database import StateDatabase
 from audiodigest.jobs import (
@@ -248,10 +249,18 @@ def _published_metadata(
     ]
     transcript: list[dict[str, Any]] = []
     source_mix: dict[str, Any] = {}
+    closing_quote_id = ""
     manifest_path = Path(str(episode.get("manifest_path", "")))
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            candidate_quote_id = manifest.get("closing_quote_id", "")
+            if (
+                isinstance(candidate_quote_id, str)
+                and len(candidate_quote_id) == 24
+                and all(character in "0123456789abcdef" for character in candidate_quote_id)
+            ):
+                closing_quote_id = candidate_quote_id
             raw_source_mix = manifest.get("source_mix", {})
             if isinstance(raw_source_mix, dict):
                 source_mix = {
@@ -314,6 +323,7 @@ def _published_metadata(
         "publicationSequence": publication_sequence,
         "updatedAt": datetime.now(UTC),
         "schemaVersion": 1,
+        "closingQuoteId": closing_quote_id,
     }
     return f"{episode_date.isoformat()}-{execution_id}"[:160], metadata
 
@@ -455,11 +465,22 @@ def _execute_generation(
     ))
     reporter.start()
     try:
+        # One small owner-only query spans all schedules. Do not use the first
+        # page of the archive (which may contain only the oldest episodes).
+        quote_episodes = client.list_private_collection(
+            "episodes", limit=40, order_by="updatedAt desc",
+            field_mask=["closingQuoteId", "references", "status", "updatedAt"],
+        )
+        recent_quote_ids = quote_ids_from_episodes(
+            load_closing_quotes(configured.podcast.closing_quotes_path),
+            [item for item in quote_episodes if item.get("status") == "published"],
+        )
         result = pipeline_factory(configured).run(
             requested_date=episode_date,
             execution_id=execution_id,
             run_name=publication_label,
             run_sequence=publication_sequence,
+            recent_quote_ids=recent_quote_ids,
         )
         episode_id, metadata = _published_metadata(
             configured,

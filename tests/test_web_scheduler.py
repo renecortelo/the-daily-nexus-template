@@ -1,9 +1,11 @@
+import json
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
+from audiodigest.closing_quotes import load_closing_quotes
 from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
 from audiodigest.progress import stage
@@ -13,6 +15,7 @@ from audiodigest.web_scheduler import (
     TerminalTaskFailure,
     _execute_generation,
     _next_publication_sequence,
+    _published_metadata,
     run_web_runner_tick,
 )
 from tests.test_jobs import schedule_payload
@@ -66,6 +69,27 @@ class _FakeWebClient:
 
 
 class WebSchedulerTests(TestCase):
+    def test_quote_identity_reaches_owner_metadata_even_without_optional_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self._settings(Path(directory))
+            quote = load_closing_quotes(settings.podcast.closing_quotes_path)[0]
+            manifest = Path(directory) / "manifest.json"
+            manifest.write_text(json.dumps({"closing_quote_id": quote.quote_id}), encoding="utf-8")
+
+            class StubDatabase:
+                def episode_for_date(self, _day):
+                    return {
+                        "status": "staged", "title": "An edition", "guid": "an-edition",
+                        "duration_seconds": 1200, "show_notes": [], "manifest_path": str(manifest),
+                    }
+
+            _, metadata = _published_metadata(
+                settings, StubDatabase(), episode_date=date(2026, 10, 5),
+                execution_id="execution", publication_label="An edition", publication_sequence=1,
+            )
+            self.assertEqual(quote.quote_id, metadata["closingQuoteId"])
+            self.assertEqual([], metadata["transcript"])
+
     def _settings(self, root: Path):
         settings = load_settings("config.example.toml")
         settings.app.runtime_dir = root / "runtime"
@@ -152,11 +176,37 @@ class WebSchedulerTests(TestCase):
             )
             self.assertTrue(all(item.firebase.publish_enabled for item in received_settings))
             self.assertTrue(
-                all(
-                    item.firebase.publish_mode == "automatic"
-                    for item in received_settings
-                )
+                all(item.firebase.publish_mode == "automatic" for item in received_settings)
             )
+
+    def test_cloud_quote_history_is_shared_across_schedules_not_from_ephemeral_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self._settings(Path(directory))
+            catalog = load_closing_quotes(settings.podcast.closing_quotes_path)
+            client = _FakeWebClient([], episodes=[
+                {"status": "published", "closingQuoteId": catalog[0].quote_id},
+                {"status": "published", "references": [catalog[1].source_url]},
+            ])
+            received = []
+
+            class RecordingPipeline:
+                def __init__(self, _configured):
+                    pass
+
+                def run(self, **kwargs):
+                    received.append(kwargs["recent_quote_ids"])
+                    return {"status": "published"}
+
+            with patch("audiodigest.web_scheduler._published_metadata", return_value=(
+                "episode", {"status": "published"},
+            )):
+                _execute_generation(
+                    settings, client, execution_id="another-schedule",
+                    display_name="Another edition",
+                    parameters=GenerationParameters.from_dict(schedule_payload()["parameters"]),
+                    episode_date=date(2026, 10, 5), pipeline_factory=RecordingPipeline,
+                )
+            self.assertEqual([[catalog[0].quote_id, catalog[1].quote_id]], received)
 
     def test_invalid_legacy_schedule_does_not_block_runner(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:

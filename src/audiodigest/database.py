@@ -64,6 +64,11 @@ class StateDatabase:
                     detail TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY (schedule_id, episode_date)
                 );
+                CREATE TABLE IF NOT EXISTS closing_quote_selections (
+                    execution_key TEXT PRIMARY KEY,
+                    quote_id TEXT NOT NULL,
+                    selected_at TEXT NOT NULL
+                );
                 """
             )
             columns = {row["name"] for row in db.execute("PRAGMA table_info(episodes)").fetchall()}
@@ -89,6 +94,23 @@ class StateDatabase:
                 """,
                 (episode_date.isoformat(), now),
             )
+
+    def closing_quote_selection(self, execution_key: str) -> str:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT quote_id FROM closing_quote_selections WHERE execution_key = ?",
+                (execution_key,),
+            ).fetchone()
+        return str(row["quote_id"]) if row else ""
+
+    def reserve_closing_quote(self, execution_key: str, quote_id: str) -> str:
+        with self.connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO closing_quote_selections "
+                "(execution_key, quote_id, selected_at) VALUES (?, ?, ?)",
+                (execution_key, quote_id, datetime.now(UTC).isoformat()),
+            )
+        return self.closing_quote_selection(execution_key)
 
     def finish_run(self, episode_date: date, status: str, detail: str = "") -> None:
         with self.connect() as db:
@@ -330,16 +352,17 @@ class StateDatabase:
             ).fetchone()
         return dict(row) if row is not None else None
 
-    def list_episodes(self, limit: int = 100) -> list[dict]:
+    def list_episodes(self, limit: int = 100, *, publication_order: bool = False) -> list[dict]:
         with self.connect() as db:
             rows = db.execute(
                 """
                 SELECT * FROM episodes
                 WHERE status IN ('staged', 'published')
-                ORDER BY episode_date DESC
+                ORDER BY CASE WHEN ? THEN COALESCE(published_at, episode_date)
+                    ELSE episode_date END DESC
                 LIMIT ?
                 """,
-                (limit,),
+                (publication_order, limit),
             ).fetchall()
         result = []
         for row in rows:
