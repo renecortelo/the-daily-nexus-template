@@ -55,6 +55,7 @@ FORBIDDEN_TRACKED_NAMES = {
 }
 SAFE_EMAIL_DOMAINS = {"example.com", "github.com", "users.noreply.github.com"}
 SAFE_AUTHOR_NAMES = {
+    "Daily Nexus Contributors",
     "Dario Novelli",
     "The Daily Nexus",
     "The Daily Nexus contributors",

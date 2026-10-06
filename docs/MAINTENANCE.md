@@ -36,6 +36,13 @@ selectors remain separate; no paid voice API or additional mandatory LLM call is
 6. Review and merge Dependabot proposals manually. Weekly update proposals do
    not auto-merge, deploy or invoke the private generation workflow.
 
+## Cloudflare development-tool override
+
+Miniflare's transitive `sharp` dependency is pinned to 0.35.5 to address
+[GHSA-wq5f-xc86-pv6w](https://github.com/lovell/sharp/security/advisories/GHSA-wq5f-xc86-pv6w).
+Wrangler remains at the tested version. This changes development tooling, not
+the deployed clock logic, generation schedules, or runner budgets.
+
 ## Firebase transitive overrides
 
 The locked CLI overrides `basic-ftp`, `uuid`, `@opentelemetry/core` and `chokidar`
