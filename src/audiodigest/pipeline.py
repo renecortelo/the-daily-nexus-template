@@ -12,7 +12,11 @@ from typing import Any
 
 from audiodigest.antigravity_client import AntigravityCLI, AntigravityCLIError
 from audiodigest.audio import AudioResult, KokoroAudioRenderer
-from audiodigest.closing_quotes import quote_for_date
+from audiodigest.closing_quotes import (
+    load_closing_quotes,
+    quote_ids_from_episodes,
+    select_closing_quote,
+)
 from audiodigest.config import Settings
 from audiodigest.cost_guard import run_cost_guard
 from audiodigest.daily_research import DailyResearchError, WikimediaDailyResearch
@@ -530,6 +534,7 @@ class Pipeline:
         checksum: str,
         guid: str,
         edition_name: str = "",
+        closing_quote_id: str = "",
     ) -> None:
         manifest = {
             "episode_date": day.isoformat(),
@@ -547,6 +552,7 @@ class Pipeline:
             "duration_seconds": duration_seconds,
             "audio_sha256": checksum,
             "edition_name": " ".join(edition_name.split()),
+            "closing_quote_id": closing_quote_id,
         }
         path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -561,6 +567,7 @@ class Pipeline:
         execution_id: str | None = None,
         run_name: str | None = None,
         run_sequence: int = 1,
+        recent_quote_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         publish = (
             self.settings.firebase.publish_enabled
@@ -661,7 +668,27 @@ class Pipeline:
                 "will lead the editorial.",
                 flush=True,
             )
-            closing_quote = quote_for_date(self.settings.podcast.closing_quotes_path, day)
+            quote_catalog = load_closing_quotes(self.settings.podcast.closing_quotes_path)
+            history = recent_quote_ids
+            if history is None:
+                local_episodes = self.database.list_episodes(limit=30, publication_order=True)
+                for episode in local_episodes:
+                    # The local database's immutable selection supplies exact IDs
+                    # even when several quotations cite the same public-domain book.
+                    episode["closingQuoteId"] = self.database.closing_quote_selection(
+                        str(episode["guid"])
+                    )
+                history = quote_ids_from_episodes(quote_catalog, local_episodes)
+            closing_quote = select_closing_quote(
+                quote_catalog, day,
+                stories=[story.to_dict() for story in stories],
+                recent_ids=history,
+                execution_key=guid,
+                reserved_id=self.database.closing_quote_selection(guid),
+            )
+            selected_id = self.database.reserve_closing_quote(guid, closing_quote.quote_id)
+            if selected_id != closing_quote.quote_id:
+                closing_quote = select_closing_quote(quote_catalog, day, reserved_id=selected_id)
             _stage(4, 8, "Drafting the host script")
             script, script_meta = self.editorial.generate_script(stories, day, closing_quote)
             _stage(5, 8, "Fact-checking the script")
@@ -903,6 +930,7 @@ class Pipeline:
                 checksum=checksum,
                 guid=guid,
                 edition_name=run_name if execution_id else "",
+                closing_quote_id=closing_quote.quote_id,
             )
             _promote_episode_files(
                 [

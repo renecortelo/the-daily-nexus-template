@@ -2,61 +2,259 @@
   {
     "text": "The unexamined life is not worth living.",
     "author": "Socrates, as recorded by Plato",
-    "source_url": "https://www.gutenberg.org/files/1656/1656-h/1656-h.htm"
+    "source_url": "https://www.gutenberg.org/files/1656/1656-h/1656-h.htm",
+    "topics": ["judgment", "learning"]
   },
   {
     "text": "Knowledge itself is power.",
     "author": "Francis Bacon",
-    "source_url": "https://en.wikisource.org/wiki/Meditationes_Sacrae"
+    "source_url": "https://en.wikisource.org/wiki/Meditationes_Sacrae",
+    "topics": ["learning", "data", "science"]
   },
   {
     "text": "I think, therefore I am.",
     "author": "René Descartes",
-    "source_url": "https://www.gutenberg.org/ebooks/23306"
+    "source_url": "https://www.gutenberg.org/ebooks/23306",
+    "topics": ["judgment", "science"]
   },
   {
     "text": "Experience is merely the name men gave to their mistakes.",
     "author": "Oscar Wilde",
-    "source_url": "https://www.gutenberg.org/ebooks/174"
+    "source_url": "https://www.gutenberg.org/ebooks/174",
+    "topics": ["learning", "resilience"]
   },
   {
     "text": "We can only see a short distance ahead, but we can see plenty there that needs to be done.",
     "author": "Alan Turing",
-    "source_url": "https://www.csee.umbc.edu/courses/471/papers/turing.pdf"
+    "source_url": "https://www.csee.umbc.edu/courses/471/papers/turing.pdf",
+    "topics": ["technology", "change"]
   },
   {
     "text": "All models are wrong, but some are useful.",
     "author": "George E. P. Box",
-    "source_url": "https://doi.org/10.1080/01621459.1976.10480949"
+    "source_url": "https://doi.org/10.1080/01621459.1976.10480949",
+    "topics": ["data", "science", "judgment"]
   },
   {
     "text": "Any sufficiently advanced technology is indistinguishable from magic.",
     "author": "Arthur C. Clarke",
-    "source_url": "https://archive.org/details/profilesoffuture00clar"
+    "source_url": "https://archive.org/details/profilesoffuture00clar",
+    "topics": ["technology", "change"]
   },
   {
     "text": "Stay hungry. Stay foolish.",
     "author": "The Whole Earth Catalog, quoted by Steve Jobs",
-    "source_url": "https://news.stanford.edu/stories/2005/06/youve-got-find-love-jobs-says"
+    "source_url": "https://news.stanford.edu/stories/2005/06/youve-got-find-love-jobs-says",
+    "topics": ["change", "business", "learning"]
   },
   {
     "text": "The best way to predict the future is to invent it.",
     "author": "Alan Kay",
-    "source_url": "https://archive.computerhistory.org/resources/access/text/2012/10/102702224-05-01-acc.pdf"
+    "source_url": "https://archive.computerhistory.org/resources/access/text/2012/10/102702224-05-01-acc.pdf",
+    "topics": ["technology", "change", "leadership"]
   },
   {
     "text": "The Web does not just connect machines, it connects people.",
     "author": "Tim Berners-Lee",
-    "source_url": "https://www.w3.org/People/Berners-Lee/Weaving/Overview.html"
+    "source_url": "https://www.w3.org/People/Berners-Lee/Weaving/Overview.html",
+    "topics": ["technology", "society"]
   },
   {
     "text": "Simplicity is prerequisite for reliability.",
     "author": "Edsger W. Dijkstra",
-    "source_url": "https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html"
+    "source_url": "https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html",
+    "topics": ["technology", "data", "security"]
   },
   {
     "text": "The purpose of computing is insight, not numbers.",
     "author": "Richard Hamming",
-    "source_url": "https://archive.org/details/numericalmethods0000hamm"
+    "source_url": "https://archive.org/details/numericalmethods0000hamm",
+    "topics": ["data", "science", "judgment"]
+  },
+  {
+    "text": "Nothing great was ever achieved without enthusiasm.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["change", "resilience"]
+  },
+  {
+    "text": "Trust thyself: every heart vibrates to that iron string.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["leadership", "judgment"]
+  },
+  {
+    "text": "A foolish consistency is the hobgoblin of little minds, adored by little statesmen and philosophers and divines.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["change", "judgment"]
+  },
+  {
+    "text": "the only way to have a friend is to be one.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["society", "leadership"]
+  },
+  {
+    "text": "Life is our dictionary.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["learning", "science"]
+  },
+  {
+    "text": "Life is a series of surprises.",
+    "author": "Ralph Waldo Emerson",
+    "source_url": "https://www.gutenberg.org/files/16643/16643-h/16643-h.htm",
+    "topics": ["change", "judgment"]
+  },
+  {
+    "text": "Our life is frittered away by detail.",
+    "author": "Henry David Thoreau",
+    "source_url": "https://www.gutenberg.org/files/205/205-h/205-h.htm",
+    "topics": ["data", "technology", "business"]
+  },
+  {
+    "text": "Things do not change; we change.",
+    "author": "Henry David Thoreau",
+    "source_url": "https://www.gutenberg.org/files/205/205-h/205-h.htm",
+    "topics": ["change", "learning"]
+  },
+  {
+    "text": "Rather than love, than money, than fame, give me truth.",
+    "author": "Henry David Thoreau",
+    "source_url": "https://www.gutenberg.org/files/205/205-h/205-h.htm",
+    "topics": ["judgment", "science", "security"]
+  },
+  {
+    "text": "To affect the quality of the day, that is the highest of arts.",
+    "author": "Henry David Thoreau",
+    "source_url": "https://www.gutenberg.org/files/205/205-h/205-h.htm",
+    "topics": ["society", "leadership"]
+  },
+  {
+    "text": "Reading maketh a full man; conference a ready man; and writing an exact man.",
+    "author": "Francis Bacon",
+    "source_url": "https://www.gutenberg.org/files/575/575-h/575-h.htm",
+    "topics": ["learning", "judgment", "data"]
+  },
+  {
+    "text": "Some books are to be tasted, others to be swallowed, and some few to be chewed and digested",
+    "author": "Francis Bacon",
+    "source_url": "https://www.gutenberg.org/files/575/575-h/575-h.htm",
+    "topics": ["learning", "judgment"]
+  },
+  {
+    "text": "Histories make men wise; poets witty; the mathematics subtile; natural philosophy deep; moral grave; logic and rhetoric able to contend.",
+    "author": "Francis Bacon",
+    "source_url": "https://www.gutenberg.org/files/575/575-h/575-h.htm",
+    "topics": ["learning", "science", "data"]
+  },
+  {
+    "text": "A wise man will make more opportunities, than he finds.",
+    "author": "Francis Bacon",
+    "source_url": "https://www.gutenberg.org/files/575/575-h/575-h.htm",
+    "topics": ["business", "change", "leadership"]
+  },
+  {
+    "text": "He who knows only his own side of the case, knows little of that.",
+    "author": "John Stuart Mill",
+    "source_url": "https://www.gutenberg.org/files/34901/34901-h/34901-h.htm",
+    "topics": ["judgment", "learning", "leadership"]
+  },
+  {
+    "text": "All silencing of discussion is an assumption of infallibility.",
+    "author": "John Stuart Mill",
+    "source_url": "https://www.gutenberg.org/files/34901/34901-h/34901-h.htm",
+    "topics": ["society", "judgment", "leadership"]
+  },
+  {
+    "text": "The only freedom which deserves the name, is that of pursuing our own good in our own way, so long as we do not attempt to deprive others of theirs, or impede their efforts to obtain it.",
+    "author": "John Stuart Mill",
+    "source_url": "https://www.gutenberg.org/files/34901/34901-h/34901-h.htm",
+    "topics": ["society", "leadership", "security"]
+  },
+  {
+    "text": "The value of philosophy is, in fact, to be sought largely in its very uncertainty.",
+    "author": "Bertrand Russell",
+    "source_url": "https://www.gutenberg.org/files/5827/5827-h/5827-h.htm",
+    "topics": ["judgment", "science", "data"]
+  },
+  {
+    "text": "Consumption is the sole end and purpose of all production",
+    "author": "Adam Smith",
+    "source_url": "https://www.gutenberg.org/files/3300/3300-h/3300-h.htm",
+    "topics": ["business", "society"]
+  },
+  {
+    "text": "The real price of every thing, what every thing really costs to the man who wants to acquire it, is the toil and trouble of acquiring it.",
+    "author": "Adam Smith",
+    "source_url": "https://www.gutenberg.org/files/3300/3300-h/3300-h.htm",
+    "topics": ["business", "resilience"]
+  },
+  {
+    "text": "Resolve to perform what you ought; perform without fail what you resolve.",
+    "author": "Benjamin Franklin",
+    "source_url": "https://www.gutenberg.org/files/148/148-h/148-h.htm",
+    "topics": ["leadership", "resilience", "change"]
+  },
+  {
+    "text": "Speak not but what may benefit others or yourself; avoid trifling conversation.",
+    "author": "Benjamin Franklin",
+    "source_url": "https://www.gutenberg.org/files/148/148-h/148-h.htm",
+    "topics": ["society", "judgment"]
+  },
+  {
+    "text": "Let all your things have their places; let each part of your business have its time.",
+    "author": "Benjamin Franklin",
+    "source_url": "https://www.gutenberg.org/files/148/148-h/148-h.htm",
+    "topics": ["data", "technology", "business"]
+  },
+  {
+    "text": "Be not disturbed at trifles, or at accidents common or unavoidable.",
+    "author": "Benjamin Franklin",
+    "source_url": "https://www.gutenberg.org/files/148/148-h/148-h.htm",
+    "topics": ["resilience", "judgment"]
+  },
+  {
+    "text": "angry people are not always wise",
+    "author": "Jane Austen",
+    "source_url": "https://www.gutenberg.org/files/1342/1342-h/1342-h.htm",
+    "topics": ["judgment", "leadership", "society"]
+  },
+  {
+    "text": "Think only of the past as its remembrance gives you pleasure.",
+    "author": "Jane Austen",
+    "source_url": "https://www.gutenberg.org/files/1342/1342-h/1342-h.htm",
+    "topics": ["resilience", "society"]
+  },
+  {
+    "text": "Nothing is so painful to the human mind as a great and sudden change.",
+    "author": "Mary Shelley",
+    "source_url": "https://www.gutenberg.org/files/84/84-h/84-h.htm",
+    "topics": ["change", "resilience", "society"]
+  },
+  {
+    "text": "nothing contributes so much to tranquillise the mind as a steady purpose",
+    "author": "Mary Shelley",
+    "source_url": "https://www.gutenberg.org/files/84/84-h/84-h.htm",
+    "topics": ["leadership", "resilience", "science"]
+  },
+  {
+    "text": "ignorance more frequently begets confidence than does knowledge",
+    "author": "Charles Darwin",
+    "source_url": "https://www.gutenberg.org/files/2300/2300-h/2300-h.htm",
+    "topics": ["science", "judgment", "learning"]
+  },
+  {
+    "text": "The best kind of revenge is, not to become like unto them.",
+    "author": "Marcus Aurelius, translated by Meric Casaubon",
+    "source_url": "https://www.gutenberg.org/files/2680/2680-h/2680-h.htm",
+    "topics": ["security", "society", "judgment"]
+  },
+  {
+    "text": "Look within; within is the fountain of all good.",
+    "author": "Marcus Aurelius, translated by Meric Casaubon",
+    "source_url": "https://www.gutenberg.org/files/2680/2680-h/2680-h.htm",
+    "topics": ["judgment", "learning", "leadership"]
   }
 ]

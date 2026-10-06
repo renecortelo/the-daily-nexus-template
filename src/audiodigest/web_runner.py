@@ -342,12 +342,20 @@ class FirebaseWebRunnerClient:
         collection_name: str,
         *,
         field_mask: list[str] | None = None,
+        limit: int = 100,
+        order_by: str = "",
     ) -> list[dict[str, Any]]:
         if collection_name not in {"schedules", "runRequests", "episodes"}:
             raise WebRunnerError("runner refused an unexpected Firestore collection")
         uid = urllib.parse.quote(self.uid, safe="")
         collection_part = urllib.parse.quote(collection_name, safe="")
-        query = "pageSize=100"
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise WebRunnerError("runner refused an invalid collection limit")
+        if order_by not in {"", "updatedAt desc"}:
+            raise WebRunnerError("runner refused an unexpected collection ordering")
+        query = f"pageSize={limit}"
+        if order_by:
+            query += "&orderBy=" + urllib.parse.quote(order_by, safe="")
         if field_mask:
             query += "&" + "&".join(
                 f"mask.fieldPaths={urllib.parse.quote(f, safe='')}"

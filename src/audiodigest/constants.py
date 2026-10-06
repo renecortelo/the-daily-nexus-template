@@ -23,6 +23,20 @@ SECTION_ORDER: tuple[Section, ...] = tuple(Section)
 DEFAULT_SECTION_NAMES: tuple[str, ...] = tuple(item.value for item in SECTION_ORDER)
 MAX_PODCAST_SECTIONS = 10
 
+DATA_SECTION_DEFINITION = (
+    "DATA means the information-technology discipline: data engineering and platforms, "
+    "databases, architecture, ETL/ELT pipelines, storage and processing, data quality and "
+    "governance, and analytics/BI tools. A story about these systems may use statistics, "
+    "but general economic figures, opinion polls, sports results, population statistics, "
+    "or any other story containing numbers do not qualify merely because they are data. "
+    "Classify by the actual subject of the reporting, not by the presence of numbers."
+)
+
+
+def editorial_section_definitions(sections: Sequence[str] | None) -> dict[str, str]:
+    names = sections or (Section.DATA.value,)
+    return {name: DATA_SECTION_DEFINITION for name in names if name.casefold() == "data"}
+
 
 class SectionLabel(str):
     """A validated custom section label with Enum-compatible serialization."""

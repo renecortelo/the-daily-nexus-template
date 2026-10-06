@@ -5,6 +5,8 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from audiodigest.closing_quotes import ClosingQuote
+from audiodigest.config import load_settings
+from audiodigest.constants import DATA_SECTION_DEFINITION, editorial_section_definitions
 from audiodigest.editorial import (
     NEWSPAPER_MAX_PROSE_WORDS,
     NEWSPAPER_MAX_TOTAL_WORDS,
@@ -30,6 +32,41 @@ from audiodigest.models import (
 
 
 class EditorialPreferenceTests(TestCase):
+    def test_data_scope_is_case_insensitive_without_renaming_custom_sections(self):
+        self.assertEqual(
+            {"DATA": DATA_SECTION_DEFINITION}, editorial_section_definitions(("AI", "DATA"))
+        )
+        self.assertEqual({"Data": DATA_SECTION_DEFINITION}, editorial_section_definitions(()))
+        self.assertEqual({}, editorial_section_definitions(("Sports",)))
+
+    def test_data_scope_reaches_all_five_existing_editorial_calls_without_extra_calls(self):
+        settings = load_settings("config.example.toml")
+        settings.podcast.sections = ("DATA",)
+        engine = EditorialPipeline(settings, Mock())
+        engine.antigravity.invoke.return_value = (
+            Mock(word_count=4000, approved=True, issues=[]), Mock()
+        )
+        story = Story.from_dict({
+            "story_id": "pipeline", "section": "DATA", "headline": "ETL pipeline release",
+            "facts": ["A database tool adds an ETL connector."],
+            "why_it_matters": "Teams can connect database tools.",
+            "source_ids": ["newsletter"], "source_urls": [], "confidence": 0.9, "rank_score": 1,
+        }, allowed_sections=("DATA",))
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
+        engine.extract_stories([], date(2026, 10, 6))
+        engine.generate_script([story], date(2026, 10, 6), quote)
+        engine.generate_newspaper([story], date(2026, 10, 6))
+        engine.verify_newspaper([story], Mock())
+        engine.verify([story], Mock(), quote)
+        self.assertEqual(5, engine.antigravity.invoke.call_count)
+        for invocation in engine.antigravity.invoke.call_args_list:
+            self.assertEqual(
+                {"DATA": DATA_SECTION_DEFINITION}, invocation.args[1]["section_definitions"]
+            )
+        writing = engine.antigravity.invoke.call_args_list[1].args[0]
+        self.assertIn("ONE specific", writing)
+        self.assertIn("Humor is optional", writing)
+
     def test_percentage_normalization_preserves_story_metadata_ids(self):
         normalized = _normalize_newspaper_percentages(
             {
