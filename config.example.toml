@@ -53,6 +53,8 @@ sample_rate = 44100
 target_lufs = -16.0
 true_peak_db = -1.0
 min_duration_seconds = 60
+# Kokoro generation speed, not player speed. Keep 1.0 until comparing local samples.
+synthesis_speed = 1.0
 
 [hosts]
 count = 1

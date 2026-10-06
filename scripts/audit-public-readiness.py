@@ -268,6 +268,12 @@ def _is_public_github_commit_identity(name: str, email: str) -> bool:
 
     if name == "GitHub" and email == "noreply@github.com":
         return True
+    # Dependency-update authorship is public metadata, not a personal mailbox.
+    # Permit only this bot with its matching GitHub-generated noreply address.
+    if name == "dependabot[bot]" and re.fullmatch(
+        r"[0-9]+\+dependabot\[bot\]@users\.noreply\.github\.com", email
+    ):
+        return True
     return bool(
         re.fullmatch(
             r"[0-9]+\+[A-Za-z0-9-]{1,39}@users\.noreply\.github\.com",

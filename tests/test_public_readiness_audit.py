@@ -22,6 +22,17 @@ class PublicReadinessAuditTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.auditor = _load_auditor()
 
+    def test_dependabot_requires_its_matching_public_noreply_identity(self) -> None:
+        self.assertTrue(self.auditor._is_public_github_commit_identity(
+            "dependabot[bot]", "123456+dependabot[bot]@users.noreply.github.com"
+        ))
+        self.assertFalse(self.auditor._is_public_github_commit_identity(
+            "dependabot[bot]", "person@example.com"
+        ))
+        self.assertFalse(self.auditor._is_public_github_commit_identity(
+            "A private name", "123456+dependabot[bot]@users.noreply.github.com"
+        ))
+
     def test_allows_only_github_noreply_metadata(self) -> None:
         self.assertTrue(
             self.auditor._is_public_github_commit_identity(

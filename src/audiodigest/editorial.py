@@ -797,7 +797,11 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                 "questions, evidence-based reactions, clarification, and occasional restrained "
                 "disagreement or humor. Let one host build on the other's point instead of "
                 "reading alternating blocks. Never invent personal experiences, opinions, or "
-                "facts, and avoid empty agreement such as 'exactly' or 'absolutely'."
+                "facts, and avoid empty agreement such as 'exactly' or 'absolutely'. "
+                "A question must clarify a real detail in the supplied evidence; the response "
+                "must answer it or explain a distinct supported consequence, not repeat the "
+                "question's premise. Vary handoffs instead of addressing the other host by "
+                "name every turn. Do not force equal-length turns or alternating sentences."
             )
         else:
             conversation_rule = (
@@ -840,6 +844,20 @@ AI change, and capable of dry humor. Give each host their configured delivery:
 Humor must never invent facts, target victims, make light of tragedy, or turn the program into
 a comedy routine. Do not pad thin material. Every dialogue turn must use one exact active host
 name. Never put production notes, sound directions, or bracketed cues in spoken text.
+
+Write for listening, not for reading a report. Prefer one main idea per sentence, ordinary
+spoken English, and natural contractions when the host's tone allows them. Break dense
+lists and nested clauses into complete, connected sentences. Introduce a necessary technical
+acronym once when its expansion is supported by the supplied evidence; do not guess expansions.
+Give exact figures in manageable groups without rounding, dropping qualifiers, or adding
+comparisons absent from the evidence. Prefer conversational turns of roughly 30-75 words
+when the story needs them, with shorter questions only when useful; never add filler merely
+to reach that range. Avoid chains of tiny acknowledgements and long uninterrupted monologues.
+Do not insert um, uh, fake laughter, theatrical interruptions, or emotion/SSML tags. Let dry
+wit emerge from wording and a concrete supported contrast, not exclamation marks or a stock
+joke. Keep formal delivery precise without making every sentence sound like a press release.
+Readability edits must preserve every evidence-backed claim, uncertainty, and attribution.
+Do not modernize or paraphrase the approved closing quotation.
 
 Target {target_min}-{target_max} words when evidence supports it. Coverage and specificity
 matter more than mechanically reaching the lower target: never pad or repeat material.
@@ -1706,6 +1724,13 @@ and must not trivialize sensitive news. Check desk assignments against payload.s
 DATA means IT/data engineering, not arbitrary statistics. Confirm that every configured host
  introduces themselves, that Dario Novelli is credited exactly once and only as editor/producer
  rather than a speaking host, and that any TIH section comes first.
+Also check listening clarity: flag substantial repeated information in host responses,
+questions that are never answered, or dense constructions that obscure the supported facts.
+Request the smallest local wording repair, not a wholesale shorter rewrite. Do not demand
+filler, fake hesitations, a fixed turn length, new factual background, or a mandatory joke.
+Do not reject a factually sound script solely for subjective style, preferred sentence length,
+accent, or pace. Prioritize factual correctness and coverage over stylistic preferences.
+The approved closing quotation must remain verbatim even if its wording is less conversational.
 
 Return JSON only:
 {"approved": true, "issues": []}

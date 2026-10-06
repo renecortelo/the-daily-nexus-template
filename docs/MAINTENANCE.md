@@ -12,6 +12,10 @@ download URLs and integrity hashes, not deployment settings or credentials.
 - Kokoro/Misaki remain 0.9.4; Torch remains 2.13.0 CPU on Linux/Windows;
   Transformers remains 5.14.1; ReportLab remains on the tested 4.x branch.
 
+For synthesis-only pronunciation, contextual pauses, and manual local comparisons,
+see [Voice delivery](VOICE_DELIVERY.md). Current voice defaults and writing-tone
+selectors remain separate; no paid voice API or additional mandatory LLM call is used.
+
 ## Safe upgrades
 
 1. Work on a branch. Review upstream release notes and security advisories.
