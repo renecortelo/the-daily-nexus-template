@@ -12,14 +12,34 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from audiodigest.config import AntigravitySettings
+from audiodigest.execution_budget import operation_timeout
 from audiodigest.models import AntigravityMetadata, DataValidationError
-from audiodigest.progress import increment, timed_operation
+from audiodigest.progress import increment, record_failure_code, timed_operation
 
 T = TypeVar("T")
 
 
 class AntigravityCLIError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, failure_code: str = ""):
+        super().__init__(message)
+        self.failure_code = failure_code
+
+
+def _validation_code(exc: Exception) -> str:
+    if isinstance(exc, json.JSONDecodeError) or "not valid json" in str(exc).casefold():
+        return "json_invalid"
+    text = str(exc).casefold()
+    for terms, code in (
+        (("partial", "truncated", "timed-out"), "model_incomplete"),
+        (("unsupported story",), "script_unsupported_reference"),
+        (("omits required",), "script_coverage"),
+        (("host", "conversation turn"), "script_hosts"),
+        (("quotation", "sign-off", "credit editor"), "script_closing"),
+        (("the maximum", "word count"), "script_length"),
+    ):
+        if any(term in text for term in terms):
+            return code
+    return "model_structure"
 
 
 class AntigravityConfigurationError(AntigravityCLIError):
@@ -73,10 +93,13 @@ def _safe_shared_settings(settings: AntigravitySettings, *, enforce: bool) -> No
             raise AntigravityConfigurationError("Shared Antigravity telemetry enabled; aborted")
         if not enforce and preferences.get(key) is not False:
             raise AntigravityConfigurationError("Shared Antigravity safety flags are not explicit")
-    if enforce and any(preferences.get(key) is not False for key in
-                       ("useAiCredits", "useG1Credits", "telemetryEnabled", "enableTelemetry")):
-        preferences.update(useAiCredits=False, useG1Credits=False,
-                           telemetryEnabled=False, enableTelemetry=False)
+    if enforce and any(
+        preferences.get(key) is not False
+        for key in ("useAiCredits", "useG1Credits", "telemetryEnabled", "enableTelemetry")
+    ):
+        preferences.update(
+            useAiCredits=False, useG1Credits=False, telemetryEnabled=False, enableTelemetry=False
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
         try:
@@ -127,13 +150,9 @@ def enforce_safe_antigravity_settings(
     if not isinstance(raw, dict):
         raise AntigravityConfigurationError("Antigravity settings.json must be a JSON object")
     if raw.get("useG1Credits") is True:
-        raise AntigravityPaymentRiskError(
-            "Antigravity useG1Credits is enabled; run aborted"
-        )
+        raise AntigravityPaymentRiskError("Antigravity useG1Credits is enabled; run aborted")
     if raw.get("enableTelemetry") is True:
-        raise AntigravityConfigurationError(
-            "Antigravity enableTelemetry is enabled; run aborted"
-        )
+        raise AntigravityConfigurationError("Antigravity enableTelemetry is enabled; run aborted")
 
     # Antigravity 1.1.7 normalizes the default false credit setting by removing the
     # property when it saves settings. Restore both explicit values before and after
@@ -168,9 +187,7 @@ def _json_from_response(value: str) -> dict[str, Any]:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise DataValidationError(
-            f"Antigravity response was not valid JSON: {exc}"
-        ) from exc
+        raise DataValidationError(f"Antigravity response was not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise DataValidationError("Antigravity response must be a JSON object")
     return parsed
@@ -248,9 +265,7 @@ def _response_from_cli_output(
         raise AntigravityCLIError("Antigravity CLI reported an execution error")
     status = str(parsed.get("status", "")).upper()
     if status and status not in {"SUCCESS", "COMPLETED", "OK"}:
-        raise AntigravityCLIError(
-            f"Antigravity CLI reported status {status}"
-        )
+        raise AntigravityCLIError(f"Antigravity CLI reported status {status}")
     metadata = _metadata_from_wrapper(parsed, elapsed_ms=elapsed_ms)
     for key in ("response", "result", "output", "text"):
         value = parsed.get(key)
@@ -307,12 +322,7 @@ class AntigravityCLI:
             raise AntigravityConfigurationError(
                 f"Antigravity agent definition is missing: {self.settings.agent_path}"
             )
-        agent_dir = (
-            self.settings.workspace_dir
-            / ".agents"
-            / "agents"
-            / self.settings.agent_name
-        )
+        agent_dir = self.settings.workspace_dir / ".agents" / "agents" / self.settings.agent_name
         agent_dir.mkdir(parents=True, exist_ok=True)
         agent_destination = agent_dir / "agent.md"
         if (
@@ -371,11 +381,14 @@ class AntigravityCLI:
                         encoding="utf-8",
                         errors="replace",
                         capture_output=True,
-                        timeout=self.settings.timeout_seconds + 30,
+                        timeout=operation_timeout(self.settings.timeout_seconds + 30),
                         check=False,
                         env=env,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                     )
+            except subprocess.TimeoutExpired:
+                record_failure_code("model_timeout")
+                raise
             finally:
                 request_path.unlink(missing_ok=True)
                 enforce_safe_antigravity_settings(self.settings)
@@ -384,18 +397,20 @@ class AntigravityCLI:
                 detail = f"{completed.stderr}\n{completed.stdout}".strip()
                 if any(pattern in detail.lower() for pattern in PAYMENT_RISK_PATTERNS):
                     raise AntigravityPaymentRiskError(
-                        "Antigravity requested billing, paid credentials, or credits; "
-                        "run aborted"
+                        "Antigravity requested billing, paid credentials, or credits; run aborted"
                     )
                 last_error = AntigravityCLIError(
                     f"Antigravity CLI failed with exit code {completed.returncode}; "
-                    "raw diagnostic output withheld for privacy"
+                    "raw diagnostic output withheld for privacy",
+                    failure_code="model_exit",
                 )
+                record_failure_code("model_exit")
                 continue
             try:
                 if re.search(
                     r"\b(?:truncated|truncation|print[- ]timeout|timed out|timeout expired)\b",
-                    completed.stderr, re.IGNORECASE,
+                    completed.stderr,
+                    re.IGNORECASE,
                 ):
                     raise AntigravityCLIError("Antigravity partial or timed-out result rejected")
                 response, metadata = _response_from_cli_output(
@@ -413,6 +428,7 @@ class AntigravityCLI:
                 ValueError,
             ) as exc:
                 increment("model_validation_failures")
+                record_failure_code(_validation_code(exc))
                 last_error = exc
                 if attempt < retries:
                     print(
@@ -426,11 +442,15 @@ class AntigravityCLI:
                         "validation_error": str(exc),
                         "repair_instruction": (
                             "Return corrected JSON only. Preserve valid supported "
-                            "material from the rejected response. If a word target "
+                            "material from the rejected response. Change only the rejected "
+                            "fields or sections; keep valid story coverage and attribution. "
+                            "Never guess missing text in a truncated JSON response. "
+                            "If a word target "
                             "failed, improve useful evidence coverage rather than "
                             "padding or repeating text."
                         ),
                     }
         raise AntigravityCLIError(
-            f"Antigravity output failed validation: {last_error}"
+            f"Antigravity output failed validation: {last_error}",
+            failure_code=getattr(last_error, "failure_code", "") or _validation_code(last_error),
         )

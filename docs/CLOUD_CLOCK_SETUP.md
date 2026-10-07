@@ -143,9 +143,10 @@ Do this after the cloud-clock source is pushed to the private repository.
    clock events. Keep `workflow_dispatch` for the Cloud Clock and manual
    recovery.
 
-The runner can process two typical full episodes within its one-hour safety
-window. If more manual queue work remains, it securely dispatches its next
-batch after cleanup; it does not depend on a timer-based poll.
+The runner processes one episode per job within its one-hour safety window.
+After a successful generation and protected cleanup, it can securely dispatch
+another job for remaining queue work; it does not depend on a timer-based poll.
+Failed or interrupted occurrences remain terminal rather than being retried.
 
 An alarm is at-least-once. A rare duplicate dispatch is safe because the
 existing Firestore schedule/date execution claim prevents a duplicate episode.

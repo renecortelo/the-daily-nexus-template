@@ -14,7 +14,7 @@ It includes:
 - optional unattended generation with a GitHub-hosted Actions job in the
   operator's private repository and a Cloudflare Worker clock.
 
-Each successful run produces a narrated MP3, a synchronized transcript, source
+A complete run produces a narrated MP3, a synchronized transcript, source
 references, a reader-oriented PDF newspaper, preview images, metadata, and—when
 publishing is enabled—an updated private RSS feed.
 
@@ -24,8 +24,12 @@ publishing is enabled—an updated private RSS feed.
 
 The model writes and checks editorial structures; it does not synthesize the
 voice. Kokoro generates speech, while the PDF renderer builds a separate
-reader-facing edition rather than copying the spoken script. The script
-verifier can request up to three evidence-grounded repair drafts. See the
+reader-facing edition rather than copying the spoken script. A newspaper that
+fails factual verification is withheld and marked failed; an independently
+verified podcast can still publish. The MP3 is accepted only when its duration
+matches the full generated speech timeline. The script
+verifier can request evidence-grounded repair drafts within the configured
+`max_script_repairs` limit. See the
 [technical overview](docs/TECHNICAL_OVERVIEW.md) for the stages, boundaries,
 technology choices, and current limitations.
 

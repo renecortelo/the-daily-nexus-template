@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from audiodigest.config import AudioSettings, HostSettings
+from audiodigest.execution_budget import check_budget, operation_timeout
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
 from audiodigest.progress import counts, timed_operation
@@ -20,6 +22,13 @@ from audiodigest.speech import boundary_pause_ms, prepare_speech
 
 class AudioGenerationError(RuntimeError):
     pass
+
+
+def _complete_audio_duration(duration: float, timeline_ms: int) -> bool:
+    # MP3 encoder padding and per-block millisecond rounding are small, not
+    # minutes. Check both short and overlong output, including NaN/Infinity.
+    expected = timeline_ms / 1000
+    return math.isfinite(duration) and expected > 0 and abs(duration - expected) <= 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +96,7 @@ def _combine_wav_chunks(chunks: list[Path], output: Path) -> None:
                     destination.setframerate(signature[2])
                     destination.setcomptype(signature[3], source.getcompname())
                 elif signature != expected:
-                    raise AudioGenerationError(
-                        f"Incompatible local audio chunk: {chunk.name}"
-                    )
+                    raise AudioGenerationError(f"Incompatible local audio chunk: {chunk.name}")
                 while True:
                     frames = source.readframes(24_000)
                     if not frames:
@@ -250,6 +257,7 @@ class KokoroAudioRenderer:
             print(f"Synthesizing {total_blocks} audio dialogue blocks...", flush=True)
 
             for index, block in enumerate(spoken_blocks):
+                check_budget()
                 turn, is_section_heading = block.turn, block.is_heading
                 percent = int(((index + 1) / total_blocks) * 100)
                 heading_marker = " [heading]" if is_section_heading else ""
@@ -268,7 +276,8 @@ class KokoroAudioRenderer:
                     self._write_speech_chunk(
                         pipelines[language_code],
                         prepare_speech(
-                            turn.text, is_heading=is_section_heading,
+                            turn.text,
+                            is_heading=is_section_heading,
                             pronunciations=self.settings.pronunciations,
                         ),
                         chunk,
@@ -276,10 +285,10 @@ class KokoroAudioRenderer:
                     )
                 counts(voice_blocks=index + 1)
                 with wave.open(str(chunk), "rb") as speech:
-                    speech_ms = round(
-                        (speech.getnframes() / max(1, speech.getframerate())) * 1000
-                    )
+                    speech_ms = round((speech.getnframes() / max(1, speech.getframerate())) * 1000)
                 leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
+                if speech_ms <= 0:
+                    raise AudioGenerationError("Kokoro returned an empty speech chunk")
                 rendered.append((chunk, speech_ms, leading_ms, trailing_ms))
 
             # Both neighbouring waveforms are available now, so existing model
@@ -340,17 +349,14 @@ class KokoroAudioRenderer:
             with timed_operation("audio_encode"):
                 completed = subprocess.run(
                     command,
+                    timeout=operation_timeout(600),
                     capture_output=True,
                     text=True,
                     check=False,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
             concat_succeeded = False
-            if (
-                completed.returncode == 0
-                and output.is_file()
-                and output.stat().st_size >= 1_000
-            ):
+            if completed.returncode == 0 and output.is_file() and output.stat().st_size >= 1_000:
                 check_probe = subprocess.run(
                     [
                         ffprobe,
@@ -363,6 +369,7 @@ class KokoroAudioRenderer:
                         str(output),
                     ],
                     capture_output=True,
+                    timeout=operation_timeout(30),
                     text=True,
                     check=False,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -370,16 +377,7 @@ class KokoroAudioRenderer:
                 if check_probe.returncode == 0:
                     try:
                         dur = float(json.loads(check_probe.stdout)["format"]["duration"])
-                        timeline_target = (
-                            (timeline_ms / 1000) * 0.75
-                            if timeline_ms > 0
-                            else self.settings.min_duration_seconds
-                        )
-                        min_expected = min(
-                            self.settings.min_duration_seconds,
-                            timeline_target,
-                        )
-                        if dur >= min_expected:
+                        if _complete_audio_duration(dur, timeline_ms):
                             concat_succeeded = True
                     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                         concat_succeeded = False
@@ -412,6 +410,7 @@ class KokoroAudioRenderer:
                 with timed_operation("audio_encode"):
                     fallback = subprocess.run(
                         fallback_command,
+                        timeout=operation_timeout(600),
                         capture_output=True,
                         text=True,
                         check=False,
@@ -444,6 +443,7 @@ class KokoroAudioRenderer:
                 str(output),
             ],
             capture_output=True,
+            timeout=operation_timeout(30),
             text=True,
             check=False,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -454,6 +454,10 @@ class KokoroAudioRenderer:
             duration = float(json.loads(probe.stdout)["format"]["duration"])
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise AudioGenerationError("FFprobe returned an invalid duration") from exc
+        if not _complete_audio_duration(duration, timeline_ms):
+            raise AudioGenerationError(
+                "Encoded episode duration does not match the complete speech timeline"
+            )
         if duration < self.settings.min_duration_seconds:
             raise AudioGenerationError(
                 f"Episode duration {duration:.1f}s is below the safety minimum"

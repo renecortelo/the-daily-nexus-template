@@ -39,6 +39,10 @@ jobs:
       TDN_SCHEDULE_DATE: ${{ inputs.clock_schedule_date || '' }}
       TDN_CLOCK_SOURCE: ${{ inputs.clock_source || '' }}
     steps:
+      - name: Reserve time for protected shutdown
+        shell: bash
+        run: echo "TDN_RUNNER_DEADLINE_EPOCH=$(( $(date +%s) + 55 * 60 ))" >> "$GITHUB_ENV"
+
       - name: Check out the private deployment
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

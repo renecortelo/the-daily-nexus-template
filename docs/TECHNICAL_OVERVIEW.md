@@ -35,6 +35,13 @@ Temporary source payloads are removed in the pipeline's cleanup path. A run is
 not marked published merely because files were uploaded: remote RSS verification
 must also succeed.
 
+The newspaper is optional at delivery, not at verification: unsupported or
+unclassified rejected copy is withheld. A verified podcast can publish with a
+visible newspaper-failed status. Stylistic review leftovers are tolerated only
+when factual safety was explicitly approved. The final MP3 duration must match
+the generated speech timeline, including gaps and headings, within two seconds
+of encoding tolerance; a truncated file is not accepted just because it is long.
+
 ## What each intelligence component does
 
 - **Antigravity CLI** handles structured editorial reasoning: story extraction,

@@ -17,13 +17,15 @@ from audiodigest.newspaper import (
 
 
 class NewspaperTests(TestCase):
+    def test_long_first_sentence_keeps_its_condition_instead_of_inventing_a_stop(self):
+        sentence = "The board approved the funding only if the regulator confirms compliance."
+        self.assertEqual(sentence, _limited_words(sentence, 7))
+
     def test_percent_word_is_normalized_for_reader_copy(self):
         self.assertEqual("Revenue rose 12%.", _percent_symbols("Revenue rose 12 percent."))
 
     def test_redundant_article_bullet_is_removed_from_reader_copy(self):
-        article = (
-            "The source documented a full codebase rewrite into Rust in 11 days."
-        )
+        article = "The source documented a full codebase rewrite into Rust in 11 days."
         self.assertFalse(
             _bullet_adds_distinct_information(
                 "A full codebase rewrite into Rust took 11 days.",
@@ -107,9 +109,7 @@ class NewspaperTests(TestCase):
         issue = newspaper_from_verified_script(script)
 
         executive_ids = {
-            story_id
-            for item in issue.executive_summary
-            for story_id in item.story_ids
+            story_id for item in issue.executive_summary for story_id in item.story_ids
         }
         visual_ids = {
             story_id

@@ -76,7 +76,9 @@ application shell and explicitly ignores the private `/p/` tree. A browser or
 Apple Podcasts client can still buffer episode media during playback.
 
 The web session uses session-only Firebase persistence plus a 15-minute idle
-sign-out. The unattended Linux runner uses separate encrypted GitHub Actions
+sign-out and a one-hour absolute session limit. Active playback counts as
+activity; sign-out unloads the player and clears private reader content.
+The unattended Linux runner uses separate encrypted GitHub Actions
 secrets for Gmail, Antigravity, Firebase owner access, and Firebase deployment.
 Those encrypted repository secrets persist until the operator rotates or deletes
 them. A job materializes temporary owner-only copies on an ephemeral machine;

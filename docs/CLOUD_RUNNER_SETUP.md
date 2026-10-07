@@ -111,6 +111,11 @@ default-branch workflow after it is configured; no GitHub cron is used.
 The runner's hard limit remains **60 minutes for the whole job**, including
 setup and cleanup. It processes one episode per job. Failed or interrupted
 occurrences are terminal; timing diagnostics never resume or requeue them.
+An internal deadline starts before setup and ends at 55 minutes, leaving five
+minutes for protected shutdown. Optional newspaper model work reserves another
+15 minutes for audio and publishing; if the paper cannot finish safely, the
+verified podcast can publish without it. These reserves are not completion-time
+guarantees and do not extend GitHub's hard limit.
 
 During generation, `TDN_PROGRESS` log lines appear immediately at each stage
 and approximately once per minute. They contain only timestamps, stage numbers,
@@ -119,6 +124,10 @@ cloud log filter; newsletter text, scripts, account identities, URLs and
 credential values are not forwarded. This changes logging, not editorial or
 audio output. The existing owner-only monitor also shows the current stage,
 voice-block progress and last progress update.
+Validation failures expose only fixed categories such as `json_invalid`,
+`script_coverage`, or `model_timeout`, never the rejected response or raw error.
+If the feed was remotely verified but a later monitor write fails, the runner
+reports publication with synchronization pending rather than generating again.
 
 The final timing profile totals the time spent in each stage and measures
 model calls, voice-model loading, speech synthesis, audio encoding and PDF

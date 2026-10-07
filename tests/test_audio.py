@@ -1,3 +1,4 @@
+import json
 import subprocess
 import tempfile
 import wave
@@ -5,24 +6,40 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from audiodigest.audio import KokoroAudioRenderer, _combine_wav_chunks
+from audiodigest.audio import KokoroAudioRenderer, _combine_wav_chunks, _complete_audio_duration
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.models import EpisodeScript
 
 
 class AudioHostTests(TestCase):
+    def test_full_duration_check_rejects_truncation_and_invalid_values(self):
+        for duration in (180, 900, 1500, float("nan"), float("inf")):
+            self.assertFalse(_complete_audio_duration(duration, 1_200_000))
+        self.assertTrue(_complete_audio_duration(1200.06, 1_200_000))
+        self.assertFalse(_complete_audio_duration(0, 0))
+
     def test_contextual_gaps_keep_original_transcript_and_match_actual_files(self):
-        script = EpisodeScript.from_dict({
-            "title": "The Daily Nexus", "hosts": ["Dalia", "Nox"],
-            "introduction": [{"host": "Dalia", "text": "An API update?"},
-                             {"host": "Nox", "text": "IT teams are testing it."}],
-            "sections": [{"name": "AI", "story_ids": ["test"],
-                          "dialogue": [{"host": "Dalia", "text": "GPU demand changed."}]}],
-            "conclusion": [{"host": "Nox", "text": "That is the evidence."}],
-            "sign_off": [{"host": "Dalia", "text": "The closing quotation stays exact."}],
-            "show_notes": [],
-        })
-        renderer = KokoroAudioRenderer(AudioSettings(), HostSettings(count=2))
+        script = EpisodeScript.from_dict(
+            {
+                "title": "The Daily Nexus",
+                "hosts": ["Dalia", "Nox"],
+                "introduction": [
+                    {"host": "Dalia", "text": "An API update?"},
+                    {"host": "Nox", "text": "IT teams are testing it."},
+                ],
+                "sections": [
+                    {
+                        "name": "AI",
+                        "story_ids": ["test"],
+                        "dialogue": [{"host": "Dalia", "text": "GPU demand changed."}],
+                    }
+                ],
+                "conclusion": [{"host": "Nox", "text": "That is the evidence."}],
+                "sign_off": [{"host": "Dalia", "text": "The closing quotation stays exact."}],
+                "show_notes": [],
+            }
+        )
+        renderer = KokoroAudioRenderer(AudioSettings(min_duration_seconds=1), HostSettings(count=2))
         spoken = []
         wave_total_ms = 0
 
@@ -45,8 +62,9 @@ class AudioHostTests(TestCase):
         def run(command, **_kwargs):
             nonlocal wave_total_ms
             if "-show_entries" in command:
-                return subprocess.CompletedProcess(command, 0,
-                                                   '{"format":{"duration":"120"}}', "")
+                return subprocess.CompletedProcess(
+                    command, 0, json.dumps({"format": {"duration": wave_total_ms / 1000}}), ""
+                )
             concat = Path(command[command.index("-i") + 1])
             for line in concat.read_text(encoding="utf-8").splitlines():
                 path = Path(line.removeprefix("file '").removesuffix("'"))
@@ -84,7 +102,7 @@ class AudioHostTests(TestCase):
             output.setnchannels(1)
             output.setsampwidth(2)
             output.setframerate(24_000)
-            output.writeframes(bytes([1, 0]) * 240)
+            output.writeframes(bytes([1, 0]) * (24_000 * 20))
 
     def test_wav_fallback_streams_chunks_in_order(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
@@ -142,9 +160,9 @@ class AudioHostTests(TestCase):
                         command,
                         0,
                         (
-                            '{"format": {"duration": "0.01"}}'
+                            '{"format": {"duration": "61.0"}}'
                             if probe_calls == 1
-                            else '{"format": {"duration": "120.0"}}'
+                            else '{"format": {"duration": "120.8"}}'
                         ),
                         "",
                     )
@@ -162,8 +180,8 @@ class AudioHostTests(TestCase):
                 patch.object(
                     renderer,
                     "_write_speech_chunk",
-                    side_effect=lambda _pipeline, _text, path, **_kwargs: (
-                        self._write_test_wav(path)
+                    side_effect=lambda _pipeline, _text, path, **_kwargs: self._write_test_wav(
+                        path
                     ),
                 ),
                 patch.object(
@@ -177,7 +195,7 @@ class AudioHostTests(TestCase):
 
             self.assertEqual(4, calls)
             self.assertEqual(2, probe_calls)
-            self.assertEqual(120.0, result.duration_seconds)
+            self.assertEqual(120.8, result.duration_seconds)
             self.assertEqual(6, len(result.transcript_segments))
             self.assertTrue(result.transcript_segments[2].is_heading)
             self.assertEqual("AI", result.transcript_segments[2].text)
@@ -185,12 +203,7 @@ class AudioHostTests(TestCase):
                 sorted(item.start_ms for item in result.transcript_segments),
                 [item.start_ms for item in result.transcript_segments],
             )
-            self.assertTrue(
-                all(
-                    item.end_ms > item.start_ms
-                    for item in result.transcript_segments
-                )
-            )
+            self.assertTrue(all(item.end_ms > item.start_ms for item in result.transcript_segments))
 
     def test_solo_nox_reads_disclosure_and_section_headings(self):
         hosts = HostSettings(count=1, solo_name="Nox")

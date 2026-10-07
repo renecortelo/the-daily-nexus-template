@@ -70,11 +70,7 @@ def _source_domains(issue: NewspaperIssue) -> list[str]:
     values = [
         *(url for article in issue.articles for url in article.source_urls),
         *(url for visual in issue.visuals for url in visual.source_urls),
-        *(
-            url
-            for source in issue.sources
-            for url in re.findall(r"https://[^\s]+", source)
-        ),
+        *(url for source in issue.sources for url in re.findall(r"https://[^\s]+", source)),
     ]
     for url in values:
         hostname = (urlsplit(url.rstrip(".,);]")).hostname or "").removeprefix("www.")
@@ -101,8 +97,7 @@ def _limited_words(text: str, limit: int) -> str:
         protected,
     )
     sentences = [
-        sentence.replace("\u2024", ".")
-        for sentence in re.split(r"(?<=[.!?])\s+", protected)
+        sentence.replace("\u2024", ".") for sentence in re.split(r"(?<=[.!?])\s+", protected)
     ]
     selected: list[str] = []
     word_count = 0
@@ -111,7 +106,9 @@ def _limited_words(text: str, limit: int) -> str:
         if selected and word_count + len(sentence_words) > limit:
             break
         if not selected and len(sentence_words) > limit:
-            return " ".join(sentence_words[:limit]).rstrip(" ,;:-") + "."
+            # A synthetic full stop can remove a necessary condition. Preserve
+            # the complete sentence; layout fitting, not slicing, owns overflow.
+            return sentence.strip()
         selected.append(sentence)
         word_count += len(sentence_words)
     return " ".join(selected).strip()
@@ -158,18 +155,10 @@ def _news_visual_copy(article: NewspaperArticle) -> tuple[str, str]:
         "in today's episode",
     )
     useful = [
-        sentence
-        for sentence in sentences
-        if not sentence.casefold().startswith(generic_starts)
+        sentence for sentence in sentences if not sentence.casefold().startswith(generic_starts)
     ]
-    article_title_is_desk = (
-        article.title.casefold() == article.section_label.casefold()
-    )
-    headline = (
-        useful[0]
-        if article_title_is_desk and useful
-        else article.title
-    )
+    article_title_is_desk = article.title.casefold() == article.section_label.casefold()
+    headline = useful[0] if article_title_is_desk and useful else article.title
     detail_candidates = [
         article.standfirst,
         *(useful[1:] if article_title_is_desk else useful),
@@ -181,12 +170,14 @@ def _news_visual_copy(article: NewspaperArticle) -> tuple[str, str]:
             for item in detail_candidates
             if item.strip()
             and not (
-                item.strip().casefold().rstrip(".").startswith(
-                    headline.strip().casefold().rstrip(".")
-                )
-                or headline.strip().casefold().rstrip(".").startswith(
-                    item.strip().casefold().rstrip(".")
-                )
+                item.strip()
+                .casefold()
+                .rstrip(".")
+                .startswith(headline.strip().casefold().rstrip("."))
+                or headline.strip()
+                .casefold()
+                .rstrip(".")
+                .startswith(item.strip().casefold().rstrip("."))
             )
             and not item.casefold().startswith(generic_starts)
         ),
@@ -199,8 +190,7 @@ def newspaper_from_verified_script(script: EpisodeScript) -> NewspaperIssue:
     """Emergency offline fallback for editions created before the independent writer."""
 
     urls = [
-        url.rstrip(".,);]")
-        for url in re.findall(r"https://[^\s]+", "\n".join(script.show_notes))
+        url.rstrip(".,);]") for url in re.findall(r"https://[^\s]+", "\n".join(script.show_notes))
     ]
     articles: list[NewspaperArticle] = []
     generic_starts = (
@@ -220,9 +210,7 @@ def newspaper_from_verified_script(script: EpisodeScript) -> NewspaperIssue:
             for sentence in _complete_sentences(section.narration)
             if not (
                 sentence.casefold().startswith(generic_starts)
-                or sentence.casefold().startswith(
-                    f"in {section.name.value.casefold()}"
-                )
+                or sentence.casefold().startswith(f"in {section.name.value.casefold()}")
                 or any(
                     re.search(
                         rf"\b{re.escape(host.casefold())}\b",
@@ -261,9 +249,7 @@ def newspaper_from_verified_script(script: EpisodeScript) -> NewspaperIssue:
             )
         ]
     tih_articles = [
-        article
-        for article in articles
-        if "today in history" in article.section_label.casefold()
+        article for article in articles if "today in history" in article.section_label.casefold()
     ]
     news_articles = [article for article in articles if article not in tih_articles]
     if not news_articles:
@@ -288,9 +274,7 @@ def newspaper_from_verified_script(script: EpisodeScript) -> NewspaperIssue:
     return NewspaperIssue(
         headline=f"The decisive shifts across {topics}" if topics else script.title,
         deck="What changed, why it matters, and the developments worth watching next.",
-        lead=" ".join(
-            article.standfirst for article in news_articles[:2]
-        ),
+        lead=" ".join(article.standfirst for article in news_articles[:2]),
         articles=articles,
         data_points=[],
         sources=script.show_notes[:12],
@@ -325,13 +309,11 @@ def newspaper_from_verified_script(script: EpisodeScript) -> NewspaperIssue:
                 ),
                 detail=(
                     news_articles[min(index, len(news_articles) - 1)].standfirst
-                    or _complete_sentences(
-                        news_articles[min(index, len(news_articles) - 1)].body
-                    )[0]
+                    or _complete_sentences(news_articles[min(index, len(news_articles) - 1)].body)[
+                        0
+                    ]
                 ),
-                story_ids=list(
-                    news_articles[min(index, len(news_articles) - 1)].story_ids
-                ),
+                story_ids=list(news_articles[min(index, len(news_articles) - 1)].story_ids),
             )
             for index, value in enumerate(("SHIFT", "IMPACT", "WATCH"))
         ],
@@ -352,18 +334,21 @@ def is_legacy_script_style_issue(issue: NewspaperIssue) -> bool:
     pull_quote = issue.pull_quote.casefold()
     headline = issue.headline.casefold()
     deck = issue.deck.casefold()
-    return headline.startswith("the decisive shifts across") or deck.startswith(
-        "what changed, why it matters"
-    ) or any(
-        marker in lead
-        for marker in (
-            "i'm dario",
-            "i am dario",
-            "welcome to the daily nexus",
-            "in today's episode",
-            "this edition distills the verified reporting",
+    return (
+        headline.startswith("the decisive shifts across")
+        or deck.startswith("what changed, why it matters")
+        or any(
+            marker in lead
+            for marker in (
+                "i'm dario",
+                "i am dario",
+                "welcome to the daily nexus",
+                "in today's episode",
+                "this edition distills the verified reporting",
+            )
         )
-    ) or pull_quote.startswith("the useful story is")
+        or pull_quote.startswith("the useful story is")
+    )
 
 
 class NewspaperRenderer:
@@ -383,9 +368,9 @@ class NewspaperRenderer:
     def _paragraph(text: str, style):
         from reportlab.platypus import Paragraph
 
-        safe_text = html.escape(_percent_symbols(text)).replace(
-            "\n\n", "<br/><br/>"
-        ).replace("\n", "<br/>")
+        safe_text = (
+            html.escape(_percent_symbols(text)).replace("\n\n", "<br/><br/>").replace("\n", "<br/>")
+        )
         return Paragraph(safe_text, style)
 
     @staticmethod
@@ -400,9 +385,7 @@ class NewspaperRenderer:
         selected: list[str] = []
         for phrase in phrases or []:
             normalized = " ".join(phrase.split())
-            if normalized and normalized.casefold() not in {
-                item.casefold() for item in selected
-            }:
+            if normalized and normalized.casefold() not in {item.casefold() for item in selected}:
                 selected.append(normalized)
         if not selected:
             for match in re.finditer(
@@ -412,19 +395,14 @@ class NewspaperRenderer:
                 flags=re.IGNORECASE,
             ):
                 value = match.group(0).strip()
-                if value and value.casefold() not in {
-                    item.casefold() for item in selected
-                }:
+                if value and value.casefold() not in {item.casefold() for item in selected}:
                     selected.append(value)
                 if len(selected) == 4:
                     break
         if not selected:
             return NewspaperRenderer._paragraph(text, style)
         pattern = re.compile(
-            "|".join(
-                re.escape(value)
-                for value in sorted(selected, key=len, reverse=True)
-            ),
+            "|".join(re.escape(value) for value in sorted(selected, key=len, reverse=True)),
             flags=re.IGNORECASE,
         )
         parts: list[str] = []
@@ -527,18 +505,21 @@ class NewspaperRenderer:
         )
         edition_label = " ".join(edition_name.split()) or "Morning Edition"
         edition_label = (
-            f"{edition_label.upper()}  /  "
-            f"{episode_date.strftime('%A %d %B %Y').upper()}"
+            f"{edition_label.upper()}  /  {episode_date.strftime('%A %d %B %Y').upper()}"
         )
         label_x = margin + logo_size + 12
         label_y = height - (59 if page_number == 1 else 49)
         label_limit = width - label_x - 194
         font_size = 6.8
-        while font_size > 4.8 and stringWidth(
-            edition_label,
-            "Courier-Bold",
-            font_size,
-        ) > label_limit:
+        while (
+            font_size > 4.8
+            and stringWidth(
+                edition_label,
+                "Courier-Bold",
+                font_size,
+            )
+            > label_limit
+        ):
             font_size -= 0.3
         if stringWidth(edition_label, "Courier-Bold", font_size) > label_limit:
             # Preserve complete words when a deliberately long run name has to
@@ -694,9 +675,7 @@ class NewspaperRenderer:
                 for point in article.bullet_points
                 if _bullet_adds_distinct_information(point, article_text)
             ]
-            bullet_text = "\n".join(
-                f"\u2022 {point}" for point in distinct_bullets[:3]
-            )
+            bullet_text = "\n".join(f"\u2022 {point}" for point in distinct_bullets[:3])
             bullets = self._paragraph(bullet_text, bullet_style) if bullet_text else None
             _, title_height = title.wrap(width, 2_000)
             standfirst_height = 0.0
@@ -788,16 +767,8 @@ class NewspaperRenderer:
                 if not assignment & 1:
                     continue
                 columns = [
-                    [
-                        block
-                        for index, block in enumerate(blocks)
-                        if assignment & (1 << index)
-                    ],
-                    [
-                        block
-                        for index, block in enumerate(blocks)
-                        if not assignment & (1 << index)
-                    ],
+                    [block for index, block in enumerate(blocks) if assignment & (1 << index)],
+                    [block for index, block in enumerate(blocks) if not assignment & (1 << index)],
                 ]
                 if len(blocks) > 1 and not columns[1]:
                     continue
@@ -1338,9 +1309,7 @@ class NewspaperRenderer:
         column_gap = 6
         row_gap = 5
         cell_width = (width - column_gap) / columns
-        row_height = (
-            height - header_height - row_gap * max(0, rows - 1)
-        ) / rows
+        row_height = (height - header_height - row_gap * max(0, rows - 1)) / rows
         label_style = ParagraphStyle(
             f"DecisionLabel-{dark}",
             fontName="Helvetica-Bold",
@@ -1363,9 +1332,11 @@ class NewspaperRenderer:
             cell_x = x + column * (cell_width + column_gap)
             current_top = row_top - row * (row_height + row_gap)
             drawing.setFillColor(
-                HexColor(self.DARK_AMBER if dark and index % 2 == 0 else (
-                    self.INK if dark else self.PAPER
-                ))
+                HexColor(
+                    self.DARK_AMBER
+                    if dark and index % 2 == 0
+                    else (self.INK if dark else self.PAPER)
+                )
             )
             drawing.roundRect(
                 cell_x,
@@ -1420,14 +1391,10 @@ class NewspaperRenderer:
             for story_id in article.story_ids
         }
         news_articles = [
-            article
-            for article in issue.articles
-            if not set(article.story_ids) & tih_story_ids
+            article for article in issue.articles if not set(article.story_ids) & tih_story_ids
         ] or issue.articles
         eligible_summary = [
-            item
-            for item in issue.executive_summary
-            if not set(item.story_ids) & tih_story_ids
+            item for item in issue.executive_summary if not set(item.story_ids) & tih_story_ids
         ]
         if eligible_summary:
             repaired: list[NewspaperVisualItem] = []
@@ -1438,13 +1405,9 @@ class NewspaperRenderer:
             )
             for index, item in enumerate(eligible_summary[:3]):
                 detail = item.detail
-                if not detail or any(
-                    marker in detail.casefold() for marker in weak_markers
-                ):
+                if not detail or any(marker in detail.casefold() for marker in weak_markers):
                     article = news_articles[min(index, len(news_articles) - 1)]
-                    sentences = _complete_sentences(
-                        article.standfirst or article.body
-                    )
+                    sentences = _complete_sentences(article.standfirst or article.body)
                     detail = sentences[0] if sentences else article.title
                 repaired.append(
                     NewspaperVisualItem(
@@ -1470,10 +1433,7 @@ class NewspaperRenderer:
         fallback = [
             *issue.data_points,
             *(brief.text for brief in issue.briefs),
-            *(
-                article.standfirst or article.body
-                for article in issue.articles
-            ),
+            *(article.standfirst or article.body for article in issue.articles),
         ]
         labels = ("SHIFT", "IMPACT", "WATCH")
         return [
@@ -1621,9 +1581,7 @@ class NewspaperRenderer:
             for story_id in article.story_ids
         }
         briefs = [
-            brief.text
-            for brief in issue.briefs[:8]
-            if not set(brief.story_ids) & tih_story_ids
+            brief.text for brief in issue.briefs[:8] if not set(brief.story_ids) & tih_story_ids
         ] or issue.data_points[:8]
         if not briefs:
             briefs = [
@@ -1674,9 +1632,7 @@ class NewspaperRenderer:
         from reportlab.lib.styles import ParagraphStyle
 
         quote_text = (
-            issue.pull_quote
-            or (issue.data_points[0] if issue.data_points else "")
-            or issue.deck
+            issue.pull_quote or (issue.data_points[0] if issue.data_points else "") or issue.deck
         )
         drawing.setFillColor(HexColor(self.AMBER))
         drawing.roundRect(x, top - height, width, height, 6, fill=1, stroke=0)
@@ -1773,8 +1729,7 @@ class NewspaperRenderer:
                 (
                     candidate
                     for candidate in snippet_candidates
-                    if candidate.strip()
-                    and len(candidate.split()) <= snippet_limit
+                    if candidate.strip() and len(candidate.split()) <= snippet_limit
                 ),
                 "",
             )
@@ -2096,9 +2051,7 @@ class NewspaperRenderer:
             (
                 first_preview
                 if page_number == 1
-                else first_preview.with_name(
-                    f"{base}-{page_number}{first_preview.suffix}"
-                )
+                else first_preview.with_name(f"{base}-{page_number}{first_preview.suffix}")
             )
             for page_number in range(1, page_count + 1)
         )
@@ -2124,9 +2077,7 @@ class NewspaperRenderer:
         pdf_path.parent.mkdir(parents=True, exist_ok=True)
         preview_path.parent.mkdir(parents=True, exist_ok=True)
         page_one_articles, page_two_articles = self._split_articles(issue.articles)
-        page_two_articles, page_three_articles = self._plan_article_pages(
-            page_two_articles
-        )
+        page_two_articles, page_three_articles = self._plan_article_pages(page_two_articles)
         page_count = 3 if page_three_articles else 2
 
         drawing = canvas.Canvas(str(pdf_path), pagesize=A4)
@@ -2177,9 +2128,7 @@ class NewspaperRenderer:
         try:
             document = fitz.open(pdf_path)
             if document.page_count != page_count:
-                raise NewspaperRenderError(
-                    f"newspaper PDF must contain exactly {page_count} pages"
-                )
+                raise NewspaperRenderError(f"newspaper PDF must contain exactly {page_count} pages")
             for page_number, output_path in enumerate(preview_paths):
                 page = document.load_page(page_number)
                 pixmap = page.get_pixmap(

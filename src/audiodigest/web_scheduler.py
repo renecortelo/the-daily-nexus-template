@@ -12,6 +12,7 @@ from typing import Any
 from audiodigest.closing_quotes import load_closing_quotes, quote_ids_from_episodes
 from audiodigest.config import Settings
 from audiodigest.database import StateDatabase
+from audiodigest.execution_budget import RunBudget
 from audiodigest.jobs import (
     GenerationParameters,
     JobValidationError,
@@ -188,8 +189,7 @@ def _active_manual_requests(
                     "updatedAt": datetime.now(UTC),
                     "finishedAt": datetime.now(UTC),
                     "detail": (
-                        "An earlier private runner attempt failed. "
-                        "Requeue to create a fresh retry."
+                        "An earlier private runner attempt failed. Requeue to create a fresh retry."
                     ),
                 },
             )
@@ -246,16 +246,21 @@ def _published_metadata(
     status = str(episode.get("status", "staged"))
     audio_url = ""
     newspaper_url = ""
-    references = [
-        str(note) for note in episode.get("show_notes", []) if isinstance(note, str)
-    ]
+    references = [str(note) for note in episode.get("show_notes", []) if isinstance(note, str)]
     transcript: list[dict[str, Any]] = []
     source_mix: dict[str, Any] = {}
+    newspaper_pages = 0
+    newspaper_status = "unknown"
     closing_quote_id = ""
     manifest_path = Path(str(episode.get("manifest_path", "")))
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("newspaper_status") in {"ready", "failed"}:
+                newspaper_status = manifest["newspaper_status"]
+            previews = manifest.get("newspaper_preview_paths", [])
+            if isinstance(previews, list) and 1 <= len(previews) <= 3:
+                newspaper_pages = len(previews)
             candidate_quote_id = manifest.get("closing_quote_id", "")
             if (
                 isinstance(candidate_quote_id, str)
@@ -268,7 +273,8 @@ def _published_metadata(
                 source_mix = {
                     key: value
                     for key, value in raw_source_mix.items()
-                    if key in {
+                    if key
+                    in {
                         "mode",
                         "newsletter_messages",
                         "newsletter_backed_stories",
@@ -301,10 +307,7 @@ def _published_metadata(
             # The episode itself remains playable if optional owner-only details are absent.
             transcript = []
     if status == "published":
-        root = (
-            f"{settings.firebase.base_url}/p/"
-            f"{settings.firebase.secret_path}"
-        )
+        root = f"{settings.firebase.base_url}/p/{settings.firebase.secret_path}"
         filename = f"{episode_date.isoformat()}-{episode['guid']}"
         audio_url = f"{root}/audio/{filename}.mp3"
         newspaper_path = episode.get("newspaper_path")
@@ -317,6 +320,8 @@ def _published_metadata(
         "status": status,
         "audioUrl": audio_url,
         "newspaperUrl": newspaper_url,
+        "newspaperPages": newspaper_pages,
+        "newspaperStatus": "ready" if newspaper_url else newspaper_status,
         "references": references[:100],
         "sourceMix": source_mix,
         "transcript": transcript,
@@ -356,7 +361,8 @@ def _next_publication_sequence(
 
     normalized_label = " ".join(label.split()).casefold()
     title_pattern = re.compile(
-        r"^\d{2}/\d{2}/\d{4}\s+" + re.escape(settings.podcast.title)
+        r"^\d{2}/\d{2}/\d{4}\s+"
+        + re.escape(settings.podcast.title)
         + r"\s+-\s+(?P<label>.+)\s+-\s+(?P<number>\d+)$",
         re.IGNORECASE,
     )
@@ -365,8 +371,10 @@ def _next_publication_sequence(
     if checkpoint is not None:
         value = checkpoint.get("lastSequence")
         if (
-            checkpoint.get("schemaVersion") != 2 or isinstance(value, bool)
-            or not isinstance(value, int) or value < 0
+            checkpoint.get("schemaVersion") != 2
+            or isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
         ):
             raise WebRunnerError("publication sequence checkpoint is invalid")
         highest = value
@@ -387,35 +395,35 @@ def _next_publication_sequence(
     ):
         if item.get("status") != "published":
             continue
-        stored_label = " ".join(
-            str(item.get("publicationLabel", "")).split()
-        ).casefold()
+        stored_label = " ".join(str(item.get("publicationLabel", "")).split()).casefold()
         title = str(item.get("title", "")).strip()
         if not stored_label:
             match = title_pattern.fullmatch(title)
             stored_label = " ".join(match["label"].split()).casefold() if match else ""
         if stored_label != normalized_label:
             continue
-        identity = (
-            item.get("audioUrl") or item.get("executionId") or item.get("document_id")
-        )
+        identity = item.get("audioUrl") or item.get("executionId") or item.get("document_id")
         if not identity:
             raise WebRunnerError("published edition lacks a stable numbering identity")
         published_identities.add(str(identity))
         value = item.get("publicationSequence")
         if (
             item.get("publicationSequenceVersion") == 2
-            and isinstance(value, int) and not isinstance(value, bool) and value > 0
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+            and value > 0
         ):
             highest = max(highest, value)
     # Hosting activation can succeed even if the subsequent Firestore write
     # fails. Never reuse a new-format number already delivered to subscribers.
     for remote in load_remote_publication(
-        settings, maximum_episodes=settings.app.retention_days + 1,
+        settings,
+        maximum_episodes=settings.app.retention_days + 1,
     ):
         match = title_pattern.fullmatch(remote.title.strip())
         if (
-            match and len(match["number"]) >= 4
+            match
+            and len(match["number"]) >= 4
             and " ".join(match["label"].split()).casefold() == normalized_label
         ):
             highest = max(highest, int(match["number"]))
@@ -486,15 +494,24 @@ def _execute_generation(
             },
         )
     previous_signal_handlers = _install_generation_interrupt_handlers()
-    reporter = ProgressReporter(callback=lambda profile: client.patch_private_document(
-        "runner", "status", {"progress": profile, "checkedAt": datetime.now(UTC)},
-    ))
+    reporter = ProgressReporter(
+        callback=lambda profile: client.patch_private_document(
+            "runner",
+            "status",
+            {"progress": profile, "checkedAt": datetime.now(UTC)},
+        )
+    )
     reporter.start()
+    budget = RunBudget()
+    publication_confirmed = False
     try:
+        budget.start_from_environment()
         # One small owner-only query spans all schedules. Do not use the first
         # page of the archive (which may contain only the oldest episodes).
         quote_episodes = client.list_private_collection(
-            "episodes", limit=40, order_by="updatedAt desc",
+            "episodes",
+            limit=40,
+            order_by="updatedAt desc",
             field_mask=["closingQuoteId", "references", "status", "updatedAt"],
         )
         recent_quote_ids = quote_ids_from_episodes(
@@ -508,6 +525,7 @@ def _execute_generation(
             run_sequence=publication_sequence,
             recent_quote_ids=recent_quote_ids,
         )
+        publication_confirmed = result.get("status") == "published"
         episode_id, metadata = _published_metadata(
             configured,
             database,
@@ -520,7 +538,8 @@ def _execute_generation(
         if metadata.get("status") == "published":
             try:
                 client.set_private_document(
-                    "runner", _publication_sequence_key(publication_label),
+                    "runner",
+                    _publication_sequence_key(publication_label),
                     {
                         "lastSequence": publication_sequence,
                         "seriesLabel": publication_label,
@@ -543,14 +562,14 @@ def _execute_generation(
             status="completed",
         )
         if request_id:
-            request_status = (
-                "published" if metadata.get("status") == "published" else "completed"
-            )
+            request_status = "published" if metadata.get("status") == "published" else "completed"
             request_detail = (
                 "Generation completed and the private feed was published."
                 if request_status == "published"
                 else "Generation and verification completed."
             )
+            if metadata.get("newspaperStatus") == "failed":
+                request_detail += " Podcast is ready; newspaper generation failed."
             client.patch_private_document(
                 "runRequests",
                 request_id,
@@ -564,7 +583,8 @@ def _execute_generation(
         profile = reporter.finish("completed")
         _save_timing_profile(client, profile)
         _runner_status(
-            client, state="idle",
+            client,
+            state="idle",
             detail=f"Last task completed in {profile['elapsed_seconds']:.0f} seconds.",
         )
         return {
@@ -573,9 +593,92 @@ def _execute_generation(
             "episode_date": episode_date.isoformat(),
         }
     except Exception as exc:
+        # The feed is authoritative once the publisher verified it. A later
+        # administrative write must not mark the episode failed or regenerate it.
+        try:
+            local_episode = database.episode_for_date(episode_date)
+        except Exception:
+            local_episode = None
+            increment("progress_updates_failed")
+        if publication_confirmed or (local_episode and local_episode.get("status") == "published"):
+            budget.close()  # Use the reserved shutdown margin for state recovery.
+            profile = reporter.finish("completed", reason="sync_pending")
+            actions = []
+            try:
+                recovered_id, recovered_metadata = _published_metadata(
+                    configured,
+                    database,
+                    episode_date=episode_date,
+                    execution_id=execution_id,
+                    publication_label=publication_label,
+                    publication_sequence=publication_sequence,
+                )
+                actions.append(
+                    lambda: client.set_private_document(
+                        "episodes", recovered_id, recovered_metadata
+                    )
+                )
+            except Exception:
+                increment("progress_updates_failed")
+            actions.extend(
+                [
+                    lambda: client.set_private_document(
+                        "runner",
+                        _publication_sequence_key(publication_label),
+                        {
+                            "lastSequence": publication_sequence,
+                            "seriesLabel": publication_label,
+                            "schemaVersion": 2,
+                            "updatedAt": datetime.now(UTC),
+                        },
+                    ),
+                    lambda: database.finish_scheduled_execution(
+                        execution_id, episode_date, "completed"
+                    ),
+                    lambda: client.finish_private_execution(
+                        execution_id, episode_date.isoformat(), status="completed"
+                    ),
+                ]
+            )
+            if request_id:
+                actions.append(
+                    lambda: client.patch_private_document(
+                        "runRequests",
+                        request_id,
+                        {
+                            "status": "published",
+                            "finishedAt": datetime.now(UTC),
+                            "updatedAt": datetime.now(UTC),
+                            "detail": ("Feed verified; monitor synchronization needs attention."),
+                        },
+                    )
+                )
+            actions.append(
+                lambda: _runner_status(
+                    client,
+                    state="idle",
+                    detail=(
+                        "Episode published and verified. Monitor synchronization needs attention; "
+                        "do not regenerate it."
+                    ),
+                )
+            )
+            for action in actions:
+                try:
+                    action()
+                except Exception:
+                    increment("progress_updates_failed")
+            _save_timing_profile(client, profile)
+            return {
+                "status": "published",
+                "synchronization_pending": True,
+                "execution_id": execution_id,
+                "episode_date": episode_date.isoformat(),
+            }
         error_name = type(exc).__name__
         reason = {
             "GenerationInterrupted": "interrupted",
+            "RunBudgetExceeded": "time_budget",
             "TimeoutExpired": "subprocess_timeout",
             "AntigravityCLIError": "model_failure",
             "VerificationError": "verification_failure",
@@ -583,6 +686,7 @@ def _execute_generation(
             "PublishError": "publish_failure",
             "NoContentError": "no_content",
             "AntigravityPaymentRiskError": "cost_guard",
+            "AntigravityConfigurationError": "cost_guard",
         }.get(error_name, "other")
         profile = reporter.finish(
             "interrupted" if isinstance(exc, GenerationInterrupted) else "failed",
@@ -595,6 +699,8 @@ def _execute_generation(
             f"after {profile['elapsed_seconds']:.0f} seconds ({reason}); "
             "inspect the private local runner log."
         )
+        if profile.get("failure_code"):
+            remote_detail += f" Diagnostic: {profile['failure_code']}."
         database.finish_scheduled_execution(
             execution_id,
             episode_date,
@@ -624,6 +730,7 @@ def _execute_generation(
             error_name=error_name,
         ) from exc
     finally:
+        budget.close()
         reporter.close()
         _restore_generation_interrupt_handlers(previous_signal_handlers)
 
@@ -669,11 +776,7 @@ def run_web_runner_tick(
 
     if requested_schedule_id:
         selected = next(
-            (
-                schedule
-                for schedule in schedules
-                if schedule.schedule_id == requested_schedule_id
-            ),
+            (schedule for schedule in schedules if schedule.schedule_id == requested_schedule_id),
             None,
         )
         if selected is None:
@@ -715,8 +818,7 @@ def run_web_runner_tick(
         )
         if execution_status:
             detail = (
-                "The requested scheduled task previously failed; it will not "
-                "retry automatically."
+                "The requested scheduled task previously failed; it will not retry automatically."
                 if execution_status == "failed"
                 else "The requested scheduled task was already claimed."
             )
@@ -741,11 +843,7 @@ def run_web_runner_tick(
             pipeline_factory=pipeline_factory,
         )
 
-    due = [
-        schedule
-        for schedule in schedules
-        if schedule.is_due(current)
-    ]
+    due = [schedule for schedule in schedules if schedule.is_due(current)]
     runnable_due = [
         schedule
         for schedule in due
@@ -786,9 +884,7 @@ def run_web_runner_tick(
             active_client,
             execution_id=f"request-{request_id}"[:120],
             display_name=f"Manual web request {requested_date.isoformat()}",
-            parameters=GenerationParameters.from_dict(
-                selected_request.get("parameters", {})
-            ),
+            parameters=GenerationParameters.from_dict(selected_request.get("parameters", {})),
             episode_date=requested_date,
             pipeline_factory=pipeline_factory,
             request_id=request_id,
