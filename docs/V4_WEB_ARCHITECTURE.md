@@ -26,7 +26,8 @@ local runtime paths, or detailed runner logs.
 ## Authentication and authorization
 
 The PWA uses Firebase Google Authentication with session-only persistence. It
-signs out after 15 minutes without activity and exposes an explicit Sign Out
+signs out after 15 minutes without activity (active listening counts as activity),
+enforces a one-hour absolute session limit, and exposes an explicit Sign Out
 control. Authentication is not authorization: Firestore private access requires
 an owner document whose ID exactly matches the signed-in Firebase UID.
 

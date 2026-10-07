@@ -10,6 +10,7 @@ from audiodigest.progress import (
     ProgressReporter,
     counts,
     filter_stream,
+    record_failure_code,
     safe_event,
     stage,
     timed_operation,
@@ -17,6 +18,20 @@ from audiodigest.progress import (
 
 
 class ProgressTests(TestCase):
+    def test_only_fixed_diagnostic_codes_survive_the_privacy_filter(self):
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        reporter.start()
+        try:
+            record_failure_code("json_invalid")
+            record_failure_code("sensitive arbitrary text")
+            self.assertEqual("json_invalid", reporter.snapshot()["failure_code"])
+            for value in ("sensitive arbitrary text", {}, []):
+                event = reporter.snapshot()
+                event["failure_code"] = value
+                self.assertNotIn("failure_code", safe_event(event))
+        finally:
+            reporter.close()
+
     def test_stage_totals_include_repairs_and_stop_at_finish(self):
         now = [0.0]
         reporter = ProgressReporter(clock=lambda: now[0], interval=0, stream=io.StringIO())

@@ -44,11 +44,7 @@ def _newspaper_article_limits(settings: Settings, story_count: int) -> tuple[str
     configured_scale = str(
         getattr(podcast_settings, "newspaper_edition_scale", "standard")
     ).casefold()
-    scale = (
-        configured_scale
-        if configured_scale in _NEWSPAPER_ARTICLE_LIMITS
-        else "standard"
-    )
+    scale = configured_scale if configured_scale in _NEWSPAPER_ARTICLE_LIMITS else "standard"
     target_minimum, target_maximum = _NEWSPAPER_ARTICLE_LIMITS[scale]
     return scale, min(target_minimum, max(1, story_count)), target_maximum
 
@@ -161,10 +157,7 @@ def _term_sets_overlap(
     if not first or not second:
         return False
     shared = len(first & second)
-    return (
-        shared >= minimum_shared
-        and shared / min(len(first), len(second)) >= containment
-    )
+    return shared >= minimum_shared and shared / min(len(first), len(second)) >= containment
 
 
 def _stories_are_duplicates(first: Story, second: Story) -> bool:
@@ -177,12 +170,8 @@ def _stories_are_duplicates(first: Story, second: Story) -> bool:
         containment=0.6,
     ):
         return True
-    first_full = _deduplication_terms(
-        " ".join([first.headline, *first.facts])
-    )
-    second_full = _deduplication_terms(
-        " ".join([second.headline, *second.facts])
-    )
+    first_full = _deduplication_terms(" ".join([first.headline, *first.facts]))
+    second_full = _deduplication_terms(" ".join([second.headline, *second.facts]))
     return _term_sets_overlap(
         first_full,
         second_full,
@@ -207,9 +196,8 @@ def _merge_duplicate_stories(primary: Story, secondary: Story) -> Story:
     primary.source_urls = _merge_unique(primary.source_urls, secondary.source_urls)
     primary.confidence = max(primary.confidence, secondary.confidence)
     primary.rank_score = max(primary.rank_score, secondary.rank_score)
-    if (
-        primary.section == secondary.section
-        and len(secondary.why_it_matters) > len(primary.why_it_matters)
+    if primary.section == secondary.section and len(secondary.why_it_matters) > len(
+        primary.why_it_matters
     ):
         primary.why_it_matters = secondary.why_it_matters
     return primary
@@ -253,10 +241,7 @@ def _stories_validator(
     raw = data.get("stories")
     if not isinstance(raw, list):
         raise ValueError("stories must be a list")
-    stories = [
-        Story.from_dict(item, allowed_sections=allowed_sections)
-        for item in raw
-    ]
+    stories = [Story.from_dict(item, allowed_sections=allowed_sections) for item in raw]
     source_sets = [set(item.source_ids) for item in stories]
     if any(not source_set for source_set in source_sets):
         raise ValueError("every story must cite at least one source")
@@ -375,10 +360,7 @@ def _normalize_newspaper_percentages(value: Any, *, key: str = "") -> Any:
         )
         return re.sub(r"(?<=\d)\s+%", "%", normalized)
     if isinstance(value, list):
-        return [
-            _normalize_newspaper_percentages(item, key=key)
-            for item in value
-        ]
+        return [_normalize_newspaper_percentages(item, key=key) for item in value]
     if isinstance(value, dict):
         return {
             item_key: _normalize_newspaper_percentages(
@@ -404,9 +386,7 @@ def _rebuild_newspaper_citations(
     """
 
     story_urls = {
-        story.story_id: [
-            url for url in story.source_urls if url.startswith("https://")
-        ]
+        story.story_id: [url for url in story.source_urls if url.startswith("https://")]
         for story in stories
     }
 
@@ -439,11 +419,7 @@ def _rebuild_newspaper_citations(
     for item in issue.executive_summary:
         remember(item.story_ids)
     for visual in issue.visuals:
-        visual_story_ids = [
-            story_id
-            for item in visual.items
-            for story_id in item.story_ids
-        ]
+        visual_story_ids = [story_id for item in visual.items for story_id in item.story_ids]
         visual.source_urls = urls_for(visual_story_ids)
         remember(visual_story_ids)
 
@@ -454,8 +430,7 @@ def _bullet_repeats_article(bullet: str, article_text: str) -> bool:
     bullet_tokens = set(re.findall(r"[a-z0-9%]+", bullet.casefold()))
     article_tokens = set(re.findall(r"[a-z0-9%]+", article_text.casefold()))
     return (
-        len(bullet_tokens) >= 5
-        and len(bullet_tokens & article_tokens) / len(bullet_tokens) >= 0.85
+        len(bullet_tokens) >= 5 and len(bullet_tokens & article_tokens) / len(bullet_tokens) >= 0.85
     )
 
 
@@ -502,20 +477,13 @@ def _exact_highlight_candidates(text: str) -> list[str]:
         for index, match in enumerate(matches)
         if any(character.isdigit() for character in match.group(0))
     )
-    starts.extend(
-        round((len(matches) - 1) * fraction)
-        for fraction in (0.25, 0.5, 0.75)
-    )
+    starts.extend(round((len(matches) - 1) * fraction) for fraction in (0.25, 0.5, 0.75))
     candidates: list[str] = []
     for start in starts:
         start = max(0, min(len(matches) - 1, start))
         end = min(len(matches), start + 6)
         phrase = text[matches[start].start() : matches[end - 1].end()].strip()
-        while (
-            not _is_complete_highlight(phrase)
-            and end < len(matches)
-            and end - start < 10
-        ):
+        while not _is_complete_highlight(phrase) and end < len(matches) and end - start < 10:
             end += 1
             phrase = text[matches[start].start() : matches[end - 1].end()].strip()
         if not 1 <= len(phrase.split()) <= 10 or not _is_complete_highlight(phrase):
@@ -537,15 +505,12 @@ def _repair_newspaper_decorations(issue: NewspaperIssue) -> None:
                 1 <= len(highlight.split()) <= 10
                 and highlight.casefold() in searchable
                 and _is_complete_highlight(highlight)
-                and highlight.casefold()
-                not in {item.casefold() for item in valid_highlights}
+                and highlight.casefold() not in {item.casefold() for item in valid_highlights}
             ):
                 valid_highlights.append(highlight)
         if require_highlights and len(valid_highlights) < 2:
             for candidate in _exact_highlight_candidates(article_text):
-                if candidate.casefold() in {
-                    item.casefold() for item in valid_highlights
-                }:
+                if candidate.casefold() in {item.casefold() for item in valid_highlights}:
                     continue
                 valid_highlights.append(candidate)
                 if len(valid_highlights) >= 2:
@@ -709,6 +674,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
             "sources": [source.to_prompt_dict() for source in sources],
             "section_definitions": editorial_section_definitions(configured_sections),
         }
+
         def validate_stories(data: dict[str, Any]) -> list[Story]:
             stories = _stories_validator(
                 data,
@@ -721,9 +687,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                     if story.section != Section.TODAY_IN_HISTORY
                 }
                 if len(derived) > MAX_PODCAST_SECTIONS:
-                    raise ValueError(
-                        "auto-assigned podcast sections exceed the safety limit"
-                    )
+                    raise ValueError("auto-assigned podcast sections exceed the safety limit")
             return stories
 
         return self.antigravity.invoke(
@@ -775,9 +739,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
             key=lambda story: (story.rank_score, story.confidence),
             reverse=True,
         )
-        required_story_ids = [
-            story.story_id for story in ranked_stories[:30]
-        ]
+        required_story_ids = [story.story_id for story in ranked_stories[:30]]
         section_order = self._section_order_for_stories(stories)
         active_hosts = self._active_hosts()
         host_names = [host["name"] for host in active_hosts]
@@ -857,6 +819,8 @@ Do not insert um, uh, fake laughter, theatrical interruptions, or emotion/SSML t
 wit emerge from wording and a concrete supported contrast, not exclamation marks or a stock
 joke. Keep formal delivery precise without making every sentence sound like a press release.
 Readability edits must preserve every evidence-backed claim, uncertainty, and attribution.
+When repairing, retain useful detail from valid stories rather than shrinking the entire
+edition into headlines. Coverage means explaining distinct supported facts, not only citing IDs.
 Do not modernize or paraphrase the approved closing quotation.
 
 Target {target_min}-{target_max} words when evidence supports it. Coverage and specificity
@@ -941,21 +905,14 @@ Return JSON only:
                     for section in script.sections:
                         if len(section.story_ids) < 2:
                             continue
-                        section_speakers = {
-                            turn.host.casefold() for turn in section.dialogue
-                        }
+                        section_speakers = {turn.host.casefold() for turn in section.dialogue}
                         if section_speakers != required_speakers:
                             raise ValueError(
                                 "both hosts must participate in every multi-story "
                                 "conversation section"
                             )
-                    if any(
-                        len(turn.text.split()) > 115
-                        for turn in script.dialogue_turns
-                    ):
-                        raise ValueError(
-                            "conversation turns must stay concise and responsive"
-                        )
+                    if any(len(turn.text.split()) > 115 for turn in script.dialogue_turns):
+                        raise ValueError("conversation turns must stay concise and responsive")
             if closing_quote.text not in script.sign_off_text:
                 raise ValueError("the sign-off must reproduce the selected quotation")
             if closing_quote.author not in script.sign_off_text:
@@ -969,21 +926,17 @@ Return JSON only:
                 raise ValueError("TIH: Today in History must be the first script section")
             valid_story_ids = {story.story_id for story in stories}
             cited_story_ids = {
-                story_id
-                for section in script.sections
-                for story_id in section.story_ids
+                story_id for section in script.sections for story_id in section.story_ids
             }
             unsupported_story_ids = cited_story_ids - valid_story_ids
             if unsupported_story_ids:
                 raise ValueError(
-                    "script cites unsupported story IDs: "
-                    f"{sorted(unsupported_story_ids)}"
+                    f"script cites unsupported story IDs: {sorted(unsupported_story_ids)}"
                 )
             missing_story_ids = set(required_story_ids) - cited_story_ids
             if missing_story_ids:
                 raise ValueError(
-                    "script omits required verified story IDs: "
-                    f"{sorted(missing_story_ids)}"
+                    f"script omits required verified story IDs: {sorted(missing_story_ids)}"
                 )
             if script.word_count > target_max:
                 raise ValueError(
@@ -1014,8 +967,7 @@ Return JSON only:
             flush=True,
         )
         expansion_instruction = (
-            instruction
-            + "\n\nThe payload includes a structurally valid previous_script that is "
+            instruction + "\n\nThe payload includes a structurally valid previous_script that is "
             f"{script.word_count:,} words, below the {target_min:,}-word duration target. "
             "Rewrite the complete script once. Preserve its supported material and every "
             "required story ID, then expand underdeveloped stories with distinct names, "
@@ -1051,9 +1003,7 @@ Return JSON only:
             return script, metadata
 
         selected_script = (
-            expanded_script
-            if expanded_script.word_count >= script.word_count
-            else script
+            expanded_script if expanded_script.word_count >= script.word_count else script
         )
         combined_metadata = _combined_metadata(metadata, expanded_metadata)
         if selected_script.word_count < target_min:
@@ -1071,8 +1021,7 @@ Return JSON only:
                 flush=True,
             )
         print(
-            "Script coverage: "
-            f"{len(required_story_ids)} required verified stories included.",
+            f"Script coverage: {len(required_story_ids)} required verified stories included.",
             flush=True,
         )
         return selected_script, combined_metadata
@@ -1090,16 +1039,12 @@ Return JSON only:
             key=lambda story: (story.rank_score, story.confidence),
             reverse=True,
         )
-        article_priority_story_ids = [
-            story.story_id for story in ranked_stories[:10]
-        ]
+        article_priority_story_ids = [story.story_id for story in ranked_stories[:10]]
         edition_scale, minimum_articles, maximum_articles = _newspaper_article_limits(
             self.settings,
             len(article_priority_story_ids),
         )
-        edition_priority_story_ids = [
-            story.story_id for story in ranked_stories[:18]
-        ]
+        edition_priority_story_ids = [story.story_id for story in ranked_stories[:18]]
         repair = ""
         if repair_issues:
             repair = (
@@ -1171,6 +1116,9 @@ sentences; executive signals state consequences rather than rephrasing the artic
 briefs contribute secondary facts; and the visual uses a different concrete angle or comparison
 from the related article. Repeat a name only when it is required for clarity, never repeat a
 full fact, sentence, or promotional claim across components.
+Write headlines in at most 18 words, the deck in at most 30, and visual captions in at most
+20 words. Briefs should use complete sentences of at most 22 words. Rewrite for these spaces;
+never satisfy a length target by dropping a necessary condition, uncertainty, or attribution.
 
 Every visual must communicate the reporting itself, never article length, word count, source
 count, confidence score, or other production metadata. Use stat_grid only when the evidence
@@ -1269,9 +1217,7 @@ Return JSON only:
         }
         valid_story_ids = {story.story_id for story in stories}
         tih_story_ids = {
-            story.story_id
-            for story in stories
-            if story.section == Section.TODAY_IN_HISTORY
+            story.story_id for story in stories if story.section == Section.TODAY_IN_HISTORY
         }
 
         def validate_issue(data: dict[str, Any]) -> NewspaperIssue:
@@ -1294,9 +1240,7 @@ Return JSON only:
                 raise ValueError("newspaper must include exactly one meaningful primary visual")
             if len(issue.executive_summary) != 3:
                 raise ValueError("newspaper must include exactly three executive summary items")
-            executive_labels = {
-                item.value.strip().casefold() for item in issue.executive_summary
-            }
+            executive_labels = {item.value.strip().casefold() for item in issue.executive_summary}
             if executive_labels != {"shift", "impact", "watch"}:
                 raise ValueError("executive summary labels must be SHIFT, IMPACT, and WATCH")
             reader_copy = " ".join(
@@ -1323,10 +1267,7 @@ Return JSON only:
                             [
                                 visual.title,
                                 visual.caption,
-                                *(
-                                    f"{item.label} {item.detail}"
-                                    for item in visual.items
-                                ),
+                                *(f"{item.label} {item.detail}" for item in visual.items),
                             ]
                         )
                         for visual in issue.visuals
@@ -1355,22 +1296,16 @@ Return JSON only:
                 "thank you for listening",
                 "join us again",
             )
-            has_spoken_marker = any(
-                marker in reader_copy for marker in spoken_markers
-            )
+            has_spoken_marker = any(marker in reader_copy for marker in spoken_markers)
             has_host_dialogue = _contains_spoken_host_dialogue(
                 reader_copy,
                 [str(host_name) for host_name in host_names],
             )
             if has_spoken_marker or has_host_dialogue:
-                raise ValueError(
-                    "newspaper contains host dialogue or spoken-script phrasing"
-                )
+                raise ValueError("newspaper contains host dialogue or spoken-script phrasing")
             pull_quote = " ".join(issue.pull_quote.casefold().split())
             if not 12 <= len(issue.pull_quote.split()) <= 32:
-                raise ValueError(
-                    "editorial takeaway must be a specific 12 to 32 word conclusion"
-                )
+                raise ValueError("editorial takeaway must be a specific 12 to 32 word conclusion")
             generic_takeaway_phrases = (
                 "this edition",
                 "the evidence",
@@ -1393,56 +1328,35 @@ Return JSON only:
                 if value.strip()
             }
             if pull_quote and pull_quote in repeated_takeaways:
-                raise ValueError(
-                    "newspaper pull quote must add a distinct cross-story takeaway"
-                )
+                raise ValueError("newspaper pull quote must add a distinct cross-story takeaway")
             for item in issue.executive_summary:
                 if not item.story_ids:
-                    raise ValueError(
-                        "every executive signal must cite supporting story IDs"
-                    )
+                    raise ValueError("every executive signal must cite supporting story IDs")
                 unsupported = set(item.story_ids) - valid_story_ids
                 if unsupported:
                     raise ValueError(
-                        "executive signal contains unsupported story IDs: "
-                        f"{sorted(unsupported)}"
+                        f"executive signal contains unsupported story IDs: {sorted(unsupported)}"
                     )
                 if not 2 <= len(item.label.split()) <= 12:
-                    raise ValueError(
-                        "executive signal labels must be specific and concise"
-                    )
+                    raise ValueError("executive signal labels must be specific and concise")
                 if not 8 <= len(item.detail.split()) <= 24:
-                    raise ValueError(
-                        "executive signal details must contain a concrete explanation"
-                    )
+                    raise ValueError("executive signal details must contain a concrete explanation")
             article_story_ids = {
-                story_id
-                for article in issue.articles
-                for story_id in article.story_ids
+                story_id for article in issue.articles for story_id in article.story_ids
             }
-            brief_story_ids = {
-                story_id
-                for brief in issue.briefs
-                for story_id in brief.story_ids
-            }
+            brief_story_ids = {story_id for brief in issue.briefs for story_id in brief.story_ids}
             used_story_ids = article_story_ids | brief_story_ids
             unsupported_story_ids = used_story_ids - valid_story_ids
             if unsupported_story_ids:
                 raise ValueError(
-                    "newspaper contains unsupported story IDs: "
-                    f"{sorted(unsupported_story_ids)}"
+                    f"newspaper contains unsupported story IDs: {sorted(unsupported_story_ids)}"
                 )
-            missing_article_priority = (
-                set(article_priority_story_ids) - article_story_ids
-            )
+            missing_article_priority = set(article_priority_story_ids) - article_story_ids
             if missing_article_priority:
                 raise ValueError(
-                    "newspaper omits priority story IDs: "
-                    f"{sorted(missing_article_priority)}"
+                    f"newspaper omits priority story IDs: {sorted(missing_article_priority)}"
                 )
-            missing_edition_priority = (
-                set(edition_priority_story_ids) - used_story_ids
-            )
+            missing_edition_priority = set(edition_priority_story_ids) - used_story_ids
             if missing_edition_priority:
                 raise ValueError(
                     "newspaper omits secondary edition story IDs: "
@@ -1459,28 +1373,18 @@ Return JSON only:
                 for article in issue.articles
             )
             if len(issue.articles) >= 5 and generic_count > 1:
-                raise ValueError(
-                    "newspaper article desk labels must be descriptive, not generic"
-                )
+                raise ValueError("newspaper article desk labels must be descriptive, not generic")
             for article in issue.articles:
                 if len(issue.articles) >= 5 and not 2 <= len(article.highlights) <= 4:
-                    raise ValueError(
-                        "each article must include 2 to 4 exact emphasis highlights"
-                    )
+                    raise ValueError("each article must include 2 to 4 exact emphasis highlights")
                 searchable = f"{article.standfirst} {article.body}".casefold()
                 for highlight in article.highlights:
                     if not 1 <= len(highlight.split()) <= 10:
-                        raise ValueError(
-                            "article highlights must contain 1 to 10 words"
-                        )
+                        raise ValueError("article highlights must contain 1 to 10 words")
                     if not _is_complete_highlight(highlight):
-                        raise ValueError(
-                            "article highlights must not end mid-fact or mid-amount"
-                        )
+                        raise ValueError("article highlights must not end mid-fact or mid-amount")
                     if highlight.casefold() not in searchable:
-                        raise ValueError(
-                            "article highlights must exactly match article text"
-                        )
+                        raise ValueError("article highlights must exactly match article text")
                 for bullet in article.bullet_points:
                     if _bullet_repeats_article(
                         bullet,
@@ -1495,13 +1399,9 @@ Return JSON only:
                         "use a consumer-facing news_grid instead of editorial signal mapping"
                     )
                 if not 2 <= len(visual.title.split()) <= 10:
-                    raise ValueError(
-                        "visual title must contain 2 to 10 complete words"
-                    )
+                    raise ValueError("visual title must contain 2 to 10 complete words")
                 if not 5 <= len(visual.caption.split()) <= 18:
-                    raise ValueError(
-                        "visual caption must contain 5 to 18 complete words"
-                    )
+                    raise ValueError("visual caption must contain 5 to 18 complete words")
                 if visual.caption.rstrip().endswith(("…", "-", "/")):
                     raise ValueError("visual caption must not be a clipped phrase")
                 if visual.kind == "bar_chart" and any(
@@ -1509,52 +1409,34 @@ Return JSON only:
                 ):
                     raise ValueError("bar_chart items must include numeric magnitudes")
                 if visual.kind in {"decision_matrix", "news_grid"} and any(
-                    not item.detail.strip() or not item.story_ids
-                    for item in visual.items
+                    not item.detail.strip() or not item.story_ids for item in visual.items
                 ):
-                    raise ValueError(
-                        "news-grid items need evidence detail and story IDs"
-                    )
+                    raise ValueError("news-grid items need evidence detail and story IDs")
                 visual_story_ids = {
-                    story_id
-                    for item in visual.items
-                    for story_id in item.story_ids
+                    story_id for item in visual.items for story_id in item.story_ids
                 }
                 for item in visual.items:
                     if not 1 <= len(item.value.split()) <= 3:
-                        raise ValueError(
-                            "visual item values must contain 1 to 3 concise words"
-                        )
+                        raise ValueError("visual item values must contain 1 to 3 concise words")
                     if len(item.value) > 18:
-                        raise ValueError(
-                            "visual item values must be 18 characters or fewer"
-                        )
+                        raise ValueError("visual item values must be 18 characters or fewer")
                     if not 2 <= len(item.label.split()) <= 5:
-                        raise ValueError(
-                            "visual item labels must contain 2 to 5 complete words"
-                        )
+                        raise ValueError("visual item labels must contain 2 to 5 complete words")
                     if len(item.label) > 27:
-                        raise ValueError(
-                            "visual item labels must be 27 characters or fewer"
-                        )
+                        raise ValueError("visual item labels must be 27 characters or fewer")
                     if item.detail:
                         if not 5 <= len(item.detail.split()) <= 7:
                             raise ValueError(
                                 "visual item details must contain 5 to 7 complete words"
                             )
                         if len(item.detail) > 34:
-                            raise ValueError(
-                                "visual item details must be 34 characters or fewer"
-                            )
+                            raise ValueError("visual item details must be 34 characters or fewer")
                         if item.detail.rstrip().endswith(("…", "-", "/")):
-                            raise ValueError(
-                                "visual item details must not be clipped phrases"
-                            )
+                            raise ValueError("visual item details must not be clipped phrases")
                 unsupported_visual_ids = visual_story_ids - valid_story_ids
                 if unsupported_visual_ids:
                     raise ValueError(
-                        "visual contains unsupported story IDs: "
-                        f"{sorted(unsupported_visual_ids)}"
+                        f"visual contains unsupported story IDs: {sorted(unsupported_visual_ids)}"
                     )
             _rebuild_newspaper_citations(issue, stories)
             used_urls = {
@@ -1575,18 +1457,12 @@ Return JSON only:
                 raise ValueError("percentages must use the % symbol")
             if tih_story_ids:
                 tih_articles = [
-                    article
-                    for article in issue.articles
-                    if set(article.story_ids) & tih_story_ids
+                    article for article in issue.articles if set(article.story_ids) & tih_story_ids
                 ]
                 if len(tih_articles) != 1:
-                    raise ValueError(
-                        "all TIH reporting must be isolated in one dedicated article"
-                    )
+                    raise ValueError("all TIH reporting must be isolated in one dedicated article")
                 if not tih_story_ids.issubset(set(tih_articles[0].story_ids)):
-                    raise ValueError(
-                        "the dedicated TIH article must contain every TIH story ID"
-                    )
+                    raise ValueError("the dedicated TIH article must contain every TIH story ID")
                 if set(tih_articles[0].story_ids) - tih_story_ids:
                     raise ValueError(
                         "the dedicated TIH article must not mix in current-news stories"
@@ -1596,18 +1472,12 @@ Return JSON only:
                     for values in (
                         *(item.story_ids for item in issue.executive_summary),
                         *(brief.story_ids for brief in issue.briefs),
-                        *(
-                            item.story_ids
-                            for visual in issue.visuals
-                            for item in visual.items
-                        ),
+                        *(item.story_ids for visual in issue.visuals for item in visual.items),
                     )
                     for story_id in values
                 } & tih_story_ids
                 if non_article_tih_ids:
-                    raise ValueError(
-                        "TIH story IDs must appear only in the dedicated TIH article"
-                    )
+                    raise ValueError("TIH story IDs must appear only in the dedicated TIH article")
             reader_fields = [
                 issue.headline,
                 issue.deck,
@@ -1638,9 +1508,7 @@ Return JSON only:
             seen_sentences: set[str] = set()
             for field in reader_fields:
                 for sentence in re.split(r"(?<=[.!?])\s+", field.strip()):
-                    normalized = " ".join(
-                        re.sub(r"[^a-z0-9% ]", "", sentence.casefold()).split()
-                    )
+                    normalized = " ".join(re.sub(r"[^a-z0-9% ]", "", sentence.casefold()).split())
                     if len(normalized.split()) < 10:
                         continue
                     if normalized in seen_sentences:
@@ -1685,9 +1553,14 @@ Also reject it for any of these reader-quality failures:
 Approve only if it reads naturally as a concise executive newspaper, every sentence is
 complete, the hierarchy avoids needless repetition, the editorial takeaway is substantive,
 and the primary visual communicates actual news. Return JSON only:
-{"approved": true, "issues": []}
+{"approved": true, "factual_approved": true, "issues": []}
 or:
-{"approved": false, "issues": ["specific rewrite instruction"]}
+{"approved": false, "factual_approved": false, "issues": ["specific rewrite instruction"]}
+Separate factual safety from editorial polish in this SAME review, not another pass.
+Set factual_approved=false for any unsupported fact, name, date, number, attribution,
+source URL, implication, or comparison. Never classify an uncertain factual claim as style.
+If every claim is supported and the only defects concern style, repetition, or presentation,
+return approved=false, factual_approved=true, and concrete editorial issues.
 """.strip()
         payload = {
             "stories": [story.to_dict() for story in stories],

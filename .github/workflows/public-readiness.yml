@@ -78,6 +78,7 @@ jobs:
       - name: Check browser and incremental publisher JavaScript
         run: |
           node --check web/app.js
+          node --test tests/web-behavior.cjs
           node --check web/cloud-clock-config.js
           node --check scripts/firebase-clone-deploy.cjs
           node --check scripts/prepare-web-console-release.cjs

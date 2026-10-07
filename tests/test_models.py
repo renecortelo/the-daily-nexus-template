@@ -1,10 +1,29 @@
 from unittest import TestCase
 
 from audiodigest.constants import AI_DISCLOSURE
-from audiodigest.models import DataValidationError, EpisodeScript, Story
+from audiodigest.models import DataValidationError, EpisodeScript, Story, VerificationResult
 
 
 class ModelTests(TestCase):
+    def test_factual_review_is_explicit_and_legacy_rejections_fail_closed(self):
+        self.assertFalse(
+            VerificationResult.from_dict({"approved": False, "issues": ["Review"]}).factually_safe
+        )
+        self.assertTrue(
+            VerificationResult.from_dict(
+                {"approved": False, "factual_approved": True, "issues": ["Polish"]}
+            ).factually_safe
+        )
+        for invalid in ("true", 1):
+            with self.assertRaises(DataValidationError):
+                VerificationResult.from_dict(
+                    {"approved": True, "factual_approved": invalid, "issues": []}
+                )
+        with self.assertRaises(DataValidationError):
+            VerificationResult.from_dict(
+                {"approved": True, "factual_approved": False, "issues": []}
+            )
+
     def test_story_rejects_unknown_section(self):
         with self.assertRaises(DataValidationError):
             Story.from_dict(

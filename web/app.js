@@ -22,11 +22,14 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  startAfter,
   setDoc,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
+const SESSION_MAX_MS = 60 * 60 * 1000;
+const ARCHIVE_PAGE_SIZE = 100;
 const TYPICAL_RUN_MS = (22 * 60 + 40) * 1000;
 const EDITION_ZOOM_STEPS = Object.freeze([0.75, 1, 1.25, 1.5, 1.75]);
 const LOCAL_VOICE_GENDERS = Object.freeze({
@@ -96,6 +99,26 @@ function clearSubscriptions() {
 
 function clearPrivateInterface() {
   clearSubscriptions();
+  const audio = byId("episode-audio");
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  byId("player-details").replaceChildren();
+  byId("edition-pages").replaceChildren();
+  byId("edition-pdf-link").removeAttribute("href");
+  byId("mini-player").hidden = true;
+  appState.episodeRecords = [];
+  appState.olderEpisodes = new Map();
+  appState.archiveCursor = null;
+  appState.archiveHasMore = false;
+  appState.episodes = [];
+  appState.lastTranscriptSegment = null;
+  appState.readerToken = null;
+  byId("player-title").textContent = "SELECT AN EPISODE";
+  byId("mini-player-title").textContent = "THE DAILY NEXUS";
+  byId("edition-title").textContent = "SELECT AN EDITION";
+  appState.archiveLoading = false;
+  updateArchiveButtons();
   if (appState.clockSyncTimer) {
     window.clearTimeout(appState.clockSyncTimer);
     appState.clockSyncTimer = null;
@@ -132,6 +155,7 @@ function showAuth() {
 function showApp(user) {
   appState.user = user;
   appState.authorized = true;
+  appState.sessionEndsAt = Date.now() + SESSION_MAX_MS;
   authScreen.hidden = true;
   appShell.hidden = false;
   byId("signed-in-user").textContent = user.email || "Verified Google account";
@@ -218,20 +242,23 @@ function resetIdleTimer() {
   if (!appState.authorized) {
     return;
   }
-  appState.idleAt = Date.now() + IDLE_LIMIT_MS;
+  appState.idleAt = Math.min(Date.now() + IDLE_LIMIT_MS, appState.sessionEndsAt);
 }
 
 async function checkIdleTimer() {
   if (!appState.authorized) {
     return;
   }
-  const remaining = Math.max(0, appState.idleAt - Date.now());
+  const audio = byId("episode-audio");
+  const listening = Boolean(audio.src && !audio.paused && !audio.ended);
+  if (listening) resetIdleTimer();
+  const remaining = Math.max(0, (listening ? appState.sessionEndsAt : appState.idleAt) - Date.now());
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   byId("session-countdown").textContent =
-    `AUTO SIGN-OUT // ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    `${listening ? "LISTENING // SESSION LIMIT" : "AUTO SIGN-OUT"} // ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   if (remaining === 0) {
-    await signOutUser("The private session expired after 15 minutes of inactivity.");
+    await signOutUser("The private session reached its inactivity or one-hour security limit.");
   }
 }
 
@@ -1165,8 +1192,9 @@ function updateRunnerDetail() {
       data.progress?.counters?.voice_total
         ? `VOICE ${data.progress.counters.voice_blocks || 0}/${data.progress.counters.voice_total}` : "",
       data.progress ? `LAST PROGRESS ${timeText(data.checkedAt)}` : "",
+      data.progress?.failure_code ? `LAST VALIDATION ${data.progress.failure_code.replaceAll("_", " ").toUpperCase()}` : "",
       `TYPICAL ${durationText(TYPICAL_RUN_MS)}`,
-      `EST. ${durationText(remaining)} REMAINING`,
+      remaining > 0 ? `EST. ${durationText(remaining)} REMAINING` : "TAKING LONGER THAN TYPICAL // ONE-HOUR LIMIT",
     ].filter(Boolean).join(" // ");
     return;
   }
@@ -1359,11 +1387,53 @@ function safePrivateURL(value, extension) {
 }
 
 function renderEpisodes(snapshot) {
-  appState.episodeRecords = snapshot.docs.map((episodeDocument) => ({
+  const latest = snapshot.docs.map((episodeDocument) => ({
     id: episodeDocument.id,
     ...episodeDocument.data(),
   }));
+  if (!appState.olderEpisodes?.size) {
+    appState.archiveCursor = snapshot.docs.at(-1) || null;
+    appState.archiveHasMore = snapshot.docs.length === ARCHIVE_PAGE_SIZE;
+  }
+  const records = new Map(appState.olderEpisodes || []);
+  for (const record of latest) records.set(record.id, record);
+  appState.episodeRecords = [...records.values()];
   renderEpisodeArchives();
+  updateArchiveButtons();
+}
+
+function updateArchiveButtons() {
+  for (const id of ["load-older-episodes", "load-older-editions"]) {
+    const button = byId(id);
+    button.hidden = !appState.archiveHasMore;
+    button.disabled = Boolean(appState.archiveLoading);
+    button.textContent = appState.archiveLoading ? "LOADING" : "LOAD OLDER";
+  }
+}
+
+async function loadOlderArchive() {
+  if (!appState.authorized || !appState.archiveCursor || appState.archiveLoading) return;
+  const uid = appState.user.uid;
+  appState.archiveLoading = true;
+  updateArchiveButtons();
+  try {
+    const snapshot = await getDocs(query(collection(appState.db, "users", uid, "episodes"),
+      orderBy("episodeDate", "desc"), startAfter(appState.archiveCursor), limit(ARCHIVE_PAGE_SIZE)));
+    if (!appState.authorized || appState.user?.uid !== uid) return;
+    appState.olderEpisodes ||= new Map();
+    for (const item of snapshot.docs) appState.olderEpisodes.set(item.id, {id: item.id, ...item.data()});
+    const merged = new Map(appState.episodeRecords.map(item => [item.id, item]));
+    for (const [id, item] of appState.olderEpisodes) if (!merged.has(id)) merged.set(id, item);
+    appState.episodeRecords = [...merged.values()];
+    appState.archiveCursor = snapshot.docs.at(-1) || appState.archiveCursor;
+    appState.archiveHasMore = snapshot.docs.length === ARCHIVE_PAGE_SIZE;
+    renderEpisodeArchives();
+  } catch (error) {
+    if (appState.authorized && appState.user?.uid === uid) showAlert(firebaseErrorMessage(error), true);
+  } finally {
+    appState.archiveLoading = false;
+    updateArchiveButtons();
+  }
 }
 
 function sortedEpisodeRecords(mode, sourceRecords = appState.episodeRecords || []) {
@@ -1531,7 +1601,7 @@ function renderEpisodeArchives() {
       ),
     );
     if (pdfURL) {
-      const selectEditionCard = () => selectEdition({ id: editionId, title, url: pdfURL });
+      const selectEditionCard = () => selectEdition({ id: editionId, title, url: pdfURL, pageCount: data.newspaperPages });
       readCard.addEventListener("click", selectEditionCard);
       readCard.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -1540,7 +1610,9 @@ function renderEpisodeArchives() {
         }
       });
     } else {
-      readCard.append(element("p", "item-meta", "PDF URL NOT SYNCHRONIZED"));
+      readCard.append(element("p", "item-meta", data.newspaperStatus === "failed"
+        ? "NEWSPAPER FAILED // VERIFIED PODCAST AVAILABLE IN PLAY"
+        : "PDF URL NOT SYNCHRONIZED"));
     }
     read.append(readCard);
   }
@@ -1579,10 +1651,11 @@ async function refreshMonitor() {
         query(
           collection(appState.db, "users", uid, "runRequests"),
           orderBy("requestedAt", "desc"),
-          limit(20),
+          limit(ARCHIVE_PAGE_SIZE),
         ),
       ),
     ]);
+    if (!appState.authorized || appState.user?.uid !== uid) return;
     renderRunner(runner);
     renderRunRequests(requests);
     appState.monitorRefreshedAt = new Date();
@@ -1635,7 +1708,14 @@ function syncPlayer() {
       segment.classList.toggle("active", isActive);
       if (isActive) active = segment;
     }
-    active?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (active && active !== appState.lastTranscriptSegment && Date.now() > (appState.transcriptFollowAfter || 0)) {
+      const container = byId("player-details");
+      const top = active.offsetTop - container.offsetTop;
+      if (top < container.scrollTop || top + active.offsetHeight > container.scrollTop + container.clientHeight) {
+        container.scrollTo({ top: Math.max(0, top - 20), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+    }
+    appState.lastTranscriptSegment = active;
   }
 }
 
@@ -1659,6 +1739,7 @@ function safeReference(value) {
 
 function renderPlayerDetails(mode = "references") {
   appState.playerDetailMode = mode;
+  appState.lastTranscriptSegment = null;
   const container = byId("player-details");
   const episode = appState.activeEpisode;
   container.replaceChildren();
@@ -1758,7 +1839,10 @@ function selectEdition(edition) {
   link.hidden = false;
   let firstPageLoaded = false;
   const previewRequest = Date.now().toString(36);
-  for (const number of [1, 2, 3]) {
+  const readerToken = {};
+  appState.readerToken = readerToken;
+  const count = [1, 2, 3].includes(edition.pageCount) ? edition.pageCount : 3;
+  for (let number = 1; number <= count; number++) {
     const preview = element("img", "edition-page");
     preview.alt = `${title}, page ${number}`;
     const previewURL = new URL(url);
@@ -1766,12 +1850,14 @@ function selectEdition(edition) {
     previewURL.searchParams.set("_tdn_preview", `${previewRequest}-${number}`);
     preview.src = previewURL.href;
     preview.addEventListener("load", () => {
+      if (appState.readerToken !== readerToken) return;
       if (number !== 1 || firstPageLoaded) return;
       firstPageLoaded = true;
       link.href = url;
       link.hidden = false;
     });
     preview.addEventListener("error", () => {
+      if (appState.readerToken !== readerToken) return;
       preview.remove();
       if (number === 1 && !firstPageLoaded) {
         pages.className = "edition-pages empty-state";
@@ -1803,6 +1889,15 @@ function adjustEditionZoom(direction) {
 }
 
 function setupWebPlayer() {
+  for (const id of ["load-older-episodes", "load-older-editions"]) {
+    byId(id).addEventListener("click", loadOlderArchive);
+  }
+  for (const eventName of ["wheel", "touchstart", "pointerdown"]) {
+    byId("player-details").addEventListener(eventName, () => {
+      appState.transcriptFollowAfter = Date.now() + 8000;
+      appState.lastTranscriptSegment = null;
+    }, { passive: true });
+  }
   const audio = byId("episode-audio");
   const togglePlayback = async () => {
     if (!audio.src) return;
@@ -1891,6 +1986,9 @@ function setupWebPlayer() {
 
 function subscribeToPrivateData(uid) {
   clearSubscriptions();
+  const privateSnapshot = callback => snapshot => {
+    if (appState.authorized && appState.user?.uid === uid) callback(snapshot);
+  };
   appState.subscriptions.push(
     onSnapshot(
       query(
@@ -1898,7 +1996,7 @@ function subscribeToPrivateData(uid) {
         orderBy("name"),
         limit(100),
       ),
-      renderSchedules,
+      privateSnapshot(renderSchedules),
       (error) => showAlert(firebaseErrorMessage(error), true),
     ),
     onSnapshot(
@@ -1907,7 +2005,7 @@ function subscribeToPrivateData(uid) {
         orderBy("requestedAt", "desc"),
         limit(100),
       ),
-      renderRunRequests,
+      privateSnapshot(renderRunRequests),
       (error) => showAlert(firebaseErrorMessage(error), true),
     ),
     onSnapshot(
@@ -1916,12 +2014,12 @@ function subscribeToPrivateData(uid) {
         orderBy("episodeDate", "desc"),
         limit(100),
       ),
-      renderEpisodes,
+      privateSnapshot(renderEpisodes),
       (error) => showAlert(firebaseErrorMessage(error), true),
     ),
     onSnapshot(
       doc(appState.db, "users", uid, "runner", "status"),
-      renderRunner,
+      privateSnapshot(renderRunner),
       (error) => showAlert(firebaseErrorMessage(error), true),
     ),
   );

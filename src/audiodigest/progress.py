@@ -1,7 +1,8 @@
 """Owner-only timing profiles and an allowlisted cloud log stream.
 
 No source text, host names, task identities, URLs or exception messages enter
-this protocol. Raw subprocess output is consumed, never forwarded or saved.
+this protocol. Fixed diagnostic codes and bounded counters are permitted.
+Raw subprocess output is consumed, never forwarded or saved.
 """
 
 from __future__ import annotations
@@ -46,6 +47,8 @@ OPERATIONS = {"model", "voice_model", "speech", "audio_encode", "paper_render"}
 EVENTS = {"start", "stage", "counts", "operation", "heartbeat", "finish"}
 STATES = {"running", "completed", "failed", "interrupted"}
 REASONS = {
+    "sync_pending",
+    "time_budget",
     "interrupted",
     "subprocess_timeout",
     "model_failure",
@@ -57,6 +60,18 @@ REASONS = {
     "other",
 }
 RESULTS = {"idle", "already-claimed", "published", "completed", "failed"}
+FAILURE_CODES = {
+    "json_invalid",
+    "model_incomplete",
+    "model_timeout",
+    "model_exit",
+    "script_coverage",
+    "script_unsupported_reference",
+    "script_hosts",
+    "script_closing",
+    "script_length",
+    "model_structure",
+}
 _CURRENT: ContextVar[ProgressReporter | None] = ContextVar("generation_progress", default=None)
 
 
@@ -85,6 +100,8 @@ def safe_event(value: Any) -> dict[str, Any] | None:
     result["label"] = STAGES[stage]
     if isinstance(value.get("reason"), str) and value["reason"] in REASONS:
         result["reason"] = value["reason"]
+    if isinstance(value.get("failure_code"), str) and value["failure_code"] in FAILURE_CODES:
+        result["failure_code"] = value["failure_code"]
     for key in ("elapsed_seconds", "stage_elapsed_seconds"):
         number = _number(value.get(key))
         if number is None:
@@ -128,6 +145,7 @@ class ProgressReporter:
         self.token: Token | None = None
         self.status = "running"
         self.reason = ""
+        self.failure_code = ""
         self.stage = 0
         self.counters: dict[str, float] = {}
         self.operations: dict[str, dict[str, float]] = {}
@@ -157,6 +175,7 @@ class ProgressReporter:
                         "status": self.status,
                         "stage": self.stage,
                         "reason": self.reason,
+                        "failure_code": self.failure_code,
                         "elapsed_seconds": current - self.started,
                         "stage_elapsed_seconds": current - self.stage_started,
                         "at": datetime.now(UTC).isoformat(),
@@ -255,6 +274,13 @@ def stage(number: int) -> None:
 def counts(**values: int) -> None:
     if reporter := _CURRENT.get():
         reporter.count(**values)
+
+
+def record_failure_code(code: str) -> None:
+    if code in FAILURE_CODES and (reporter := _CURRENT.get()):
+        with reporter.lock:
+            reporter.failure_code = code
+            reporter.emit("counts")
 
 
 def increment(name: str) -> None:

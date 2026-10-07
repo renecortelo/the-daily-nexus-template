@@ -12,6 +12,7 @@ from audiodigest.antigravity_client import (
     AntigravityPaymentRiskError,
     _json_from_response,
     _response_from_cli_output,
+    _validation_code,
     assert_safe_antigravity_settings,
     enforce_safe_antigravity_settings,
 )
@@ -19,6 +20,19 @@ from audiodigest.config import AntigravitySettings
 
 
 class AntigravityParsingTests(TestCase):
+    def test_validation_codes_are_safe_categories_not_exception_text(self):
+        self.assertEqual(
+            "script_coverage",
+            _validation_code(ValueError("script omits required verified story IDs: ['opaque']")),
+        )
+        self.assertEqual(
+            "script_hosts", _validation_code(ValueError("both configured hosts must speak"))
+        )
+        self.assertEqual(
+            "model_structure", _validation_code(ValueError("sensitive arbitrary details"))
+        )
+        self.assertEqual("json_invalid", _validation_code(json.JSONDecodeError("bad", "", 0)))
+
     def test_structured_cli_error_does_not_leak_raw_diagnostics(self):
         with self.assertRaises(AntigravityCLIError) as error:
             _response_from_cli_output(
@@ -37,14 +51,21 @@ class AntigravityParsingTests(TestCase):
     def test_structured_billing_error_still_aborts(self):
         with self.assertRaises(AntigravityPaymentRiskError):
             _response_from_cli_output(
-                json.dumps({"error": {"message": "buy AI credits"}}), elapsed_ms=1,
+                json.dumps({"error": {"message": "buy AI credits"}}),
+                elapsed_ms=1,
             )
 
     def test_denied_tools_do_not_silently_return_a_successful_result(self):
         with self.assertRaises(AntigravityCLIError):
             _response_from_cli_output(
-                json.dumps({"status": "SUCCESS", "response": '{"approved":true}',
-                            "denied_actions": ["private tool request"]}), elapsed_ms=1,
+                json.dumps(
+                    {
+                        "status": "SUCCESS",
+                        "response": '{"approved":true}',
+                        "denied_actions": ["private tool request"],
+                    }
+                ),
+                elapsed_ms=1,
             )
 
     def test_json_fence_is_accepted(self):
@@ -87,7 +108,8 @@ class AntigravitySafetyTests(TestCase):
             settings.settings_path = root / "antigravity-cli" / "settings.json"
             settings.settings_path.parent.mkdir()
             settings.settings_path.write_text(
-                '{"useG1Credits":false,"enableTelemetry":false}', encoding="utf-8",
+                '{"useG1Credits":false,"enableTelemetry":false}',
+                encoding="utf-8",
             )
             shared = root / "config" / "config.json"
             shared.parent.mkdir()
@@ -102,12 +124,14 @@ class AntigravitySafetyTests(TestCase):
             settings.settings_path = root / "antigravity-cli" / "settings.json"
             settings.settings_path.parent.mkdir()
             settings.settings_path.write_text(
-                '{"useG1Credits":false,"enableTelemetry":false}', encoding="utf-8",
+                '{"useG1Credits":false,"enableTelemetry":false}',
+                encoding="utf-8",
             )
             shared = root / "config" / "config.json"
             shared.parent.mkdir()
-            shared.write_text('{"plugins":{},"userSettings":{"themeMode":"dark"}}',
-                              encoding="utf-8")
+            shared.write_text(
+                '{"plugins":{},"userSettings":{"themeMode":"dark"}}', encoding="utf-8"
+            )
             enforce_safe_antigravity_settings(settings)
             value = json.loads(shared.read_text())
             self.assertEqual(value["userSettings"]["themeMode"], "dark")
@@ -131,9 +155,7 @@ class AntigravitySafetyTests(TestCase):
                 '{"useG1Credits": false, "enableTelemetry": false}',
                 encoding="utf-8",
             )
-            self.assertFalse(
-                assert_safe_antigravity_settings(settings)["useG1Credits"]
-            )
+            self.assertFalse(assert_safe_antigravity_settings(settings)["useG1Credits"])
 
     def test_missing_telemetry_setting_is_rejected(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
@@ -164,9 +186,7 @@ class AntigravitySafetyTests(TestCase):
             )
             enforced = enforce_safe_antigravity_settings(settings)
             self.assertIs(enforced["useG1Credits"], False)
-            self.assertFalse(
-                settings.settings_path.read_bytes().startswith(b"\xef\xbb\xbf")
-            )
+            self.assertFalse(settings.settings_path.read_bytes().startswith(b"\xef\xbb\xbf"))
 
     def test_headless_call_uses_isolated_request_and_removes_it(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
@@ -235,9 +255,7 @@ class AntigravitySafetyTests(TestCase):
 
             def fake_run(command, **kwargs):
                 request = next(Path(kwargs["cwd"]).glob("request-*.json"))
-                payloads.append(
-                    json.loads(request.read_text(encoding="utf-8"))["payload"]
-                )
+                payloads.append(json.loads(request.read_text(encoding="utf-8"))["payload"])
                 return subprocess.CompletedProcess(
                     command,
                     0,

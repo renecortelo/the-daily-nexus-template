@@ -5,17 +5,27 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from audiodigest.antigravity_client import AntigravityCLIError
+from audiodigest.antigravity_client import (
+    AntigravityCLIError,
+    AntigravityConfigurationError,
+    AntigravityPaymentRiskError,
+)
+from audiodigest.audio import AudioResult
+from audiodigest.config import load_settings
+from audiodigest.gmail_client import fixture_sources
 from audiodigest.models import (
     AntigravityMetadata,
+    EpisodeScript,
     NewspaperArticle,
     NewspaperIssue,
+    Story,
     VerificationResult,
 )
 from audiodigest.pipeline import (
     Pipeline,
+    VerificationError,
     _episode_guid,
     _execution_storage_key,
     _format_article_summary,
@@ -24,6 +34,7 @@ from audiodigest.pipeline import (
     _remove_stale_preview_files,
     _write_progress_status,
 )
+from audiodigest.publisher import PublishResult
 
 
 class EpisodeIdentityTests(TestCase):
@@ -56,8 +67,10 @@ class EpisodeIdentityTests(TestCase):
     def test_publication_sequence_does_not_wrap_after_four_digits(self):
         for value, suffix in ((999, "0999"), (1000, "1000"), (10000, "10000")):
             title = _published_episode_title(
-                "The Daily Nexus", episode_date=date(2026, 12, 31),
-                run_name="An edition", sequence=value,
+                "The Daily Nexus",
+                episode_date=date(2026, 12, 31),
+                run_name="An edition",
+                sequence=value,
             )
             self.assertTrue(title.endswith(f" - {suffix}"))
 
@@ -109,9 +122,7 @@ class NewspaperRepairTests(TestCase):
         )
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, result_metadata = Pipeline._generate_verified_newspaper(
@@ -143,12 +154,8 @@ class NewspaperRepairTests(TestCase):
         metadata = AntigravityMetadata()
         editorial = Mock()
         editorial.generate_newspaper.side_effect = [
-            AntigravityCLIError(
-                "newspaper contains host dialogue or spoken-script phrasing"
-            ),
-            AntigravityCLIError(
-                "executive signal labels must be specific and concise"
-            ),
+            AntigravityCLIError("newspaper contains host dialogue or spoken-script phrasing"),
+            AntigravityCLIError("executive signal labels must be specific and concise"),
             (issue, metadata),
         ]
         editorial.verify_newspaper.return_value = (
@@ -157,9 +164,7 @@ class NewspaperRepairTests(TestCase):
         )
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, _metadata = Pipeline._generate_verified_newspaper(
@@ -196,9 +201,7 @@ class NewspaperRepairTests(TestCase):
         )
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, _metadata = Pipeline._generate_verified_newspaper(
@@ -226,9 +229,7 @@ class NewspaperRepairTests(TestCase):
         metadata = AntigravityMetadata()
         editorial = Mock()
         editorial.generate_newspaper.side_effect = [
-            AntigravityCLIError(
-                "reader-facing copy repeats a full sentence across sections"
-            ),
+            AntigravityCLIError("reader-facing copy repeats a full sentence across sections"),
             (issue, metadata),
         ]
         editorial.verify_newspaper.return_value = (
@@ -237,9 +238,7 @@ class NewspaperRepairTests(TestCase):
         )
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, _metadata = Pipeline._generate_verified_newspaper(
@@ -263,10 +262,7 @@ class NewspaperRepairTests(TestCase):
             articles=[
                 NewspaperArticle(
                     title="A measured change",
-                    body=(
-                        "The verified source documented one complete operational "
-                        "change."
-                    ),
+                    body=("The verified source documented one complete operational change."),
                     source_urls=["https://example.com/report"],
                     bullet_points=[],
                     section_label="Operations",
@@ -295,9 +291,7 @@ class NewspaperRepairTests(TestCase):
         ]
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, result_metadata = Pipeline._generate_verified_newspaper(
@@ -318,7 +312,7 @@ class NewspaperRepairTests(TestCase):
             [item["stage"] for item in result_metadata],
         )
 
-    def test_unapproved_newspaper_review_warns_and_returns_newspaper(self):
+    def test_explicitly_factually_safe_newspaper_warns_and_returns_newspaper(self):
         issue = NewspaperIssue(
             headline="A complete executive edition",
             deck="One material change moved from planning into operation.",
@@ -326,10 +320,7 @@ class NewspaperRepairTests(TestCase):
             articles=[
                 NewspaperArticle(
                     title="A measured change",
-                    body=(
-                        "The verified source documented one complete operational "
-                        "change."
-                    ),
+                    body=("The verified source documented one complete operational change."),
                     source_urls=["https://example.com/report"],
                     bullet_points=[],
                     section_label="Operations",
@@ -344,15 +335,14 @@ class NewspaperRepairTests(TestCase):
         rejected = VerificationResult(
             approved=False,
             issues=["Remove minor repetition of facts."],
+            factual_approved=True,
         )
         editorial = Mock()
         editorial.generate_newspaper.return_value = (issue, metadata)
         editorial.verify_newspaper.return_value = (rejected, metadata)
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, result_metadata = Pipeline._generate_verified_newspaper(
@@ -375,7 +365,9 @@ class NewspaperRepairTests(TestCase):
             sources=[],
         )
         metadata = AntigravityMetadata()
-        rejected = VerificationResult(approved=False, issues=["Remove repetition."])
+        rejected = VerificationResult(
+            approved=False, issues=["Remove repetition."], factual_approved=True
+        )
         editorial = Mock()
         editorial.generate_newspaper.side_effect = [
             (issue, metadata),
@@ -385,9 +377,7 @@ class NewspaperRepairTests(TestCase):
         editorial.verify_newspaper.return_value = (rejected, metadata)
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, result_metadata = Pipeline._generate_verified_newspaper(
@@ -413,23 +403,19 @@ class NewspaperRepairTests(TestCase):
             sources=[],
         )
         metadata = AntigravityMetadata()
-        rejected = VerificationResult(approved=False, issues=["Improve visual copy."])
+        rejected = VerificationResult(
+            approved=False, issues=["Improve visual copy."], factual_approved=True
+        )
         editorial = Mock()
         editorial.generate_newspaper.side_effect = [
             (issue, metadata),
-            AntigravityCLIError(
-                "visual item details must contain 5 to 7 complete words"
-            ),
-            AntigravityCLIError(
-                "visual item details must contain 5 to 7 complete words"
-            ),
+            AntigravityCLIError("visual item details must contain 5 to 7 complete words"),
+            AntigravityCLIError("visual item details must contain 5 to 7 complete words"),
         ]
         editorial.verify_newspaper.return_value = (rejected, metadata)
         pipeline = SimpleNamespace(
             editorial=editorial,
-            settings=SimpleNamespace(
-                podcast=SimpleNamespace(max_script_repairs=2)
-            ),
+            settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=2)),
         )
 
         result, result_metadata = Pipeline._generate_verified_newspaper(
@@ -444,6 +430,135 @@ class NewspaperRepairTests(TestCase):
             ["newspaper", "newspaper-review"],
             [item["stage"] for item in result_metadata],
         )
+
+    def test_factual_and_unclassified_rejections_block_after_configured_repairs(self):
+        issue = NewspaperIssue(
+            headline="Synthetic test",
+            deck="Test",
+            lead="Test",
+            articles=[],
+            data_points=[],
+            sources=[],
+        )
+        for factual in (False, None):
+            editorial = Mock()
+            editorial.generate_newspaper.return_value = (issue, AntigravityMetadata())
+            editorial.verify_newspaper.return_value = (
+                VerificationResult(False, ["Unsupported amount."], factual),
+                AntigravityMetadata(),
+            )
+            pipeline = SimpleNamespace(
+                editorial=editorial,
+                settings=SimpleNamespace(podcast=SimpleNamespace(max_script_repairs=1)),
+            )
+            with self.assertRaises(VerificationError):
+                Pipeline._generate_verified_newspaper(pipeline, [], date(2026, 8, 10))
+            self.assertEqual(2, editorial.generate_newspaper.call_count)
+
+
+class OptionalNewspaperTests(TestCase):
+    def test_failed_paper_does_not_publish_rejected_copy(self):
+        pipeline = SimpleNamespace(
+            _generate_verified_newspaper=Mock(side_effect=VerificationError("Unsupported fact")),
+        )
+        with patch("audiodigest.pipeline.NewspaperRenderer") as renderer:
+            issue, metadata, previews = Pipeline._prepare_newspaper_artifact(
+                pipeline, [], date(2026, 8, 10), Path("unused"), Path("unused")
+            )
+        self.assertIsNone(issue)
+        self.assertEqual([], previews)
+        self.assertEqual("newspaper-failed", metadata[0]["stage"])
+        self.assertNotIn("Unsupported fact", json.dumps(metadata))
+        renderer.assert_not_called()
+
+    def test_payment_guard_cannot_be_downgraded_to_optional_paper_failure(self):
+        pipeline = SimpleNamespace(
+            _generate_verified_newspaper=Mock(side_effect=AntigravityPaymentRiskError("guard")),
+        )
+        with self.assertRaises(AntigravityPaymentRiskError):
+            Pipeline._prepare_newspaper_artifact(
+                pipeline, [], date(2026, 8, 10), Path("unused"), Path("unused")
+            )
+
+    def test_unsafe_settings_cannot_be_downgraded_to_optional_paper_failure(self):
+        pipeline = SimpleNamespace(
+            _generate_verified_newspaper=Mock(side_effect=AntigravityConfigurationError("guard")),
+        )
+        with self.assertRaises(AntigravityConfigurationError):
+            Pipeline._prepare_newspaper_artifact(
+                pipeline, [], date(2026, 8, 10), Path("unused"), Path("unused")
+            )
+
+    def test_verified_podcast_can_publish_without_a_paper_end_to_end(self):
+        sources = fixture_sources(Path("tests/fixtures/newsletters.json"))
+        story = Story.from_dict(
+            {
+                "story_id": "test-story",
+                "section": "AI",
+                "headline": "Synthetic test",
+                "facts": ["Synthetic evidence"],
+                "why_it_matters": "Test evidence",
+                "source_ids": [sources[0].message_id],
+                "source_urls": [],
+                "confidence": 1,
+                "rank_score": 1,
+            }
+        )
+        script = EpisodeScript.from_dict(
+            {
+                "title": "The Daily Nexus",
+                "hosts": ["Nox"],
+                "introduction": "Introduction",
+                "sections": [
+                    {"name": "AI", "narration": "Synthetic evidence", "story_ids": ["test-story"]}
+                ],
+                "conclusion": "Conclusion",
+                "sign_off": "Quotation",
+                "show_notes": [],
+            }
+        )
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = load_settings("config.example.toml")
+            settings.app.runtime_dir = Path(name)
+            settings.firebase.publish_enabled = True
+            settings.firebase.publish_mode = "automatic"
+            pipeline = Pipeline(settings)
+            pipeline._load_sources = Mock(return_value=sources)
+            pipeline._enrich_articles = Mock()
+            pipeline.editorial = Mock()
+            pipeline.editorial.extract_stories.return_value = ([story], AntigravityMetadata())
+            pipeline.editorial.generate_script.return_value = (script, AntigravityMetadata())
+            pipeline.editorial.verify.return_value = (
+                VerificationResult(True, []),
+                AntigravityMetadata(),
+            )
+            pipeline._generate_verified_newspaper = Mock(side_effect=VerificationError("Rejected"))
+
+            def render(_script, output):
+                output.write_bytes(b"audio" * 300)
+                return AudioResult(output, 1200)
+
+            with (
+                patch("audiodigest.pipeline.run_cost_guard"),
+                patch("audiodigest.pipeline.KokoroAudioRenderer") as renderer,
+                patch("audiodigest.pipeline.FirebasePublisher") as publisher,
+            ):
+                renderer.return_value.render.side_effect = render
+                publisher.return_value.publish.return_value = PublishResult(
+                    "https://example.com/feed", 1, 1500
+                )
+                result = pipeline.run(requested_date=date(2026, 8, 10))
+            self.assertEqual("published", result["status"])
+            self.assertEqual("failed", result["newspaper_status"])
+            self.assertEqual("", result["newspaper_path"])
+            self.assertTrue(Path(result["audio_path"]).is_file())
+            manifest = json.loads(Path(result["manifest_path"]).read_text(encoding="utf-8"))
+            self.assertIsNone(manifest["newspaper"])
+            self.assertEqual([], manifest["newspaper_preview_paths"])
+            self.assertIsNone(
+                pipeline.database.episode_for_date(date(2026, 8, 10))["newspaper_path"]
+            )
+            publisher.return_value.publish.assert_called_once()
 
 
 class EpisodePromotionTests(TestCase):
@@ -473,9 +588,7 @@ class EpisodePromotionTests(TestCase):
                 message="Script available; rendering audio.",
             )
 
-            payload = json.loads(
-                (progress / "status.json").read_text(encoding="utf-8")
-            )
+            payload = json.loads((progress / "status.json").read_text(encoding="utf-8"))
             self.assertEqual("2026-07-20", payload["episode_date"])
             self.assertEqual("in-progress", payload["status"])
             self.assertEqual(7, payload["stage"])

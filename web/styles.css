@@ -1248,6 +1248,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   *,
   *::before,
   *::after {
+    animation: none !important;
     scroll-behavior: auto !important;
     transition: none !important;
   }
@@ -1256,3 +1257,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     display: none;
   }
 }
+
+/* A fine visual track with a usable, invisible touch area. */
+.mini-player-copy #mini-player-progress {
+  min-height: 1.75rem !important;
+  height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  background: transparent;
+  border: none;
+}
+
+.mini-player-copy #mini-player-progress::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, var(--amber) 0 var(--progress), var(--black) var(--progress) 100%);
+  border: 1px solid var(--line);
+}
+.mini-player-copy #mini-player-progress::-moz-range-track {
+  background: linear-gradient(90deg, var(--amber) 0 var(--progress), var(--black) var(--progress) 100%);
+  border: 1px solid var(--line);
+}
+
+.player-details { font-size: 0.875rem; }

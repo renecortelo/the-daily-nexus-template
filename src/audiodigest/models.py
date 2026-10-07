@@ -498,18 +498,14 @@ class NewspaperIssue:
             or len(raw_executive_summary) > 4
             or any(not isinstance(item, dict) for item in raw_executive_summary)
         ):
-            raise DataValidationError(
-                "newspaper executive_summary must contain up to 4 objects"
-            )
+            raise DataValidationError("newspaper executive_summary must contain up to 4 objects")
         raw_briefs = data.get("briefs", [])
         if (
             not isinstance(raw_briefs, list)
             or len(raw_briefs) > 8
             or any(not isinstance(item, (str, dict)) for item in raw_briefs)
         ):
-            raise DataValidationError(
-                "newspaper briefs must contain up to 8 strings or objects"
-            )
+            raise DataValidationError("newspaper briefs must contain up to 8 strings or objects")
         issue = cls(
             headline=_required_str(data, "headline"),
             deck=_required_str(data, "deck"),
@@ -549,19 +545,13 @@ class NewspaperIssue:
                 self.kicker,
                 self.pull_quote,
                 *(brief.text for brief in self.briefs),
-                *(
-                    f"{item.value} {item.label} {item.detail}"
-                    for item in self.executive_summary
-                ),
+                *(f"{item.value} {item.label} {item.detail}" for item in self.executive_summary),
                 *(
                     " ".join(
                         [
                             visual.title,
                             visual.caption,
-                            *(
-                                f"{item.value} {item.label} {item.detail}"
-                                for item in visual.items
-                            ),
+                            *(f"{item.value} {item.label} {item.detail}" for item in visual.items),
                         ]
                     )
                     for visual in self.visuals
@@ -581,9 +571,7 @@ class NewspaperIssue:
             "kicker": self.kicker,
             "pull_quote": self.pull_quote,
             "briefs": [brief.to_dict() for brief in self.briefs],
-            "executive_summary": [
-                item.to_dict() for item in self.executive_summary
-            ],
+            "executive_summary": [item.to_dict() for item in self.executive_summary],
             "visuals": [visual.to_dict() for visual in self.visuals],
             "word_count": self.word_count,
         }
@@ -593,6 +581,14 @@ class NewspaperIssue:
 class VerificationResult:
     approved: bool
     issues: list[str]
+    factual_approved: bool | None = None
+
+    @property
+    def factually_safe(self) -> bool:
+        # Legacy rejections are unclassified: never assume they are cosmetic.
+        return self.factual_approved is True or (
+            self.approved and self.factual_approved is not False
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> VerificationResult:
@@ -602,7 +598,12 @@ class VerificationResult:
         issues = _string_list(data, "issues")
         if not approved and not issues:
             raise DataValidationError("a rejected script must contain at least one issue")
-        return cls(approved=approved, issues=issues)
+        factual = data.get("factual_approved")
+        if factual is not None and not isinstance(factual, bool):
+            raise DataValidationError("factual_approved must be a boolean")
+        if approved and factual is False:
+            raise DataValidationError("an approved edition cannot fail factual verification")
+        return cls(approved=approved, issues=issues, factual_approved=factual)
 
 
 @dataclass(slots=True)

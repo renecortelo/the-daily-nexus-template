@@ -4,13 +4,19 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import uuid
 from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from audiodigest.antigravity_client import AntigravityCLI, AntigravityCLIError
+from audiodigest.antigravity_client import (
+    AntigravityCLI,
+    AntigravityCLIError,
+    AntigravityConfigurationError,
+    AntigravityPaymentRiskError,
+)
 from audiodigest.audio import AudioResult, KokoroAudioRenderer
 from audiodigest.closing_quotes import (
     load_closing_quotes,
@@ -28,6 +34,7 @@ from audiodigest.editorial import (
     EditorialPipeline,
     newspaper_prose_word_count,
 )
+from audiodigest.execution_budget import RunBudgetExceeded, check_budget, reserve_time
 from audiodigest.gmail_client import GmailClient, fixture_sources
 from audiodigest.models import (
     DataValidationError,
@@ -38,6 +45,7 @@ from audiodigest.models import (
 )
 from audiodigest.newspaper import (
     NewspaperRenderer,
+    NewspaperRenderError,
     is_legacy_script_style_issue,
 )
 from audiodigest.progress import counts, stage, timed_operation
@@ -159,12 +167,15 @@ def _published_episode_title(
     canonical_show_title = " ".join(show_title.split()) or "The Daily Nexus"
     # Editorial drafts still carry a spoken date in their working title. The
     # published name owns the date prefix, so remove only that known suffix.
-    canonical_show_title = re.sub(
-        r"\s+-\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}$",
-        "",
-        canonical_show_title,
-        flags=re.IGNORECASE,
-    ) or "The Daily Nexus"
+    canonical_show_title = (
+        re.sub(
+            r"\s+-\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}$",
+            "",
+            canonical_show_title,
+            flags=re.IGNORECASE,
+        )
+        or "The Daily Nexus"
+    )
     label = (run_name or "").strip()
     if label.casefold() in {"", "daily nexus", "the daily nexus"}:
         label = "Run"
@@ -271,9 +282,7 @@ class Pipeline:
             if (
                 self.settings.research.enabled
                 and self.settings.podcast.include_today_in_history
-                and getattr(
-                    self.settings.podcast, "evidence_mode", "newsletter_first"
-                )
+                and getattr(self.settings.podcast, "evidence_mode", "newsletter_first")
                 != "newsletter_only"
             ):
                 try:
@@ -284,18 +293,14 @@ class Pipeline:
                     print(f"Warning: daily research was skipped: {exc}")
         if not self.settings.podcast.include_today_in_history:
             sources = [
-                item
-                for item in sources
-                if item.source_type not in {"history", "current_world"}
+                item for item in sources if item.source_type not in {"history", "current_world"}
             ]
         if getattr(self.settings.podcast, "evidence_mode", "newsletter_first") == "newsletter_only":
             sources = [item for item in sources if item.source_type == "newsletter"]
         return sources
 
     def _enrich_articles(self, sources: list[SourceItem], *, fetch_articles: bool) -> None:
-        evidence_mode = getattr(
-            self.settings.podcast, "evidence_mode", "newsletter_first"
-        )
+        evidence_mode = getattr(self.settings.podcast, "evidence_mode", "newsletter_first")
         if not fetch_articles or evidence_mode == "newsletter_only":
             if evidence_mode == "newsletter_only":
                 print("Article enrichment: disabled by newsletter-only evidence mode.")
@@ -379,7 +384,8 @@ class Pipeline:
         # A generated edition can expose more than one independent display
         # defect. Retry a small, bounded sequence of known structural repairs
         # rather than failing a complete podcast after the first correction.
-        for structural_attempt in range(3):
+        structural_limit = int(getattr(self.settings.podcast, "max_script_repairs", 2))
+        for structural_attempt in range(structural_limit + 1):
             try:
                 newspaper, newspaper_meta = self.editorial.generate_newspaper(
                     stories,
@@ -397,7 +403,7 @@ class Pipeline:
                     ),
                     None,
                 )
-                if matched is None or structural_attempt == 2:
+                if matched is None or structural_attempt == structural_limit:
                     raise
                 message, repair_issues = matched
                 print(message, flush=True)
@@ -406,12 +412,10 @@ class Pipeline:
         metadata.append({"stage": "newspaper", **newspaper_meta.to_dict()})
         if (
             newspaper.word_count > NEWSPAPER_TARGET_TOTAL_WORDS
-            or newspaper_prose_word_count(newspaper)
-            > NEWSPAPER_TARGET_PROSE_WORDS
+            or newspaper_prose_word_count(newspaper) > NEWSPAPER_TARGET_PROSE_WORDS
         ):
             print(
-                "Independent newspaper draft is being compressed for the "
-                "two-page layout.",
+                "Independent newspaper draft is being compressed for the two-page layout.",
                 flush=True,
             )
             newspaper, compact_meta = self.editorial.generate_newspaper(
@@ -426,13 +430,10 @@ class Pipeline:
                 ],
                 previous_issue=newspaper,
             )
-            metadata.append(
-                {"stage": "newspaper-compact", **compact_meta.to_dict()}
-            )
+            metadata.append({"stage": "newspaper-compact", **compact_meta.to_dict()})
             if (
                 newspaper.word_count > NEWSPAPER_TARGET_TOTAL_WORDS
-                or newspaper_prose_word_count(newspaper)
-                > NEWSPAPER_TARGET_PROSE_WORDS
+                or newspaper_prose_word_count(newspaper) > NEWSPAPER_TARGET_PROSE_WORDS
             ):
                 print(
                     "Newspaper remains above the two-page target but within the "
@@ -449,10 +450,7 @@ class Pipeline:
             return newspaper, metadata
 
         repair_attempt = 0
-        repair_limit = max(
-            2,
-            int(getattr(self.settings.podcast, "max_script_repairs", 2)),
-        )
+        repair_limit = int(getattr(self.settings.podcast, "max_script_repairs", 2))
         while not review.approved and repair_attempt < repair_limit:
             repair_attempt += 1
             print(
@@ -479,7 +477,7 @@ class Pipeline:
                     "timeout waiting for response" in str(exc).lower()
                     or "visual item details" in str(exc).lower()
                 )
-                if recoverable_rewrite_failure:
+                if recoverable_rewrite_failure and review.factually_safe:
                     # The existing edition has already passed the structural
                     # generator validation. A transient CLI timeout or an
                     # optional visual-copy rewrite failure must not discard a
@@ -511,11 +509,59 @@ class Pipeline:
                 }
             )
         if not review.approved:
+            if not review.factually_safe:
+                raise VerificationError(
+                    "Newspaper has unresolved factual or unclassified verification issues."
+                )
             print(
-                "Warning: newspaper quality review: " + "; ".join(review.issues),
+                "Warning: factually approved newspaper retains editorial warnings.",
                 flush=True,
             )
         return newspaper, metadata
+
+    def _prepare_newspaper_artifact(
+        self, stories, day, working_dir, in_progress_dir, *, edition_name=""
+    ):
+        """An optional paper cannot invalidate an already verified audio script."""
+        try:
+            with reserve_time(15 * 60):
+                newspaper, metadata = self._generate_verified_newspaper(stories, day)
+            json_path = working_dir / "newspaper.json"
+            json_path.write_text(
+                json.dumps(newspaper.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            with timed_operation("paper_render"):
+                result = NewspaperRenderer(self.settings).render(
+                    newspaper,
+                    day,
+                    working_dir / "edition.pdf",
+                    working_dir / "edition-1.png",
+                    edition_name=edition_name,
+                )
+            previews = list(result.preview_paths)
+            progress_files = [
+                (json_path, in_progress_dir / "newspaper.json"),
+                (result.pdf_path, in_progress_dir / "edition.pdf"),
+            ]
+            progress_files.extend((path, in_progress_dir / path.name) for path in previews)
+            _promote_episode_files(progress_files)
+            return newspaper, metadata, previews
+        except (AntigravityPaymentRiskError, AntigravityConfigurationError):
+            raise  # Cost/security guards remain fatal, not an optional-paper fallback.
+        except (
+            VerificationError,
+            AntigravityCLIError,
+            NewspaperRenderError,
+            DataValidationError,
+            subprocess.TimeoutExpired,
+            RunBudgetExceeded,
+        ) as exc:
+            check_budget()  # A globally exhausted deadline still stops the whole task.
+            print(
+                "Newspaper unavailable; continuing with the independently verified podcast.",
+                flush=True,
+            )
+            return None, [{"stage": "newspaper-failed", "error_type": type(exc).__name__}], []
 
     def _write_manifest(
         self,
@@ -526,8 +572,8 @@ class Pipeline:
         source_mix: dict[str, int | str],
         stories,
         script: EpisodeScript,
-        newspaper: NewspaperIssue,
-        newspaper_path: Path,
+        newspaper: NewspaperIssue | None,
+        newspaper_path: Path | None,
         preview_paths: list[Path],
         transcript_path: Path,
         antigravity_metadata: list[dict[str, Any]],
@@ -544,9 +590,10 @@ class Pipeline:
             "source_mix": source_mix,
             "stories": [item.to_dict() for item in stories],
             "script": script.to_dict(),
-            "newspaper": newspaper.to_dict(),
-            "newspaper_path": str(newspaper_path),
-            "newspaper_preview_path": str(preview_paths[0]),
+            "newspaper": newspaper.to_dict() if newspaper else None,
+            "newspaper_status": "ready" if newspaper else "failed",
+            "newspaper_path": str(newspaper_path) if newspaper_path else "",
+            "newspaper_preview_path": str(preview_paths[0]) if preview_paths else "",
             "newspaper_preview_paths": [str(path) for path in preview_paths],
             "transcript_path": str(transcript_path),
             "antigravity_calls": antigravity_metadata,
@@ -595,9 +642,7 @@ class Pipeline:
         staging.mkdir(parents=True)
         source_payload_path = staging / "sources.json"
         try:
-            evidence_mode = getattr(
-                self.settings.podcast, "evidence_mode", "newsletter_first"
-            )
+            evidence_mode = getattr(self.settings.podcast, "evidence_mode", "newsletter_first")
             research_label = (
                 " and daily research"
                 if (
@@ -611,18 +656,14 @@ class Pipeline:
             if not sources:
                 raise NoContentError(f"No eligible newsletter or research sources found for {day}")
             _stage(2, 8, "Retrieving safe public article text")
-            newsletter_count = sum(
-                source.source_type == "newsletter" for source in sources
-            )
+            newsletter_count = sum(source.source_type == "newsletter" for source in sources)
             if not newsletter_count:
                 raise NoContentError(
                     "No eligible newsletter messages were found; independent research "
                     "will not replace the selected Gmail label."
                 )
             newsletter_links = sum(
-                len(source.article_urls)
-                for source in sources
-                if source.source_type == "newsletter"
+                len(source.article_urls) for source in sources if source.source_type == "newsletter"
             )
             counts(newsletters=newsletter_count, links=newsletter_links)
             print(
@@ -681,7 +722,8 @@ class Pipeline:
                     )
                 history = quote_ids_from_episodes(quote_catalog, local_episodes)
             closing_quote = select_closing_quote(
-                quote_catalog, day,
+                quote_catalog,
+                day,
                 stories=[story.to_dict() for story in stories],
                 recent_ids=history,
                 execution_key=guid,
@@ -701,11 +743,8 @@ class Pipeline:
             ]
             repair_issues: list[str] = []
             repair_attempt = 0
-            repair_limit = max(3, self.settings.podcast.max_script_repairs)
-            while (
-                not verification.approved
-                and repair_attempt < repair_limit
-            ):
+            repair_limit = self.settings.podcast.max_script_repairs
+            while not verification.approved and repair_attempt < repair_limit:
                 repair_attempt += 1
                 repair_issues.extend(
                     issue for issue in verification.issues if issue not in repair_issues
@@ -713,10 +752,7 @@ class Pipeline:
                 _stage(
                     5,
                     8,
-                    (
-                        "Repairing verifier issues "
-                        f"({repair_attempt}/{repair_limit})"
-                    ),
+                    (f"Repairing verifier issues ({repair_attempt}/{repair_limit})"),
                 )
                 script, repair_meta = self.editorial.generate_script(
                     stories,
@@ -756,9 +792,7 @@ class Pipeline:
             script_work_path.write_text(
                 json.dumps(script.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            _promote_episode_files(
-                [(script_work_path, in_progress_dir / "script.json")]
-            )
+            _promote_episode_files([(script_work_path, in_progress_dir / "script.json")])
             _write_progress_status(
                 in_progress_dir,
                 day=day,
@@ -774,62 +808,20 @@ class Pipeline:
                 8,
                 "Writing the newspaper edition (two-page target; three-page maximum)",
             )
-            try:
-                newspaper, newspaper_metadata = self._generate_verified_newspaper(
-                    stories,
-                    day,
-                )
-            except Exception as exc:
-                raise VerificationError(
-                    "Independent newspaper generation failed. The audio script "
-                    "was not reused for Read mode: "
-                    f"{exc}"
-                ) from exc
+            newspaper, newspaper_metadata, preview_work_paths = self._prepare_newspaper_artifact(
+                stories,
+                day,
+                working_episode_dir,
+                in_progress_dir,
+                edition_name=run_name if execution_id else "",
+            )
             metadata.extend(newspaper_metadata)
             newspaper_json_work_path = working_episode_dir / "newspaper.json"
-            newspaper_json_work_path.write_text(
-                json.dumps(
-                    newspaper.to_dict(),
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-            _promote_episode_files(
-                [
-                    (
-                        newspaper_json_work_path,
-                        in_progress_dir / "newspaper.json",
-                    )
-                ]
-            )
             newspaper_work_path = working_episode_dir / "edition.pdf"
-            preview_work_path = working_episode_dir / "edition-1.png"
-            with timed_operation("paper_render"):
-                newspaper_result = NewspaperRenderer(self.settings).render(
-                    newspaper,
-                    day,
-                    newspaper_work_path,
-                    preview_work_path,
-                    edition_name=run_name if execution_id else "",
-                )
-            preview_work_paths = list(newspaper_result.preview_paths)
             in_progress_preview_paths = [
                 in_progress_dir / f"edition-{index}.png"
                 for index in range(1, len(preview_work_paths) + 1)
             ]
-            _promote_episode_files(
-                [
-                    (script_work_path, in_progress_dir / "script.json"),
-                    (newspaper_json_work_path, in_progress_dir / "newspaper.json"),
-                    (newspaper_work_path, in_progress_dir / "edition.pdf"),
-                    *zip(
-                        preview_work_paths,
-                        in_progress_preview_paths,
-                        strict=True,
-                    ),
-                ]
-            )
             _remove_stale_preview_files(
                 in_progress_dir,
                 in_progress_preview_paths,
@@ -838,39 +830,50 @@ class Pipeline:
                 in_progress_dir,
                 day=day,
                 stage=7,
-                message="Script and newspaper available; rendering local audio.",
+                message="Verified script available; rendering audio. Newspaper "
+                + ("ready." if newspaper else "failed."),
             )
 
             script_path = episode_dir / "script.json"
             newspaper_json_path = episode_dir / "newspaper.json"
-            newspaper_path = episode_dir / "edition.pdf"
+            newspaper_path = episode_dir / "edition.pdf" if newspaper else None
             preview_paths = [
                 episode_dir / f"edition-{index}.png"
                 for index in range(1, len(preview_work_paths) + 1)
             ]
-            preview_path = preview_paths[0]
+            preview_path = preview_paths[0] if preview_paths else None
+            paper_files = (
+                [
+                    (newspaper_json_work_path, newspaper_json_path),
+                    (newspaper_work_path, newspaper_path),
+                    *zip(preview_work_paths, preview_paths, strict=True),
+                ]
+                if newspaper
+                else []
+            )
             if skip_audio:
                 _promote_episode_files(
                     [
                         (script_work_path, script_path),
-                        (newspaper_json_work_path, newspaper_json_path),
-                        (newspaper_work_path, newspaper_path),
-                        *zip(preview_work_paths, preview_paths, strict=True),
+                        *paper_files,
                     ]
                 )
                 _remove_stale_preview_files(episode_dir, preview_paths)
                 self.database.finish_run(
                     day,
                     "dry-run",
-                    "script and newspaper generated; audio skipped",
+                    "verified script generated; newspaper "
+                    + ("ready" if newspaper else "failed")
+                    + "; audio skipped",
                 )
                 shutil.rmtree(in_progress_dir, ignore_errors=True)
                 return {
                     "status": "dry-run",
                     "episode_date": day.isoformat(),
                     "script_path": str(script_path),
-                    "newspaper_path": str(newspaper_path),
-                    "preview_path": str(preview_path),
+                    "newspaper_path": str(newspaper_path) if newspaper_path else "",
+                    "newspaper_status": "ready" if newspaper else "failed",
+                    "preview_path": str(preview_path) if preview_path else "",
                     "preview_paths": [str(path) for path in preview_paths],
                     "word_count": script.word_count,
                 }
@@ -888,8 +891,7 @@ class Pipeline:
                     {
                         "episode_date": day.isoformat(),
                         "segments": [
-                            segment.to_dict()
-                            for segment in audio_result.transcript_segments
+                            segment.to_dict() for segment in audio_result.transcript_segments
                         ],
                     },
                     ensure_ascii=False,
@@ -936,9 +938,7 @@ class Pipeline:
             _promote_episode_files(
                 [
                     (script_work_path, script_path),
-                    (newspaper_json_work_path, newspaper_json_path),
-                    (newspaper_work_path, newspaper_path),
-                    *zip(preview_work_paths, preview_paths, strict=True),
+                    *paper_files,
                     (audio_work_path, audio_path),
                     (transcript_work_path, transcript_path),
                     (manifest_work_path, manifest_path),
@@ -984,30 +984,26 @@ class Pipeline:
                 backup.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(audio_path, backup / audio_path.name)
                 shutil.copy2(manifest_path, backup / manifest_path.name)
-                shutil.copy2(newspaper_path, backup / newspaper_path.name)
+                if newspaper_path:
+                    shutil.copy2(newspaper_path, backup / newspaper_path.name)
 
             return {
                 "status": status,
                 "episode_date": day.isoformat(),
                 "audio_path": str(audio_path),
                 "manifest_path": str(manifest_path),
-                "newspaper_path": str(newspaper_path),
-                "preview_path": str(preview_path),
+                "newspaper_path": str(newspaper_path) if newspaper_path else "",
+                "newspaper_status": "ready" if newspaper else "failed",
+                "preview_path": str(preview_path) if preview_path else "",
                 "preview_paths": [str(path) for path in preview_paths],
                 "word_count": script.word_count,
                 "duration_seconds": audio_result.duration_seconds,
                 "feed_url": publish_result.feed_url if publish_result else "",
-                "feed_episode_count": (
-                    publish_result.episode_count if publish_result else 0
-                ),
+                "feed_episode_count": (publish_result.episode_count if publish_result else 0),
                 "hosted_megabytes": (
-                    round(publish_result.hosted_bytes / (1024 * 1024), 2)
-                    if publish_result
-                    else 0
+                    round(publish_result.hosted_bytes / (1024 * 1024), 2) if publish_result else 0
                 ),
-                "remote_verified": (
-                    publish_result.remote_verified if publish_result else False
-                ),
+                "remote_verified": (publish_result.remote_verified if publish_result else False),
             }
         except Exception as exc:
             self.database.finish_run(day, "failed", str(exc))
@@ -1163,10 +1159,7 @@ class Pipeline:
             episode_date,
         )
 
-        working_dir = (
-            self.settings.staging_dir
-            / f"{episode_date.isoformat()}-newspaper-rebuild"
-        )
+        working_dir = self.settings.staging_dir / f"{episode_date.isoformat()}-newspaper-rebuild"
         if working_dir.exists():
             shutil.rmtree(working_dir)
         working_dir.mkdir(parents=True)
@@ -1205,11 +1198,10 @@ class Pipeline:
             ]
             updated_manifest = dict(manifest)
             updated_manifest["newspaper"] = newspaper.to_dict()
+            updated_manifest["newspaper_status"] = "ready"
             updated_manifest["newspaper_path"] = str(newspaper_path)
             updated_manifest["newspaper_preview_path"] = str(preview_path)
-            updated_manifest["newspaper_preview_paths"] = [
-                str(path) for path in preview_paths
-            ]
+            updated_manifest["newspaper_preview_paths"] = [str(path) for path in preview_paths]
             updated_manifest.setdefault("antigravity_calls", []).extend(
                 {
                     **item,
