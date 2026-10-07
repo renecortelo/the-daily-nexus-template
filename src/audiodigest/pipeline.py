@@ -34,6 +34,7 @@ from audiodigest.editorial import (
     EditorialPipeline,
     newspaper_prose_word_count,
 )
+from audiodigest.episode_budget import plan_episode
 from audiodigest.execution_budget import RunBudgetExceeded, check_budget, reserve_time
 from audiodigest.gmail_client import GmailClient, fixture_sources
 from audiodigest.models import (
@@ -582,12 +583,14 @@ class Pipeline:
         guid: str,
         edition_name: str = "",
         closing_quote_id: str = "",
+        episode_budget: dict[str, Any] | None = None,
     ) -> None:
         manifest = {
             "episode_date": day.isoformat(),
             "guid": guid,
             "source_message_ids": source_ids,
             "source_mix": source_mix,
+            "episode_budget": episode_budget or {},
             "stories": [item.to_dict() for item in stories],
             "script": script.to_dict(),
             "newspaper": newspaper.to_dict() if newspaper else None,
@@ -710,6 +713,24 @@ class Pipeline:
                 "will lead the editorial.",
                 flush=True,
             )
+            episode_budget = plan_episode(
+                stories,
+                self.settings.app,
+                [source.message_id for source in sources if source.source_type == "newsletter"],
+            )
+            counts(
+                selected_stories=episode_budget.selected_news_stories,
+                unique_facts=episode_budget.unique_facts,
+            )
+            print(
+                f"Episode budget: {episode_budget.newsletter_count} newsletters; "
+                f"{episode_budget.selected_news_stories}/{episode_budget.available_stories} "
+                f"news stories across {episode_budget.represented_newsletters} newsletters; "
+                f"{episode_budget.unique_facts} distinct facts. Up to "
+                f"about {episode_budget.estimated_max_minutes:g} minutes; "
+                "no minimum; complete audio must remain within 30 minutes.",
+                flush=True,
+            )
             quote_catalog = load_closing_quotes(self.settings.podcast.closing_quotes_path)
             history = recent_quote_ids
             if history is None:
@@ -733,9 +754,13 @@ class Pipeline:
             if selected_id != closing_quote.quote_id:
                 closing_quote = select_closing_quote(quote_catalog, day, reserved_id=selected_id)
             _stage(4, 8, "Drafting the host script")
-            script, script_meta = self.editorial.generate_script(stories, day, closing_quote)
+            script, script_meta = self.editorial.generate_script(
+                stories, day, closing_quote, episode_budget=episode_budget
+            )
             _stage(5, 8, "Fact-checking the script")
-            verification, verify_meta = self.editorial.verify(stories, script, closing_quote)
+            verification, verify_meta = self.editorial.verify(
+                stories, script, closing_quote, episode_budget=episode_budget
+            )
             metadata = [
                 {"stage": "extract", **extract_meta.to_dict()},
                 {"stage": "script", **script_meta.to_dict()},
@@ -760,9 +785,10 @@ class Pipeline:
                     closing_quote,
                     repair_issues=repair_issues,
                     previous_script=script,
+                    episode_budget=episode_budget,
                 )
                 verification, final_verify_meta = self.editorial.verify(
-                    stories, script, closing_quote
+                    stories, script, closing_quote, episode_budget=episode_budget
                 )
                 metadata.extend(
                     [
@@ -778,6 +804,7 @@ class Pipeline:
                 )
             if not verification.approved:
                 raise VerificationError("; ".join(verification.issues))
+            counts(word_count=script.word_count)
             if execution_id:
                 script.title = _published_episode_title(
                     self.settings.podcast.title,
@@ -934,6 +961,7 @@ class Pipeline:
                 guid=guid,
                 edition_name=run_name if execution_id else "",
                 closing_quote_id=closing_quote.quote_id,
+                episode_budget=episode_budget.to_dict(),
             )
             _promote_episode_files(
                 [

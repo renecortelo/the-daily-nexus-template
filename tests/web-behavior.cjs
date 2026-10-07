@@ -13,7 +13,7 @@ function extract(name) {
 function harness(names) {
   const nodes = new Map(), images = [];
   function node() {
-    return { children: [], textContent: '', className: '', hidden: false,
+    return { children: [], options: [], textContent: '', className: '', hidden: false,
       classList: {toggle(){}, remove(){}}, parentElement: {classList: {remove(){}}},
       style: {setProperty(){}}, setAttribute(){}, removeAttribute(name){delete this[name];},
       replaceChildren(){this.children=[]; this.textContent='';}, append(child){this.children.push(child);},
@@ -27,6 +27,7 @@ function harness(names) {
     document: {querySelectorAll(){return []; }},
     element(){const image=node(); images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
+    clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     window: {clearTimeout(){}, matchMedia(){return {matches:false};}},
     showAlert(){}, firebaseErrorMessage(){return 'safe error';},
   };
@@ -84,4 +85,70 @@ test('active listening extends inactivity but never the absolute session limit',
   assert.equal(context.appState.idleAt,200000);
   context.Date.now=()=>200001;
   await context.checkIdleTimer(); assert.equal(signouts,1);
+});
+
+test('resume bookmarks contain only IDs and positions and disappear at logout', () => {
+  const {context}=harness(['playbackSessionKey','playbackBookmarks','savePlaybackPosition','clearPlaybackSession']);
+  const storage=new Map(); const actions=new Map();
+  Object.assign(context,{sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
+    navigator:{mediaSession:{setActionHandler:(key,value)=>actions.set(key,value),setPositionState(){}}}});
+  context.appState.activeEpisode={id:'synthetic-episode',title:'Private title',audioURL:'https://example.com/private.mp3'};
+  context.appState.positionRestored=true;
+  Object.assign(context.byId('episode-audio'),{duration:100,currentTime:25,paused:true,ended:false});
+  context.savePlaybackPosition(true);
+  const entries=JSON.parse(storage.values().next().value);
+  assert.deepEqual(entries,[{id:'synthetic-episode',seconds:25}]);
+  context.appState.positionRestored=false; context.appState.playbackStopped=true;
+  context.savePlaybackPosition(true); assert.deepEqual(JSON.parse(storage.values().next().value),[]);
+  context.clearPlaybackSession(); assert.equal(storage.size,0);
+  assert.equal(context.navigator.mediaSession.metadata,null);
+  assert.equal([...actions.values()].every(value=>value===null),true);
+});
+
+test('resume rejects stale media events and out-of-range positions', () => {
+  const {context}=harness(['restorePlaybackPosition']);
+  context.playbackBookmarks=()=>[{id:'selected',seconds:25}];
+  context.appState.activeEpisode={id:'selected'};
+  const audio=context.byId('episode-audio');
+  Object.assign(audio,{duration:100,currentTime:0,src:'new',currentSrc:'old'});
+  context.restorePlaybackPosition(); assert.equal(audio.currentTime,0);
+  audio.currentSrc='new'; context.restorePlaybackPosition(); assert.equal(audio.currentTime,25);
+  context.appState.positionRestored=false; audio.duration=20; audio.currentTime=0;
+  context.restorePlaybackPosition(); assert.equal(audio.currentTime,0);
+});
+
+test('Media Session is feature-detected and never leaks private URLs', () => {
+  const {context}=harness(['updateMediaMetadata','syncMediaSession']);
+  context.appState.activeEpisode={id:'A',title:'Synthetic title',audioURL:'https://example.com/private.mp3'};
+  context.updateMediaMetadata(); context.syncMediaSession(); // Unsupported browser.
+  const handlers=new Map();
+  context.navigator={mediaSession:{setActionHandler:(action,handler)=>handlers.set(action,handler),setPositionState(){throw Error('Unsupported');}}};
+  context.MediaMetadata=function(data){Object.assign(this,data);};
+  let invoked=0; context.appState.mediaActions={play(){invoked++;}};
+  context.updateMediaMetadata();
+  assert.equal(JSON.stringify(context.navigator.mediaSession.metadata).includes('https:'),false);
+  handlers.get('play')({}); assert.equal(invoked,1);
+  context.appState.authorized=false; handlers.get('play')({}); assert.equal(invoked,1);
+});
+
+test('chapters use explicit heading flags, not guessed prose', () => {
+  const {context}=harness(['renderPlayerChapters']);
+  context.appState.activeEpisode={transcript:[{text:'AI',startMs:5000,isHeading:true},{text:'Ordinary prose',startMs:9000}]};
+  context.renderPlayerChapters();
+  const chapters=context.byId('player-chapters');
+  assert.equal(chapters.children.length,2); assert.equal(chapters.children[1].value,'5');
+  context.appState.activeEpisode={transcript:[{text:'Legacy',startMs:5000}]};
+  context.renderPlayerChapters(); assert.equal(chapters.parentElement.hidden,true);
+});
+
+test('time estimates use observed completed runs and never failed attempts', () => {
+  const {context}=harness(['runEstimateRange']);
+  context.SESSION_MAX_MS=3600000; context.dateValue=value=>value?new Date(value):null;
+  context.appState.runRequests=[];
+  let range=context.runEstimateRange('Example'); assert.equal(range.observed,false);
+  context.appState.runRequests=[20,30,40].map(minutes=>({status:'published',parameters:{runName:'Example'},startedAt:1000,finishedAt:1000+minutes*60000}));
+  context.appState.runRequests.push({status:'failed',parameters:{runName:'Example'},startedAt:1000,finishedAt:100000000});
+  range=context.runEstimateRange('Example'); assert.equal(range.observed,true);
+  assert.equal(range.low,20*60000); assert.equal(range.high,40*60000);
+  assert.equal(context.runEstimateRange('Other').observed,false);
 });

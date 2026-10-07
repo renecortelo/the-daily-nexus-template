@@ -41,6 +41,13 @@ visible newspaper-failed status. Stylistic review leftovers are tolerated only
 when factual safety was explicitly approved. The final MP3 duration must match
 the generated speech timeline, including gaps and headings, within two seconds
 of encoding tolerance; a truncated file is not accepted just because it is long.
+`episode_budget.py` sizes the spoken shortlist from newsletter count and distinct
+facts. Its word ceilings are 600 / 1,300 / 2,200 / 3,000 / 3,400 for 1 / 2–3 /
+4–7 / 8–15 / 16+ newsletters, further reduced when evidence is sparse. These
+are planning ceilings, not mandatory durations. Coverage is source-balanced;
+the newspaper still receives the complete extracted story set. A draft is not
+expanded just to reach a word minimum. Kokoro's complete speech timeline and
+the encoded MP3 must both remain within 30 minutes; neither is silently cut.
 
 ## What each intelligence component does
 
@@ -102,7 +109,14 @@ of encoding tolerance; a truncated file is not accepted just because it is long.
   inaccessible article as optional enrichment rather than a reason to replace
   newsletter evidence.
 - The web session uses session-only Firebase persistence and signs out after 15
-  minutes of inactivity. Firestore authorization requires a matching owner UID.
+  minutes of inactivity or one hour total. Active listening counts as activity,
+  but never bypasses the one-hour limit. Firestore authorization requires a matching owner UID.
+  Playback bookmarks store only episode IDs and numeric positions in owner-scoped
+  sessionStorage, at most 20 entries, and are removed at sign-out. Media Session
+  controls are feature-detected; the episode title may appear on the device's
+  lock screen, but no feed/media URL is included in that metadata. This does not
+  guarantee background playback in every iOS/browser version. Section navigation
+  uses explicit transcript heading flags, not guesses about prose.
 - Owner-locked Firestore stores the full generation/schedule parameters needed
   by the runner, queue and execution state, episode metadata, source counts,
   references, and timed transcript segments. Raw Gmail message bodies, OAuth

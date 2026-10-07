@@ -30,7 +30,6 @@ import {
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 const SESSION_MAX_MS = 60 * 60 * 1000;
 const ARCHIVE_PAGE_SIZE = 100;
-const TYPICAL_RUN_MS = (22 * 60 + 40) * 1000;
 const EDITION_ZOOM_STEPS = Object.freeze([0.75, 1, 1.25, 1.5, 1.75]);
 const LOCAL_VOICE_GENDERS = Object.freeze({
   af_heart: "Female",
@@ -98,6 +97,8 @@ function clearSubscriptions() {
 }
 
 function clearPrivateInterface() {
+  clearPlaybackSession();
+  appState.authorized = false;
   clearSubscriptions();
   const audio = byId("episode-audio");
   audio.pause();
@@ -116,6 +117,7 @@ function clearPrivateInterface() {
   appState.readerToken = null;
   byId("player-title").textContent = "SELECT AN EPISODE";
   byId("mini-player-title").textContent = "THE DAILY NEXUS";
+  byId("mini-player-edition").textContent = "";
   byId("edition-title").textContent = "SELECT AN EDITION";
   appState.archiveLoading = false;
   updateArchiveButtons();
@@ -130,6 +132,7 @@ function clearPrivateInterface() {
   byId("edition-list").replaceChildren();
   byId("schedule-count").textContent = "0";
   byId("queue-count").textContent = "0 QUEUED";
+  byId("monitor-scope").textContent = "LATEST 100 REQUEST WINDOW";
   byId("runner-status").textContent = "RUNNER STATUS UNKNOWN";
   byId("runner-status").parentElement.classList.remove("running", "error");
   byId("runner-detail").textContent = "Awaiting the private cloud runner status.";
@@ -1173,6 +1176,18 @@ function timestampText(value) {
   }).format(parsed).toUpperCase();
 }
 
+function runEstimateRange(runName = "") {
+  const samples = appState.runRequests.filter(item =>
+    ["published", "completed"].includes(item.status) &&
+    (!runName || item.parameters?.runName === runName)).map(item => {
+      const start = dateValue(item.startedAt), finish = dateValue(item.finishedAt);
+      return start && finish ? finish - start : 0;
+    }).filter(value => value >= 60000 && value <= SESSION_MAX_MS).sort((a, b) => a - b);
+  if (samples.length < 3) return { low: 20 * 60000, high: 55 * 60000, observed: false };
+  return { low: samples[Math.floor((samples.length - 1) * 0.2)],
+    high: samples[Math.ceil((samples.length - 1) * 0.8)], observed: true };
+}
+
 function updateRunnerDetail() {
   const detail = byId("runner-detail");
   const data = appState.runner;
@@ -1184,17 +1199,22 @@ function updateRunnerDetail() {
   if (state === "running") {
     const startedAt = dateValue(data.startedAt) || dateValue(data.checkedAt);
     const elapsed = startedAt ? Date.now() - startedAt.getTime() : 0;
-    const remaining = Math.max(0, TYPICAL_RUN_MS - elapsed);
+    const estimate = runEstimateRange(data.activeTask);
+    const remainingLow = Math.max(0, estimate.low - elapsed);
+    const remainingHigh = Math.max(0, estimate.high - elapsed);
     detail.textContent = [
       `ACTIVE // ${data.activeTask || "PRIVATE GENERATION"}`,
       `ELAPSED ${durationText(elapsed)}`,
       data.progress ? `STAGE ${data.progress.stage}/8 // ${data.progress.label}` : "",
       data.progress?.counters?.voice_total
         ? `VOICE ${data.progress.counters.voice_blocks || 0}/${data.progress.counters.voice_total}` : "",
+      data.progress?.counters?.newsletters ? `NEWSLETTERS ${data.progress.counters.newsletters}` : "",
+      data.progress?.counters?.selected_stories ? `SELECTED STORIES ${data.progress.counters.selected_stories}` : "",
+      data.progress?.counters?.word_count ? `SCRIPT ${data.progress.counters.word_count} WORDS` : "",
       data.progress ? `LAST PROGRESS ${timeText(data.checkedAt)}` : "",
       data.progress?.failure_code ? `LAST VALIDATION ${data.progress.failure_code.replaceAll("_", " ").toUpperCase()}` : "",
-      `TYPICAL ${durationText(TYPICAL_RUN_MS)}`,
-      remaining > 0 ? `EST. ${durationText(remaining)} REMAINING` : "TAKING LONGER THAN TYPICAL // ONE-HOUR LIMIT",
+      `${estimate.observed ? "RECENT RUN RANGE" : "REFERENCE RANGE"} ${durationText(estimate.low)}–${durationText(estimate.high)}`,
+      remainingHigh > 0 ? `EST. ${durationText(remainingLow)}–${durationText(remainingHigh)} REMAINING; NOT A DEADLINE` : "PAST ESTIMATE // ONE-HOUR LIMIT",
     ].filter(Boolean).join(" // ");
     return;
   }
@@ -1224,6 +1244,7 @@ function renderRunRequestList() {
   const running = appState.runRequests.filter((item) => item.status === "running").length;
   byId("queue-count").textContent = running ? `${running} RUNNING // ${queued} QUEUED` : `${queued} QUEUED`;
   if (!appState.runRequests.length) {
+    byId("monitor-scope").textContent = "0 RECENT REQUESTS LOADED";
     container.className = "terminal-list empty-state";
     container.textContent = "No queued tasks.";
     return;
@@ -1239,6 +1260,8 @@ function renderRunRequestList() {
     const searchable = `${item.parameters?.runName || ""} ${item.parameters?.gmailLabel || ""}`.toLocaleLowerCase();
     return !queryFilter || searchable.includes(queryFilter);
   });
+  const scope = byId("monitor-scope");
+  if (scope) scope.textContent = `${visible.length} SHOWN // ${appState.runRequests.length} RECENT REQUESTS LOADED // LATEST ${ARCHIVE_PAGE_SIZE} REQUEST WINDOW`;
   visible.sort((left, right) => {
     if (sortMode === "status") return String(left.status || "").localeCompare(String(right.status || ""));
     if (sortMode === "name") return String(left.parameters?.runName || "").localeCompare(String(right.parameters?.runName || ""));
@@ -1291,7 +1314,7 @@ function renderRunRequestList() {
         element(
           "p",
           "request-detail",
-          `RUNNING ${durationText(elapsed)} // TYPICAL ${durationText(TYPICAL_RUN_MS)}`,
+          `RUNNING ${durationText(elapsed)} // ONE-HOUR JOB LIMIT`,
         ),
       );
     } else if (data.status === "queued") {
@@ -1547,6 +1570,7 @@ function renderEpisodeArchives() {
       references: Array.isArray(data.references) ? data.references : [],
       transcript: Array.isArray(data.transcript) ? data.transcript : [],
       sourceMix: data.sourceMix && typeof data.sourceMix === "object" ? data.sourceMix : {},
+      episodeBudget: data.episodeBudget && typeof data.episodeBudget === "object" ? data.episodeBudget : {},
     } : null;
     if (episode) appState.episodes.push(episode);
 
@@ -1698,6 +1722,17 @@ function syncPlayer() {
   byId("mini-pause-button").classList.toggle("active", !audio.paused && !audio.ended);
   byId("web-player").classList.toggle("playing", !audio.paused && !audio.ended);
   byId("mini-player").classList.toggle("playing", !audio.paused && !audio.ended);
+  byId("mini-player").hidden = !appState.activeEpisode || appState.playbackStopped === true || audio.ended;
+  syncMediaSession();
+  savePlaybackPosition();
+  const chapters = byId("player-chapters");
+  if (chapters) {
+    let chapterIndex = 0;
+    for (const [index, option] of Array.from(chapters.options).entries()) {
+      if (Number(option.value) <= current) chapterIndex = index;
+    }
+    chapters.selectedIndex = chapterIndex;
+  }
   if (appState.playerDetailMode === "transcript") {
     const currentMs = audio.currentTime * 1000;
     let active = null;
@@ -1757,6 +1792,11 @@ function renderPlayerDetails(mode = "references") {
       const summary = `${modeLabel} // ${mix.newsletter_messages || 0} NEWSLETTERS // ${mix.newsletter_backed_stories || 0} NEWSLETTER STORIES // ${mix.safe_articles_retrieved || 0} SAFE ARTICLES // ${mix.research_sources || 0} RESEARCH SOURCES`;
       container.append(element("p", "item-meta evidence-mix", summary));
     }
+    const budget = episode.episodeBudget;
+    if (budget && Number.isFinite(budget.selected_news_stories)) {
+      container.append(element("p", "item-meta evidence-mix",
+        `AUDIO COVERAGE // ${budget.selected_news_stories} OF ${budget.available_stories} NEWS STORIES // ${budget.represented_newsletters} NEWSLETTERS REPRESENTED // CONTENT-SIZED; NO MINIMUM DURATION`));
+    }
     if (!refs.length) {
       container.className = "player-details empty-state";
       container.textContent = "References will appear for newly synchronized episodes.";
@@ -1794,14 +1834,19 @@ function renderPlayerDetails(mode = "references") {
 }
 
 function selectEpisode(episode) {
+  savePlaybackPosition(true);
   const audio = byId("episode-audio");
   audio.pause();
+  appState.activeEpisode = episode;
+  appState.playbackStopped = false;
+  appState.positionRestored = false;
   audio.src = episode.audioURL;
   audio.load();
-  appState.activeEpisode = episode;
   appState.activeAudio = audio;
   byId("player-title").textContent = episode.title;
   byId("mini-player-title").textContent = episode.title;
+  byId("mini-player-title").title = episode.title;
+  byId("mini-player-edition").textContent = episode.title.match(/(?:-\s*|\/\/\s*)(\d{3,})$/)?.[1] || "";
   byId("player-play-button").disabled = false;
   byId("player-pause-button").disabled = false;
   byId("player-stop-button").disabled = false;
@@ -1812,7 +1857,109 @@ function selectEpisode(episode) {
   }
   byId("mini-player").hidden = false;
   renderPlayerDetails();
+  renderPlayerChapters();
+  updateMediaMetadata();
   syncPlayer();
+}
+
+function playbackSessionKey() {
+  return appState.user?.uid ? `tdn-playback-session:${appState.user.uid}` : null;
+}
+
+function playbackBookmarks() {
+  try {
+    const key = playbackSessionKey();
+    const entries = key ? JSON.parse(sessionStorage.getItem(key) || "[]") : [];
+    return Array.isArray(entries) ? entries.filter(item =>
+      typeof item?.id === "string" && item.id.length <= 160 &&
+      Number.isFinite(item.seconds) && item.seconds > 0).slice(-20) : [];
+  } catch { return []; }
+}
+
+function savePlaybackPosition(force = false) {
+  if (!appState.authorized || !appState.activeEpisode ||
+      (!appState.positionRestored && !appState.playbackStopped)) return;
+  if (!force && Date.now() - (appState.lastPositionSaved || 0) < 5000) return;
+  const audio = byId("episode-audio");
+  const remaining = playbackBookmarks().filter(item => item.id !== appState.activeEpisode.id);
+  if (!appState.playbackStopped && !audio.ended && Number.isFinite(audio.duration) &&
+      audio.currentTime > 0 && audio.currentTime < audio.duration - 3) {
+    remaining.push({ id: appState.activeEpisode.id, seconds: audio.currentTime });
+  }
+  try { sessionStorage.setItem(playbackSessionKey(), JSON.stringify(remaining.slice(-20))); }
+  catch { /* Private mode can deny storage; playback still works. */ }
+  appState.lastPositionSaved = Date.now();
+}
+
+function restorePlaybackPosition() {
+  if (!appState.authorized || !appState.activeEpisode || appState.positionRestored) return;
+  const audio = byId("episode-audio");
+  // Ignore stale metadata from the previously selected episode.
+  if (audio.currentSrc !== audio.src || !Number.isFinite(audio.duration)) return;
+  const bookmark = playbackBookmarks().find(item => item.id === appState.activeEpisode.id);
+  if (!appState.playbackStopped && bookmark && bookmark.seconds < audio.duration - 3) audio.currentTime = bookmark.seconds;
+  appState.positionRestored = true;
+  appState.lastPositionSaved = Date.now();
+}
+
+function clearPlaybackSession() {
+  try { const key = playbackSessionKey(); if (key) sessionStorage.removeItem(key); } catch {}
+  appState.positionRestored = false;
+  appState.playbackStopped = true;
+  if (typeof navigator !== "undefined" && navigator.mediaSession) {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
+    try { navigator.mediaSession.setPositionState?.(); } catch {}
+    for (const action of ["play", "pause", "stop", "previoustrack", "nexttrack", "seekbackward", "seekforward", "seekto"]) {
+      try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+    }
+  }
+  const chapters = byId("player-chapters");
+  if (chapters) { chapters.replaceChildren(); chapters.parentElement.hidden = true; }
+}
+
+function renderPlayerChapters() {
+  const control = byId("player-chapters");
+  control.replaceChildren();
+  const headings = (appState.activeEpisode?.transcript || []).filter(segment =>
+    segment.isHeading === true && Number.isFinite(segment.startMs) && segment.startMs >= 0);
+  control.parentElement.hidden = !headings.length;
+  if (!headings.length) return;
+  const introduction = element("option", "", "Introduction");
+  introduction.value = "0";
+  control.append(introduction);
+  for (const heading of headings) {
+    const option = element("option", "", heading.text);
+    option.value = String(heading.startMs / 1000);
+    control.append(option);
+  }
+}
+
+function updateMediaMetadata() {
+  if (!appState.authorized || !appState.activeEpisode || typeof navigator === "undefined" ||
+      !navigator.mediaSession || typeof MediaMetadata === "undefined") return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: appState.activeEpisode.title, artist: "The Daily Nexus", album: "Private newsletter podcast",
+  });
+  for (const [action, handler] of Object.entries(appState.mediaActions || {})) {
+    try { navigator.mediaSession.setActionHandler(action, details => {
+      if (appState.authorized && appState.activeEpisode) handler(details);
+    }); } catch {}
+  }
+}
+
+function syncMediaSession() {
+  if (!appState.authorized || !appState.activeEpisode || typeof navigator === "undefined" || !navigator.mediaSession) return;
+  const audio = byId("episode-audio");
+  navigator.mediaSession.playbackState = appState.playbackStopped || audio.ended ? "none" : audio.paused ? "paused" : "playing";
+  if (Number.isFinite(audio.duration) && audio.duration > 0 && !appState.playbackStopped) {
+    try {
+      navigator.mediaSession.setPositionState?.({ duration: audio.duration,
+        playbackRate: audio.playbackRate || 1, position: Math.min(audio.duration, Math.max(0, audio.currentTime || 0)) });
+    } catch { /* Unsupported browsers retain ordinary in-app controls. */ }
+  } else {
+    try { navigator.mediaSession.setPositionState?.(); } catch {}
+  }
 }
 
 function selectRelativeEpisode(direction) {
@@ -1900,11 +2047,38 @@ function setupWebPlayer() {
   }
   const audio = byId("episode-audio");
   const togglePlayback = async () => {
-    if (!audio.src) return;
+    if (!appState.authorized || !audio.src) return;
+    appState.playbackStopped = false;
     if (audio.paused) await audio.play(); else audio.pause();
   };
-  const play = () => audio.src && audio.play().catch(() => showAlert("Playback could not start in this browser.", true));
-  const stop = () => { audio.pause(); audio.currentTime = 0; syncPlayer(); };
+  const play = () => {
+    if (!appState.authorized || !audio.src) return;
+    appState.playbackStopped = false;
+    return audio.play().catch(() => showAlert("Playback could not start in this browser.", true));
+  };
+  const stop = () => {
+    appState.playbackStopped = true;
+    audio.pause(); audio.currentTime = 0; savePlaybackPosition(true); syncPlayer();
+  };
+  byId("mini-levels-button").addEventListener("click", () => {
+    const opened = byId("mini-player").classList.toggle("levels-open");
+    byId("mini-levels-button").setAttribute("aria-expanded", String(opened));
+  });
+  byId("player-chapters").addEventListener("change", (event) => {
+    if (!audio.duration) return;
+    audio.currentTime = Math.min(audio.duration, Number(event.target.value) || 0);
+    savePlaybackPosition(true); syncPlayer();
+  });
+  if (typeof navigator !== "undefined" && navigator.mediaSession) {
+    const actions = { play, pause: () => audio.pause(), stop,
+      previoustrack: () => selectRelativeEpisode(-1), nexttrack: () => selectRelativeEpisode(1),
+      seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 15)); syncPlayer(); },
+      seekforward: details => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 15)); syncPlayer(); },
+      seekto: details => { if (Number.isFinite(details.seekTime)) audio.currentTime = Math.min(audio.duration || 0, Math.max(0, details.seekTime)); syncPlayer(); },
+    };
+    appState.mediaActions = actions;
+    // Installed on episode selection; sign-out removes every OS action handler.
+  }
   byId("player-play-button").addEventListener("click", play);
   byId("player-pause-button").addEventListener("click", () => { togglePlayback().catch(() => showAlert("Playback could not start in this browser.", true)); });
   byId("mini-play-button").addEventListener("click", play);
@@ -1980,7 +2154,11 @@ function setupWebPlayer() {
     }
   }
   for (const eventName of ["timeupdate", "loadedmetadata", "play", "pause", "ended"]) {
-    audio.addEventListener(eventName, syncPlayer);
+    audio.addEventListener(eventName, () => {
+      if (eventName === "loadedmetadata") restorePlaybackPosition();
+      if (eventName === "pause" || eventName === "ended") savePlaybackPosition(true);
+      syncPlayer();
+    });
   }
 }
 

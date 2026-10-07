@@ -5,7 +5,7 @@ import re
 from datetime import date
 from typing import Any
 
-from audiodigest.antigravity_client import AntigravityCLI, AntigravityCLIError
+from audiodigest.antigravity_client import AntigravityCLI
 from audiodigest.closing_quotes import ClosingQuote
 from audiodigest.config import Settings
 from audiodigest.constants import (
@@ -15,6 +15,7 @@ from audiodigest.constants import (
     Section,
     editorial_section_definitions,
 )
+from audiodigest.episode_budget import EpisodeBudget, plan_episode
 from audiodigest.models import (
     AntigravityMetadata,
     EpisodeScript,
@@ -326,19 +327,6 @@ def _validate_newspaper_word_budget(
             "complete structured newspaper exceeds the "
             f"{maximum_total_words:,}-word three-page safety ceiling"
         )
-
-
-def _combined_metadata(
-    first: AntigravityMetadata,
-    second: AntigravityMetadata,
-) -> AntigravityMetadata:
-    return AntigravityMetadata(
-        model=second.model or first.model,
-        input_tokens=first.input_tokens + second.input_tokens,
-        output_tokens=first.output_tokens + second.output_tokens,
-        cache_read_tokens=first.cache_read_tokens + second.cache_read_tokens,
-        latency_ms=first.latency_ms + second.latency_ms,
-    )
 
 
 def _normalize_newspaper_percentages(value: Any, *, key: str = "") -> Any:
@@ -731,9 +719,12 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
         *,
         repair_issues: list[str] | None = None,
         previous_script: EpisodeScript | None = None,
+        episode_budget: EpisodeBudget | None = None,
     ) -> tuple[EpisodeScript, AntigravityMetadata]:
-        target_min = self.settings.app.target_min_words
-        target_max = self.settings.app.target_max_words
+        budget = episode_budget or plan_episode(stories, self.settings.app)
+        stories = [story for story in stories if story.story_id in budget.selected_ids]
+        target_min = budget.suggested_min_words
+        target_max = budget.max_words
         ranked_stories = sorted(
             stories,
             key=lambda story: (story.rank_score, story.confidence),
@@ -823,7 +814,14 @@ When repairing, retain useful detail from valid stories rather than shrinking th
 edition into headlines. Coverage means explaining distinct supported facts, not only citing IDs.
 Do not modernize or paraphrase the approved closing quotation.
 
-Target {target_min}-{target_max} words when evidence supports it. Coverage and specificity
+The episode has {budget.newsletter_count} newsletters and {budget.unique_facts} distinct
+news facts. Its evidence-sized word guide is {target_min}-{target_max}; the lower figure
+is NOT a minimum. Stay below {target_max} words and aim below 27 minutes, with a hard
+delivery ceiling of 30 minutes. One newsletter warrants a brief, not a full-length show.
+Use a proportionately short introduction, transitions, conclusion, and quotation observation.
+Cover the selected stories' distinct material facts and essential qualifiers; merely citing
+their IDs is not coverage. When the same development occurs in multiple sources, explain it
+once with attribution instead of repeating it. Coverage and specificity
 matter more than mechanically reaching the lower target: never pad or repeat material.
 Every story ID in required_story_ids must be cited in the appropriate section, and useful
 facts from those stories should be explained rather than merely listed. Sections must follow
@@ -877,6 +875,7 @@ Return JSON only:
             "hosts": active_hosts,
             "dialogue_style": dialogue_style,
             "required_story_ids": required_story_ids,
+            "episode_budget": budget.to_dict(),
             "previous_script": previous_script.to_dict() if previous_script else None,
         }
 
@@ -941,7 +940,7 @@ Return JSON only:
             if script.word_count > target_max:
                 raise ValueError(
                     f"script contains {script.word_count} words; "
-                    f"the maximum is {target_max} for a 20-30 minute episode"
+                    f"the evidence-sized maximum is {target_max}"
                 )
             return script
 
@@ -951,80 +950,12 @@ Return JSON only:
             validate_script,
             retries=1,
         )
-        if script.word_count >= target_min:
-            print(
-                "Script coverage: "
-                f"{len(required_story_ids)} required verified stories included "
-                f"in {script.word_count:,} words.",
-                flush=True,
-            )
-            return script, metadata
-
         print(
-            "Script draft contains "
-            f"{script.word_count:,} words; expanding underdeveloped verified "
-            f"stories toward the {target_min:,}-word duration target.",
+            f"Script coverage: {len(required_story_ids)} selected verified stories "
+            f"included in {script.word_count:,} words; no minimum duration or filler.",
             flush=True,
         )
-        expansion_instruction = (
-            instruction + "\n\nThe payload includes a structurally valid previous_script that is "
-            f"{script.word_count:,} words, below the {target_min:,}-word duration target. "
-            "Rewrite the complete script once. Preserve its supported material and every "
-            "required story ID, then expand underdeveloped stories with distinct names, "
-            "figures, comparisons, consequences, and context found in the supplied story "
-            "records. Do not add facts, repeat points, stretch transitions, or pad dialogue. "
-            "If all useful supplied evidence is already covered, return the strongest "
-            "complete shorter script rather than filler."
-        )
-        expansion_payload = {
-            **payload,
-            "previous_script": script.to_dict(),
-            "duration_repair": {
-                "previous_word_count": script.word_count,
-                "target_min_words": target_min,
-                "target_max_words": target_max,
-            },
-        }
-        try:
-            expanded_script, expanded_metadata = self.antigravity.invoke(
-                expansion_instruction,
-                expansion_payload,
-                validate_script,
-                retries=1,
-            )
-        except AntigravityCLIError as exc:
-            if not str(exc).startswith("Antigravity output failed validation:"):
-                raise
-            print(
-                "Warning: the duration expansion draft did not pass structural "
-                "validation; continuing with the comprehensive verified first draft.",
-                flush=True,
-            )
-            return script, metadata
-
-        selected_script = (
-            expanded_script if expanded_script.word_count >= script.word_count else script
-        )
-        combined_metadata = _combined_metadata(metadata, expanded_metadata)
-        if selected_script.word_count < target_min:
-            print(
-                "Script remains below the duration target at "
-                f"{selected_script.word_count:,} words after evidence expansion; "
-                "all required verified stories are covered, so generation will continue "
-                "without filler.",
-                flush=True,
-            )
-        else:
-            print(
-                f"Script expanded to {selected_script.word_count:,} words using "
-                "the existing verified evidence.",
-                flush=True,
-            )
-        print(
-            f"Script coverage: {len(required_story_ids)} required verified stories included.",
-            flush=True,
-        )
-        return selected_script, combined_metadata
+        return script, metadata
 
     def generate_newspaper(
         self,
@@ -1581,6 +1512,8 @@ return approved=false, factual_approved=true, and concrete editorial issues.
         stories: list[Story],
         script: EpisodeScript,
         closing_quote: ClosingQuote,
+        *,
+        episode_budget: EpisodeBudget | None = None,
     ) -> tuple[VerificationResult, AntigravityMetadata]:
         instruction = """
 Act as a strict factual verifier. Compare every claim in the proposed script against the
@@ -1604,6 +1537,10 @@ filler, fake hesitations, a fixed turn length, new factual background, or a mand
 Do not reject a factually sound script solely for subjective style, preferred sentence length,
 accent, or pace. Prioritize factual correctness and coverage over stylistic preferences.
 The approved closing quotation must remain verbatim even if its wording is less conversational.
+The episode_budget defines a source-balanced shortlist for this episode. Verify that its
+selected stories are explained with substantive supported facts, not merely cited IDs.
+Omitting unselected stories is intentional: the newspaper has the full story set. A short
+episode is valid when evidence is sparse; never require a minimum duration or padded dialogue.
 
 Return JSON only:
 {"approved": true, "issues": []}
@@ -1615,6 +1552,9 @@ or:
             "script": script.to_dict(),
             "closing_quote": closing_quote.to_dict(),
             "configured_hosts": self.settings.hosts.active_names,
+            "episode_budget": (
+                episode_budget or plan_episode(stories, self.settings.app)
+            ).to_dict(),
             "section_definitions": editorial_section_definitions(
                 tuple(story.section.value for story in stories)
             ),

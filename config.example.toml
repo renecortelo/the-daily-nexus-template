@@ -2,6 +2,7 @@
 timezone = "UTC"
 gmail_label = "AudioDigest/Source"
 retention_days = 30
+# Legacy word preferences remain upper guidance: evidence-sized episodes have no minimum.
 target_min_words = 2850
 target_max_words = 3800
 max_newsletters = 80
