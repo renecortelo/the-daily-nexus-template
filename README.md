@@ -33,6 +33,13 @@ verifier can request evidence-grounded repair drafts within the configured
 [technical overview](docs/TECHNICAL_OVERVIEW.md) for the stages, boundaries,
 technology choices, and current limitations.
 
+Episodes scale with useful evidence, not a mandatory running time. Planning
+ceilings are roughly 5 / 10 / 18 / 23 / 27 minutes for 1 / 2–3 / 4–7 / 8–15 /
+16+ newsletters, reduced further when distinct facts are sparse. There is no
+minimum-duration expansion call or filler. The complete MP3 must stay within
+30 minutes. The podcast shortlist balances sources; the independent newspaper
+receives all extracted stories. Existing episodes are not changed by this rule.
+
 ## Read this first
 
 This repository is a **public source template**. It contains no real account or

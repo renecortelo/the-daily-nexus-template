@@ -11,11 +11,13 @@
 - A failed retry does not replace the last completed local edition for that date.
 - A published date is immutable and cannot be published twice.
 - No episode is produced when there is no substantive source material.
-- Scripts target 2,850–3,800 words, or roughly 20–30 minutes at the current local
-  voices. A short first draft is automatically expanded once using underdeveloped
-  verified stories already collected in Stage 2. If all required stories are covered
-  and the evidence is exhausted, a comprehensive shorter script proceeds without
-  filler instead of failing on an arbitrary minimum.
+- Scripts are sized to available newsletter evidence, with planning ceilings of
+  roughly 5 / 10 / 18 / 23 / 27 minutes for 1 / 2–3 / 4–7 / 8–15 / 16+ newsletters.
+  Distinct evidence can reduce that budget. There is no minimum duration or
+  length-only expansion call. The spoken shortlist balances newsletter sources;
+  the independently written paper receives all extracted stories. Both the full
+  speech timeline and final MP3 must be at most 30 minutes; an overlong episode
+  is rejected, not silently cropped or sped up.
 - Once a script is verified, recoverable work is copied to
   `%LOCALAPPDATA%\AudioDigest\episodes\YYYY-MM-DD\in-progress`. If Windows sleeps
   or the app closes during audio rendering, the script and any completed PDF remain there.

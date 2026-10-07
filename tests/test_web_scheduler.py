@@ -77,6 +77,63 @@ class _FakeWebClient:
 
 
 class WebSchedulerTests(TestCase):
+    def test_episode_budget_metadata_excludes_source_ids_and_transcript_marks_chapters(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            manifest, transcript = root / "manifest.json", root / "transcript.json"
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "segments": [
+                            {"host": "Nox", "text": "AI", "start_ms": 5000, "is_heading": True},
+                            {"host": "Nox", "text": "Ordinary prose", "start_ms": 8000},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "transcript_path": str(transcript),
+                        "episode_budget": {
+                            "newsletter_count": 3,
+                            "available_stories": 12,
+                            "selected_news_stories": 8,
+                            "max_words": 1300,
+                            "estimated_max_minutes": 10.1,
+                            "selected_ids": ["private-source-id"],
+                            "unapproved_field": "private-content",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            class Database:
+                def episode_for_date(self, _day):
+                    return {
+                        "status": "staged",
+                        "title": "An edition",
+                        "guid": "edition",
+                        "duration_seconds": 500,
+                        "manifest_path": str(manifest),
+                        "show_notes": [],
+                    }
+
+            _, metadata = _published_metadata(
+                self._settings(root),
+                Database(),
+                episode_date=date(2026, 10, 7),
+                execution_id="synthetic",
+                publication_label="Example",
+                publication_sequence=1,
+            )
+            self.assertEqual(8, metadata["episodeBudget"]["selected_news_stories"])
+            self.assertNotIn("selected_ids", metadata["episodeBudget"])
+            self.assertNotIn("unapproved_field", metadata["episodeBudget"])
+            self.assertEqual([True, False], [row["isHeading"] for row in metadata["transcript"]])
+
     def test_post_publication_archive_failure_never_marks_generation_failed(self):
         class Client(_FakeWebClient):
             failed_once = False

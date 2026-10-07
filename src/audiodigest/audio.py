@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from audiodigest.config import AudioSettings, HostSettings
+from audiodigest.episode_budget import MAX_EPISODE_SECONDS
 from audiodigest.execution_budget import check_budget, operation_timeout
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
@@ -311,6 +312,11 @@ class KokoroAudioRenderer:
                     )
                 )
                 timeline_ms += speech_ms + pause_ms
+                if timeline_ms > MAX_EPISODE_SECONDS * 1000:
+                    raise AudioGenerationError(
+                        "Complete speech exceeds the 30-minute delivery ceiling; "
+                        "audio was not cut or published"
+                    )
                 chunks.append(chunk)
                 if pause_ms:
                     if pause_ms not in silences:
@@ -458,6 +464,8 @@ class KokoroAudioRenderer:
             raise AudioGenerationError(
                 "Encoded episode duration does not match the complete speech timeline"
             )
+        if duration > MAX_EPISODE_SECONDS:
+            raise AudioGenerationError("Encoded episode exceeds the 30-minute delivery ceiling")
         if duration < self.settings.min_duration_seconds:
             raise AudioGenerationError(
                 f"Episode duration {duration:.1f}s is below the safety minimum"

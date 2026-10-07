@@ -6,12 +6,53 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from audiodigest.audio import KokoroAudioRenderer, _combine_wav_chunks, _complete_audio_duration
+from audiodigest.audio import (
+    AudioGenerationError,
+    KokoroAudioRenderer,
+    _combine_wav_chunks,
+    _complete_audio_duration,
+)
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.models import EpisodeScript
 
 
 class AudioHostTests(TestCase):
+    def test_duration_cap_rejects_complete_speech_instead_of_truncating_it(self):
+        script = EpisodeScript.from_dict(
+            {
+                "title": "The Daily Nexus",
+                "hosts": ["Nox"],
+                "introduction": "Introduction",
+                "sections": [
+                    {"name": "AI", "narration": "Supported evidence", "story_ids": ["story"]}
+                ],
+                "conclusion": "Conclusion",
+                "sign_off": "Closing quotation",
+                "show_notes": [],
+            }
+        )
+        renderer = KokoroAudioRenderer(
+            AudioSettings(min_duration_seconds=1), HostSettings(count=1, solo_name="Nox")
+        )
+        with (
+            tempfile.TemporaryDirectory() as name,
+            patch("audiodigest.audio.MAX_EPISODE_SECONDS", 30),
+            patch("audiodigest.audio._require_binary", side_effect=lambda value: value),
+            patch.object(renderer, "_pipeline", return_value=object()),
+            patch.object(
+                renderer,
+                "_write_speech_chunk",
+                side_effect=lambda _p, _t, path, **_kw: self._write_test_wav(path),
+            ),
+            patch.object(
+                renderer, "_write_silence", side_effect=lambda path, _ms: self._write_test_wav(path)
+            ),
+            patch("audiodigest.audio.subprocess.run") as encode,
+        ):
+            with self.assertRaisesRegex(AudioGenerationError, "not cut or published"):
+                renderer.render(script, Path(name) / "episode.mp3")
+            encode.assert_not_called()
+
     def test_full_duration_check_rejects_truncation_and_invalid_values(self):
         for duration in (180, 900, 1500, float("nan"), float("inf")):
             self.assertFalse(_complete_audio_duration(duration, 1_200_000))

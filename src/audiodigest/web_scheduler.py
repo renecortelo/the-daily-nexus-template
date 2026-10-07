@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import signal
 from collections.abc import Callable
@@ -249,6 +250,7 @@ def _published_metadata(
     references = [str(note) for note in episode.get("show_notes", []) if isinstance(note, str)]
     transcript: list[dict[str, Any]] = []
     source_mix: dict[str, Any] = {}
+    episode_budget: dict[str, int | float] = {}
     newspaper_pages = 0
     newspaper_status = "unknown"
     closing_quote_id = ""
@@ -269,6 +271,27 @@ def _published_metadata(
             ):
                 closing_quote_id = candidate_quote_id
             raw_source_mix = manifest.get("source_mix", {})
+            raw_budget = manifest.get("episode_budget", {})
+            if isinstance(raw_budget, dict):
+                episode_budget = {
+                    key: value
+                    for key, value in raw_budget.items()
+                    if key
+                    in {
+                        "newsletter_count",
+                        "available_stories",
+                        "unique_facts",
+                        "selected_news_stories",
+                        "represented_newsletters",
+                        "max_words",
+                        "estimated_max_minutes",
+                        "hard_max_seconds",
+                    }
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(value)
+                    and value >= 0
+                }
             if isinstance(raw_source_mix, dict):
                 source_mix = {
                     key: value
@@ -301,6 +324,7 @@ def _published_metadata(
                             "host": str(segment.get("host", "Host"))[:40],
                             "text": text[:2_000],
                             "startMs": int(segment.get("start_ms", 0)),
+                            "isHeading": segment.get("is_heading") is True,
                         }
                     )
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -324,6 +348,7 @@ def _published_metadata(
         "newspaperStatus": "ready" if newspaper_url else newspaper_status,
         "references": references[:100],
         "sourceMix": source_mix,
+        "episodeBudget": episode_budget,
         "transcript": transcript,
         "executionId": execution_id,
         "publicationLabel": publication_label,

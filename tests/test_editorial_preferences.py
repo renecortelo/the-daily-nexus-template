@@ -58,14 +58,23 @@ class EditorialPreferenceTests(TestCase):
         settings.podcast.sections = ("DATA",)
         engine = EditorialPipeline(settings, Mock())
         engine.antigravity.invoke.return_value = (
-            Mock(word_count=4000, approved=True, issues=[]), Mock()
+            Mock(word_count=4000, approved=True, issues=[]),
+            Mock(),
         )
-        story = Story.from_dict({
-            "story_id": "pipeline", "section": "DATA", "headline": "ETL pipeline release",
-            "facts": ["A database tool adds an ETL connector."],
-            "why_it_matters": "Teams can connect database tools.",
-            "source_ids": ["newsletter"], "source_urls": [], "confidence": 0.9, "rank_score": 1,
-        }, allowed_sections=("DATA",))
+        story = Story.from_dict(
+            {
+                "story_id": "pipeline",
+                "section": "DATA",
+                "headline": "ETL pipeline release",
+                "facts": ["A database tool adds an ETL connector."],
+                "why_it_matters": "Teams can connect database tools.",
+                "source_ids": ["newsletter"],
+                "source_urls": [],
+                "confidence": 0.9,
+                "rank_score": 1,
+            },
+            allowed_sections=("DATA",),
+        )
         quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
         engine.extract_stories([], date(2026, 10, 6))
         engine.generate_script([story], date(2026, 10, 6), quote)
@@ -86,7 +95,6 @@ class EditorialPreferenceTests(TestCase):
         verification = engine.antigravity.invoke.call_args_list[4].args[0]
         self.assertIn("smallest local wording repair", verification)
 
-
     def test_percentage_normalization_preserves_story_metadata_ids(self):
         normalized = _normalize_newspaper_percentages(
             {
@@ -105,9 +113,7 @@ class EditorialPreferenceTests(TestCase):
         )
 
     def test_newspaper_article_scale_adapts_to_the_requested_edition(self):
-        settings = SimpleNamespace(
-            podcast=SimpleNamespace(newspaper_edition_scale="focused")
-        )
+        settings = SimpleNamespace(podcast=SimpleNamespace(newspaper_edition_scale="focused"))
         self.assertEqual(
             ("focused", 2, 4),
             _newspaper_article_limits(settings, 10),
@@ -126,9 +132,7 @@ class EditorialPreferenceTests(TestCase):
         review = _remove_enforced_script_order_issues(
             VerificationResult(
                 approved=False,
-                issues=[
-                    "The section order is incorrect: 'Sports' appears before 'AI'."
-                ],
+                issues=["The section order is incorrect: 'Sports' appears before 'AI'."],
             )
         )
 
@@ -215,9 +219,7 @@ class EditorialPreferenceTests(TestCase):
                         "story_id": "world-leadership",
                         "section": "World Politics and News",
                         "headline": "Andy Burnham succeeds Keir Starmer as UK prime minister",
-                        "facts": [
-                            "Andy Burnham succeeded Keir Starmer after a party vote."
-                        ],
+                        "facts": ["Andy Burnham succeeded Keir Starmer after a party vote."],
                         "why_it_matters": "The change reshapes UK government leadership.",
                         "source_ids": ["newsletter-1"],
                         "source_urls": ["https://example.com/news"],
@@ -228,9 +230,7 @@ class EditorialPreferenceTests(TestCase):
                         "story_id": "tih-world-snapshot",
                         "section": "TIH: Today in History",
                         "headline": "UK leadership changes from Starmer to Burnham",
-                        "facts": [
-                            "Andy Burnham became UK prime minister after Keir Starmer."
-                        ],
+                        "facts": ["Andy Burnham became UK prime minister after Keir Starmer."],
                         "why_it_matters": "The current-world snapshot records the transition.",
                         "source_ids": ["current-world"],
                         "source_urls": ["https://example.com/snapshot"],
@@ -290,18 +290,14 @@ class EditorialPreferenceTests(TestCase):
             NewspaperArticle(
                 section_label="AI",
                 title=f"Measured deployment {index}",
-                standfirst=(
-                    f"Company {index} deployed a measured system into production."
-                ),
+                standfirst=(f"Company {index} deployed a measured system into production."),
                 body=(
                     "The operating team documented a 50% reduction in processing "
                     "time while preserving the existing review controls."
                 ),
                 story_ids=[f"story-{index}"],
                 source_urls=[f"https://example.com/report-{index}"],
-                bullet_points=[
-                    "The operating team documented a 50% reduction in processing time."
-                ],
+                bullet_points=["The operating team documented a 50% reduction in processing time."],
                 highlights=["invented phrase"],
             )
             for index in range(5)
@@ -315,10 +311,7 @@ class EditorialPreferenceTests(TestCase):
             self.assertEqual([], article.bullet_points)
             self.assertGreaterEqual(len(article.highlights), 2)
             self.assertTrue(
-                all(
-                    highlight.casefold() in article_text
-                    for highlight in article.highlights
-                )
+                all(highlight.casefold() in article_text for highlight in article.highlights)
             )
 
     def test_highlight_repair_never_leaves_a_fact_truncated_at_a_number(self):
@@ -405,7 +398,7 @@ class EditorialPreferenceTests(TestCase):
             payload["hosts"],
         )
 
-    def test_short_script_is_expanded_from_existing_verified_stories(self):
+    def test_short_script_is_not_expanded_just_to_fill_time(self):
         settings = SimpleNamespace(
             app=SimpleNamespace(target_min_words=1000, target_max_words=1500),
             podcast=SimpleNamespace(tone="formal"),
@@ -432,15 +425,14 @@ class EditorialPreferenceTests(TestCase):
             }
         )
         short_script = SimpleNamespace(
-            word_count=850,
-            to_dict=lambda: {"word_count": 850},
+            word_count=150,
+            to_dict=lambda: {"word_count": 150},
         )
-        expanded_script = SimpleNamespace(word_count=1120)
         antigravity = Mock()
-        antigravity.invoke.side_effect = [
-            (short_script, AntigravityMetadata(input_tokens=10, output_tokens=20)),
-            (expanded_script, AntigravityMetadata(input_tokens=30, output_tokens=40)),
-        ]
+        antigravity.invoke.return_value = (
+            short_script,
+            AntigravityMetadata(input_tokens=10, output_tokens=20),
+        )
         pipeline = EditorialPipeline(settings, antigravity)
 
         result, metadata = pipeline.generate_script(
@@ -453,19 +445,16 @@ class EditorialPreferenceTests(TestCase):
             ),
         )
 
-        self.assertIs(result, expanded_script)
-        self.assertEqual(40, metadata.input_tokens)
-        self.assertEqual(60, metadata.output_tokens)
-        expansion_instruction = antigravity.invoke.call_args_list[1].args[0]
-        expansion_payload = antigravity.invoke.call_args_list[1].args[1]
-        self.assertIn("underdeveloped stories", expansion_instruction)
-        self.assertEqual(
-            {"word_count": 850},
-            expansion_payload["previous_script"],
-        )
+        self.assertIs(result, short_script)
+        self.assertEqual(10, metadata.input_tokens)
+        self.assertEqual(20, metadata.output_tokens)
+        self.assertEqual(1, antigravity.invoke.call_count)
+        instruction, payload = antigravity.invoke.call_args.args[:2]
+        self.assertIn("NOT a minimum", instruction)
+        self.assertLess(payload["episode_budget"]["max_words"], 1000)
         self.assertEqual(
             ["verified-ai"],
-            expansion_payload["required_story_ids"],
+            payload["required_story_ids"],
         )
 
     def test_newspaper_is_written_from_stories_without_the_audio_script(self):
@@ -517,8 +506,7 @@ class EditorialPreferenceTests(TestCase):
                     "value": "SHIFT",
                     "label": "Measured deployment entered production",
                     "detail": (
-                        "The documented system moved from controlled testing "
-                        "into live operations."
+                        "The documented system moved from controlled testing into live operations."
                     ),
                     "story_ids": ["priority-ai-percent"],
                 },
@@ -535,8 +523,7 @@ class EditorialPreferenceTests(TestCase):
                     "value": "WATCH",
                     "label": "Results remain the open test",
                     "detail": (
-                        "The supplied evidence does not yet establish "
-                        "long-term production results."
+                        "The supplied evidence does not yet establish long-term production results."
                     ),
                     "story_ids": ["priority-ai-percent"],
                 },
