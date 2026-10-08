@@ -72,6 +72,7 @@ class GenerationParameters:
     include_today_in_history: bool = True
     newspaper_edition_scale: str = "standard"
     evidence_mode: str = "newsletter_first"
+    include_newspaper: bool = True
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GenerationParameters:
@@ -91,6 +92,9 @@ class GenerationParameters:
             include_today_in_history = data.get("includeTih", True)
             if not isinstance(include_today_in_history, bool):
                 raise JobValidationError("includeTih must be true or false")
+            include_newspaper = data.get("includeNewspaper", True)
+            if not isinstance(include_newspaper, bool):
+                raise JobValidationError("includeNewspaper must be true or false")
             newspaper_edition_scale = str(
                 data.get("editionScale") or "standard"
             ).strip().casefold()
@@ -185,6 +189,7 @@ class GenerationParameters:
             include_today_in_history=include_today_in_history,
             newspaper_edition_scale=newspaper_edition_scale,
             evidence_mode=evidence_mode,
+            include_newspaper=include_newspaper,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -204,6 +209,7 @@ class GenerationParameters:
             "includeTih": self.include_today_in_history,
             "editionScale": self.newspaper_edition_scale,
             "evidenceMode": self.evidence_mode,
+            "includeNewspaper": self.include_newspaper,
         }
 
 
@@ -320,6 +326,7 @@ def apply_generation_parameters(
     configured.podcast.include_today_in_history = parameters.include_today_in_history
     configured.podcast.newspaper_edition_scale = parameters.newspaper_edition_scale
     configured.podcast.evidence_mode = parameters.evidence_mode
+    configured.podcast.include_newspaper = parameters.include_newspaper
     configured.hosts.count = parameters.host_count
     configured.hosts.solo_name = parameters.solo_name
     configured.hosts.dialogue_style = parameters.dialogue_style

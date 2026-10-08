@@ -28,6 +28,7 @@ service cloud.firestore {
           'publish',
           'dateMode',
           'includeTih',
+          'includeNewspaper',
           'editionScale',
           'evidenceMode'
         ])
@@ -49,6 +50,7 @@ service cloud.firestore {
         && parameters.publish is bool
         && parameters.dateMode in ['previous_day', 'today']
         && parameters.includeTih is bool
+        && (!('includeNewspaper' in parameters) || parameters.includeNewspaper is bool)
         && parameters.editionScale in ['focused', 'standard', 'comprehensive']
         && parameters.evidenceMode in ['newsletter_first', 'newsletter_only'];
     }

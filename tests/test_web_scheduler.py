@@ -96,6 +96,7 @@ class WebSchedulerTests(TestCase):
                 json.dumps(
                     {
                         "transcript_path": str(transcript),
+                        "newspaper_status": "skipped",
                         "episode_budget": {
                             "newsletter_count": 3,
                             "available_stories": 12,
@@ -130,6 +131,8 @@ class WebSchedulerTests(TestCase):
                 publication_sequence=1,
             )
             self.assertEqual(8, metadata["episodeBudget"]["selected_news_stories"])
+            self.assertEqual("skipped", metadata["newspaperStatus"])
+            self.assertEqual("", metadata["newspaperUrl"])
             self.assertNotIn("selected_ids", metadata["episodeBudget"])
             self.assertNotIn("unapproved_field", metadata["episodeBudget"])
             self.assertEqual([True, False], [row["isHeading"] for row in metadata["transcript"]])

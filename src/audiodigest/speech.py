@@ -8,7 +8,6 @@ guessed or translated. Misaki handles ordinary numbers and punctuation itself.
 from __future__ import annotations
 
 import re
-import unicodedata
 
 # Misaki's phoneme notation, rather than English respellings that can themselves
 # be out of vocabulary. Exact matching protects ordinary words and product names.
@@ -31,6 +30,27 @@ _PRONUNCIATIONS = {
     "RSS": "ˌɑɹˌɛsˈɛs",
     "SQL": "ˌɛskjˌuˈɛl",
 }
+# Exact public-news names only: English-voice approximations, not a general
+# Spanish/Catalan transliterator. Preserve source spellings in the transcript.
+# Local validated overrides take precedence. Do not infer a person's language
+# or accent from a surname or from the Gmail label.
+_NEWS_NAME_PRONUNCIATIONS = {
+    "Sánchez": "sˈɑnʧɛs",
+    "Pedro Sánchez": "pˈɛdɾɔ sˈɑnʧɛθ",
+    "Cándido Conde-Pumpido": "kˈɑndiðɔ kˈɔndɛ pumˈpiðɔ",
+    "Carles Puigdemont": "kˈɑɾləs puʒðəmˈɔn",
+    "Puigdemont": "puʒðəmˈɔn",
+    "Lluís Puig": "ljuˈis pˈuʧ",
+    "Raül Romeva": "ɹəˈul ɹumˈɛvə",
+    "Agustí Sala": "əɡusˈti sˈɑlə",
+    "Vandellòs": "bəndəljˈɔs",
+    "Gironès": "ʒiɾunˈɛs",
+    "Toni Comín": "tˈɔni kumˈin",
+}
+# Documented Misaki English phone inventory (including US/UK variants).
+# Explicit membership prevents markup, URLs, control characters and arbitrary
+# Unicode; the old range check accidentally rejected supported ᵊ and ᵻ.
+_ENGLISH_PHONES = frozenset("bdfhjklmnpstvwzɡŋɹʃʒðθʤʧəiuɑɔɛɜɪʊʌæaAIWYQOᵊᵻɾːˈˌ ")
 _VERSIONS = re.compile(
     r"\b(?P<term>GPT|Python|Kokoro|Antigravity|Node(?:\.js)?|FFmpeg|version|v)"
     r"(?P<separator>[ \t]*-?[ \t]*)(?P<version>\d+(?:\.\d+){1,3})(?!\d|\.\d)"
@@ -53,10 +73,7 @@ def validate_pronunciations(values: object) -> dict[str, str]:
         if (
             not isinstance(phonemes, str)
             or not 1 <= len(phonemes) <= 100
-            or not all(
-                char == " " or (ord(char) <= 0x036F and unicodedata.category(char)[0] in {"L", "M"})
-                for char in phonemes
-            )
+            or not all(char in _ENGLISH_PHONES for char in phonemes)
             or not phonemes.strip()
         ):
             raise ValueError("audio.pronunciations values must contain phonemes, not directions")
@@ -78,6 +95,7 @@ def prepare_speech(
     spoken = _VERSIONS.sub(speak_version, text)
     dictionary = {
         **_PRONUNCIATIONS,
+        **_NEWS_NAME_PRONUNCIATIONS,
         **validate_pronunciations({} if pronunciations is None else pronunciations),
     }
     terms = re.compile(

@@ -220,6 +220,7 @@ class PodcastSettings:
     include_today_in_history: bool = True
     newspaper_edition_scale: str = "standard"
     evidence_mode: str = "newsletter_first"
+    include_newspaper: bool = True
 
 
 @dataclass(slots=True)
@@ -498,6 +499,7 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
         include_today_in_history=bool(
             podcast_raw.get("include_today_in_history", True)
         ),
+        include_newspaper=podcast_raw.get("include_newspaper", True),
         newspaper_edition_scale=newspaper_edition_scale,
         evidence_mode=evidence_mode,
         sections=normalize_custom_sections(
@@ -534,6 +536,8 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
 
 
 def validate_settings(settings: Settings) -> None:
+    if not isinstance(settings.podcast.include_newspaper, bool):
+        raise ValueError("podcast.include_newspaper must be true or false")
     validate_gmail_label(settings.app.gmail_label)
     if not 0.90 <= settings.audio.synthesis_speed <= 1.10:
         raise ValueError("audio.synthesis_speed must be from 0.90 to 1.10")

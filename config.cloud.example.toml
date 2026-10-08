@@ -89,6 +89,7 @@ token_file_path = __TDN_FIREBASE_REFRESH_TOKEN_PATH__
 poll_minutes = 60
 
 [podcast]
+include_newspaper = true
 tone = "warm"
 max_script_repairs = 2
 sections = []

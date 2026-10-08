@@ -455,12 +455,16 @@ function parameterData(form) {
     publish: true,
     dateMode: String(values.get("dateMode") || "today"),
     includeTih: values.get("includeTih") === "on",
-    editionScale: String(values.get("editionScale") || "standard"),
+    includeNewspaper: values.get("includeNewspaper") === "on",
+    editionScale: String(form.elements.editionScale.value || "standard"),
     evidenceMode: String(values.get("evidenceMode") || "newsletter_first"),
   };
 }
 
 function validateParameters(parameters) {
+  if (typeof parameters.includeNewspaper !== "boolean") {
+    throw new Error("Choose whether to generate a newspaper.");
+  }
   if (!parameters.runName || parameters.runName.length > 80) {
     throw new Error("Give this run a name of up to 80 characters.");
   }
@@ -539,6 +543,10 @@ function syncFavoriteActions() {
   if (remove) remove.disabled = !selected;
 }
 
+function syncNewspaperControls(form) {
+  form.elements.editionScale.disabled = !form.elements.includeNewspaper.checked;
+}
+
 function applyParametersToForm(form, parameters) {
   for (const name of [
     "runName", "gmailLabel", "hostCount", "soloName", "dialogueStyle",
@@ -553,6 +561,8 @@ function applyParametersToForm(form, parameters) {
     publish.checked = Boolean(parameters.publish);
   }
   form.elements.includeTih.checked = parameters.includeTih !== false;
+  form.elements.includeNewspaper.checked = parameters.includeNewspaper !== false;
+  syncNewspaperControls(form);
   setSections(form, parameters.sections || []);
   syncHostControls(form);
 }
@@ -835,7 +845,8 @@ function renderSchedules(snapshot) {
         `${state} // ${weekdayText(data.weekdays || [])} // ` +
           `${data.startTime || "--:--"} → READY ${data.readyBy || "--:--"}\n` +
           `${data.parameters?.runName || "UNNAMED RUN"} // ` +
-          `${data.parameters?.gmailLabel || "NO LABEL"} // ${sections}`,
+          `${data.parameters?.gmailLabel || "NO LABEL"} // ${sections}\n` +
+          (data.parameters?.includeNewspaper === false ? "PODCAST ONLY" : "PODCAST + PAPER"),
       ),
     );
     const actions = element("div", "item-actions");
@@ -969,6 +980,8 @@ function editSchedule(scheduleId) {
   }
   scheduleForm.elements.enabled.checked = Boolean(data.enabled);
   scheduleForm.elements.includeTih.checked = parameters.includeTih !== false;
+  scheduleForm.elements.includeNewspaper.checked = parameters.includeNewspaper !== false;
+  syncNewspaperControls(scheduleForm);
   syncHostControls(scheduleForm);
   byId("cancel-edit-button").hidden = false;
   scheduleForm.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -984,6 +997,7 @@ function resetScheduleForm() {
   }
   byId("cancel-edit-button").hidden = true;
   setSections(scheduleForm, []);
+  syncNewspaperControls(scheduleForm);
   syncHostControls(scheduleForm);
 }
 
@@ -1636,7 +1650,9 @@ function renderEpisodeArchives() {
     } else {
       readCard.append(element("p", "item-meta", data.newspaperStatus === "failed"
         ? "NEWSPAPER FAILED // VERIFIED PODCAST AVAILABLE IN PLAY"
-        : "PDF URL NOT SYNCHRONIZED"));
+        : data.newspaperStatus === "skipped"
+          ? "PODCAST ONLY // NEWSPAPER NOT REQUESTED"
+          : "PDF URL NOT SYNCHRONIZED"));
     }
     read.append(readCard);
   }
@@ -2280,6 +2296,8 @@ async function initialize() {
     setupSectionEditor(form);
     form.elements.hostCount.addEventListener("change", () => syncHostControls(form));
     form.elements.soloName.addEventListener("change", () => syncHostControls(form));
+    form.elements.includeNewspaper.addEventListener("change", () => syncNewspaperControls(form));
+    syncNewspaperControls(form);
     syncHostControls(form);
   }
   const localToday = new Date();

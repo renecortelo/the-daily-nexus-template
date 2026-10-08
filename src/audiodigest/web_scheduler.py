@@ -258,7 +258,7 @@ def _published_metadata(
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("newspaper_status") in {"ready", "failed"}:
+            if manifest.get("newspaper_status") in {"ready", "failed", "skipped"}:
                 newspaper_status = manifest["newspaper_status"]
             previews = manifest.get("newspaper_preview_paths", [])
             if isinstance(previews, list) and 1 <= len(previews) <= 3:
@@ -595,6 +595,8 @@ def _execute_generation(
             )
             if metadata.get("newspaperStatus") == "failed":
                 request_detail += " Podcast is ready; newspaper generation failed."
+            elif metadata.get("newspaperStatus") == "skipped":
+                request_detail += " Newspaper skipped as requested."
             client.patch_private_document(
                 "runRequests",
                 request_id,
