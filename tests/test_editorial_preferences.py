@@ -13,6 +13,7 @@ from audiodigest.editorial import (
     NEWSPAPER_TARGET_PROSE_WORDS,
     NEWSPAPER_TARGET_TOTAL_WORDS,
     EditorialPipeline,
+    _bound_closing_comment,
     _deduplicate_newspaper_articles,
     _exact_highlight_candidates,
     _newspaper_article_limits,
@@ -25,10 +26,51 @@ from audiodigest.editorial import (
 )
 from audiodigest.models import (
     AntigravityMetadata,
+    DialogueTurn,
     NewspaperArticle,
     Story,
     VerificationResult,
 )
+
+
+class ClosingCommentBoundsTests(TestCase):
+    def _script(self, quotation, comment):
+        text = f"'{quotation.text}' — {quotation.author}. {comment}"
+        return SimpleNamespace(
+            hosts=["Dalia"], sign_off=[DialogueTurn("Dalia", text)], sign_off_text=text
+        )
+
+    def test_short_witty_comment_and_exact_quote_are_preserved(self):
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
+        comment = "A useful reminder: the database backup should not be an act of faith."
+        script = self._script(quote, comment)
+        _bound_closing_comment(script, quote)
+        self.assertEqual(2, len(script.sign_off))
+        self.assertIn(quote.text, script.sign_off[0].text)
+        self.assertIn(quote.author, script.sign_off[0].text)
+        self.assertEqual(comment, script.sign_off[1].text)
+
+    def test_overlong_single_sentence_is_omitted_never_cropped(self):
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
+        script = self._script(quote, " ".join(["development"] * 30) + ".")
+        _bound_closing_comment(script, quote)
+        self.assertEqual(1, len(script.sign_off))
+        self.assertIn(quote.text, script.sign_off[0].text)
+
+    def test_only_complete_short_sentence_can_survive_the_guard(self):
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
+        script = self._script(
+            quote, "The backup deserves checking. " + " ".join(["detail"] * 30) + "."
+        )
+        _bound_closing_comment(script, quote)
+        self.assertEqual("The backup deserves checking.", script.sign_off[1].text)
+
+    def test_quote_length_is_not_counted_against_comment_limit(self):
+        quote = ClosingQuote(" ".join(["evidence"] * 30) + ".", "An Author", "https://example.com/source")
+        script = self._script(quote, "The database is not impressed by our optimism.")
+        _bound_closing_comment(script, quote)
+        self.assertEqual(2, len(script.sign_off))
+        self.assertIn(quote.text, script.sign_off[0].text)
 
 
 class EditorialPreferenceTests(TestCase):
@@ -88,7 +130,10 @@ class EditorialPreferenceTests(TestCase):
             )
         writing = engine.antigravity.invoke.call_args_list[1].args[0]
         self.assertIn("ONE specific", writing)
-        self.assertIn("Humor is optional", writing)
+        self.assertIn("aim for 12-20 words", writing)
+        self.assertIn("never more than\n25 words", writing)
+        self.assertIn("SEPARATE sign_off turn", writing)
+        self.assertIn("natural contractions as the default", writing)
         self.assertIn("Write for listening", writing)
         self.assertIn("Do not modernize or paraphrase the approved closing quotation", writing)
         self.assertIn("emotion/SSML tags", writing)

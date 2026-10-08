@@ -79,6 +79,20 @@ class WebAppSecurityTests(TestCase):
         self.assertNotIn("schedule-clock-note", page)
         self.assertNotIn("The web app stores parameters", page)
 
+    def test_newspaper_toggle_is_shared_and_backwards_compatible(self):
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        rules = Path("firestore.rules").read_text(encoding="utf-8")
+        self.assertEqual(2, page.count('name="includeNewspaper" type="checkbox" checked'))
+        self.assertIn('includeNewspaper: values.get("includeNewspaper") === "on"', source)
+        self.assertEqual(
+            2, source.count('includeNewspaper.checked = parameters.includeNewspaper !== false')
+        )
+        self.assertIn("PODCAST ONLY // NEWSPAPER NOT REQUESTED", source)
+        self.assertIn(
+            "!('includeNewspaper' in parameters) || parameters.includeNewspaper is bool", rules
+        )
+
     def test_schedule_timezone_uses_the_browser_iana_zone(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
         page = Path("web/index.html").read_text(encoding="utf-8")

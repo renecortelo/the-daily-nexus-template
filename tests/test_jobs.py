@@ -37,6 +37,26 @@ def schedule_payload() -> dict:
 
 
 class ScheduledJobTests(TestCase):
+    def test_newspaper_defaults_on_and_explicit_opt_out_survives_round_trip(self):
+        payload = schedule_payload()
+        self.assertTrue(ScheduledJob.from_dict(payload).parameters.include_newspaper)
+        payload["parameters"]["includeNewspaper"] = False
+        job = ScheduledJob.from_dict(payload)
+        self.assertFalse(job.parameters.include_newspaper)
+        self.assertFalse(ScheduledJob.from_dict(job.to_dict()).parameters.include_newspaper)
+        configured = apply_generation_parameters(
+            load_settings("config.example.toml"), job.parameters
+        )
+        self.assertFalse(configured.podcast.include_newspaper)
+        self.assertEqual(job.parameters.sections, configured.podcast.sections)
+
+    def test_newspaper_option_rejects_non_booleans(self):
+        for value in ("false", 0, 1, None):
+            payload = schedule_payload()
+            payload["parameters"]["includeNewspaper"] = value
+            with self.assertRaisesRegex(JobValidationError, "includeNewspaper"):
+                ScheduledJob.from_dict(payload)
+
     def test_schedule_parameters_are_normalized_and_applied(self):
         job = ScheduledJob.from_dict(schedule_payload())
         self.assertEqual(

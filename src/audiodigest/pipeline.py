@@ -584,6 +584,7 @@ class Pipeline:
         edition_name: str = "",
         closing_quote_id: str = "",
         episode_budget: dict[str, Any] | None = None,
+        newspaper_status: str = "failed",
     ) -> None:
         manifest = {
             "episode_date": day.isoformat(),
@@ -594,7 +595,7 @@ class Pipeline:
             "stories": [item.to_dict() for item in stories],
             "script": script.to_dict(),
             "newspaper": newspaper.to_dict() if newspaper else None,
-            "newspaper_status": "ready" if newspaper else "failed",
+            "newspaper_status": "ready" if newspaper else newspaper_status,
             "newspaper_path": str(newspaper_path) if newspaper_path else "",
             "newspaper_preview_path": str(preview_paths[0]) if preview_paths else "",
             "newspaper_preview_paths": [str(path) for path in preview_paths],
@@ -827,20 +828,34 @@ class Pipeline:
                 message=(
                     "Verified script available; preparing the two-page edition "
                     "with a third page reserved only for readable overflow."
+                    if self.settings.podcast.include_newspaper
+                    else "Verified script available; newspaper disabled for this run."
                 ),
             )
 
             _stage(
                 6,
                 8,
-                "Writing the newspaper edition (two-page target; three-page maximum)",
+                "Writing the newspaper edition (two-page target; three-page maximum)"
+                if self.settings.podcast.include_newspaper
+                else "Newspaper skipped as requested; continuing to audio",
             )
-            newspaper, newspaper_metadata, preview_work_paths = self._prepare_newspaper_artifact(
-                stories,
-                day,
-                working_episode_dir,
-                in_progress_dir,
-                edition_name=run_name if execution_id else "",
+            if self.settings.podcast.include_newspaper:
+                newspaper, newspaper_metadata, preview_work_paths = (
+                    self._prepare_newspaper_artifact(
+                        stories,
+                        day,
+                        working_episode_dir,
+                        in_progress_dir,
+                        edition_name=run_name if execution_id else "",
+                    )
+                )
+            else:
+                newspaper, newspaper_metadata, preview_work_paths = None, [], []
+            newspaper_status = (
+                "ready" if newspaper
+                else "failed" if self.settings.podcast.include_newspaper
+                else "skipped"
             )
             metadata.extend(newspaper_metadata)
             newspaper_json_work_path = working_episode_dir / "newspaper.json"
@@ -858,7 +873,7 @@ class Pipeline:
                 day=day,
                 stage=7,
                 message="Verified script available; rendering audio. Newspaper "
-                + ("ready." if newspaper else "failed."),
+                + newspaper_status + ".",
             )
 
             script_path = episode_dir / "script.json"
@@ -890,7 +905,7 @@ class Pipeline:
                     day,
                     "dry-run",
                     "verified script generated; newspaper "
-                    + ("ready" if newspaper else "failed")
+                    + newspaper_status
                     + "; audio skipped",
                 )
                 shutil.rmtree(in_progress_dir, ignore_errors=True)
@@ -899,7 +914,7 @@ class Pipeline:
                     "episode_date": day.isoformat(),
                     "script_path": str(script_path),
                     "newspaper_path": str(newspaper_path) if newspaper_path else "",
-                    "newspaper_status": "ready" if newspaper else "failed",
+                    "newspaper_status": newspaper_status,
                     "preview_path": str(preview_path) if preview_path else "",
                     "preview_paths": [str(path) for path in preview_paths],
                     "word_count": script.word_count,
@@ -962,6 +977,7 @@ class Pipeline:
                 edition_name=run_name if execution_id else "",
                 closing_quote_id=closing_quote.quote_id,
                 episode_budget=episode_budget.to_dict(),
+                newspaper_status=newspaper_status,
             )
             _promote_episode_files(
                 [
@@ -1021,7 +1037,7 @@ class Pipeline:
                 "audio_path": str(audio_path),
                 "manifest_path": str(manifest_path),
                 "newspaper_path": str(newspaper_path) if newspaper_path else "",
-                "newspaper_status": "ready" if newspaper else "failed",
+                "newspaper_status": newspaper_status,
                 "preview_path": str(preview_path) if preview_path else "",
                 "preview_paths": [str(path) for path in preview_paths],
                 "word_count": script.word_count,

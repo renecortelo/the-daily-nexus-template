@@ -27,7 +27,7 @@ deployment.
 | 3 | Ask Antigravity for structured story extraction, classification, ranking, and duplicate consolidation | Evidence-linked story records |
 | 4 | Generate the configured solo or two-host podcast script with ordered or content-derived sections | Structured host dialogue and show notes |
 | 5 | Verify coverage and factual support; repair rejected drafts within bounded attempts | Approved spoken script |
-| 6 | Generate and quality-check an independent reader-facing newspaper, targeting two pages with a third page allowed only for readable overflow | Structured newspaper JSON, PDF, and page previews |
+| 6 | If requested, generate and quality-check an independent reader-facing newspaper, targeting two pages with a third page allowed only for readable overflow | Structured newspaper JSON, PDF, and page previews, or an explicit skipped status |
 | 7 | Synthesize each host with Kokoro inside the selected private runtime, assemble segments, preserve transcript timing, and normalize the MP3 with FFmpeg | MP3 and timed transcript |
 | 8 | Finalize locally or publish an incremental Firebase Hosting release, then fetch the remote RSS feed and verify the new episode | Local archive or remotely verified private feed |
 
@@ -35,7 +35,14 @@ Temporary source payloads are removed in the pipeline's cleanup path. A run is
 not marked published merely because files were uploaded: remote RSS verification
 must also succeed.
 
-The newspaper is optional at delivery, not at verification: unsupported or
+GEN, SCHED and saved favorites carry `includeNewspaper` (boolean, default true
+for older records). It maps to `[podcast].include_newspaper` in the runtime.
+When false, stage 6 makes no newspaper model, quality-review or render calls;
+publication and transcript creation proceed normally. Manifest and owner-only
+archive metadata distinguish `skipped` from `failed`. No schedule is silently
+changed during deployment.
+
+When requested, the newspaper is optional at delivery, not at verification: unsupported or
 unclassified rejected copy is withheld. A verified podcast can publish with a
 visible newspaper-failed status. Stylistic review leftovers are tolerated only
 when factual safety was explicitly approved. The final MP3 duration must match
@@ -48,6 +55,16 @@ are planning ceilings, not mandatory durations. Coverage is source-balanced;
 the newspaper still receives the complete extracted story set. A draft is not
 expanded just to reach a word minimum. Kokoro's complete speech timeline and
 the encoded MP3 must both remain within 30 minutes; neither is silently cut.
+
+Non-formal speech prompts prefer contractions, plain wording and genuinely
+responsive host dialogue; these are style preferences, not new failure quotas.
+The closing quote and attribution stay verbatim. Its separate original comment
+targets 12–20 words (25 maximum); a deterministic guard keeps only complete short
+copy or the quotation alone, without another model call or whole-script retry.
+Reviewed Spanish/Catalan public-news names have synthesis-only phoneme overrides
+in `speech.py`, shared by desktop and cloud. Written names remain unchanged;
+local validated overrides take precedence. These are English-voice approximations,
+not native-language voice switching or automatic transliteration of unknown names.
 
 ## What each intelligence component does
 

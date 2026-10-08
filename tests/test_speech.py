@@ -5,10 +5,36 @@ from pathlib import Path
 from unittest import TestCase
 
 from audiodigest.audio import _wav_edge_silence_ms
-from audiodigest.speech import boundary_pause_ms, prepare_speech, validate_pronunciations
+from audiodigest.speech import (
+    _NEWS_NAME_PRONUNCIATIONS,
+    boundary_pause_ms,
+    prepare_speech,
+    validate_pronunciations,
+)
 
 
 class SpeechPreparationTests(TestCase):
+    def test_public_news_names_are_exact_synthesis_only_overrides(self):
+        text = "Carles Puigdemont and Sánchez; unknown surname remains unchanged."
+        prepared = prepare_speech(text)
+        self.assertIn("[Carles Puigdemont](/kˈɑɾləs puʒðəmˈɔn/)", prepared)
+        self.assertIn("[Sánchez](/sˈɑnʧɛs/)", prepared)
+        self.assertIn("unknown surname remains unchanged", prepared)
+        self.assertEqual(prepared, prepare_speech(prepared))
+        self.assertEqual(text, "Carles Puigdemont and Sánchez; unknown surname remains unchanged.")
+        self.assertIn(
+            "[Sánchez](/sˈɑnʧɛθ/)",
+            prepare_speech("Sánchez", pronunciations={"Sánchez": "sˈɑnʧɛθ"}),
+        )
+
+    def test_documented_phone_inventory_accepts_supported_variants_only(self):
+        self.assertEqual(
+            _NEWS_NAME_PRONUNCIATIONS, validate_pronunciations(_NEWS_NAME_PRONUNCIATIONS)
+        )
+        self.assertEqual({"Sample": "ᵊᵻɾˈaː"}, validate_pronunciations({"Sample": "ᵊᵻɾˈaː"}))
+        for value in ("n\u200bm", "n\tm", "🙂", "<&>", "sˈanxes"):
+            with self.assertRaises(ValueError):
+                validate_pronunciations({"Sample": value})
     def test_technical_acronyms_use_letter_names_without_touching_other_words(self):
         self.assertEqual(
             "[IT](/ˌItˈi/) uses an [API](/ˌApˌiˈI/) for [SQL](/ˌɛskjˌuˈɛl/) "

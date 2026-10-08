@@ -490,6 +490,12 @@ class OptionalNewspaperTests(TestCase):
             )
 
     def test_verified_podcast_can_publish_without_a_paper_end_to_end(self):
+        self._assert_podcast_without_paper(include_newspaper=True)
+
+    def test_newspaper_opt_out_publishes_podcast_without_paper_calls(self):
+        self._assert_podcast_without_paper(include_newspaper=False)
+
+    def _assert_podcast_without_paper(self, *, include_newspaper):
         sources = fixture_sources(Path("tests/fixtures/newsletters.json"))
         story = Story.from_dict(
             {
@@ -522,6 +528,7 @@ class OptionalNewspaperTests(TestCase):
             settings.app.runtime_dir = Path(name)
             settings.firebase.publish_enabled = True
             settings.firebase.publish_mode = "automatic"
+            settings.podcast.include_newspaper = include_newspaper
             pipeline = Pipeline(settings)
             pipeline._load_sources = Mock(return_value=sources)
             pipeline._enrich_articles = Mock()
@@ -549,11 +556,16 @@ class OptionalNewspaperTests(TestCase):
                 )
                 result = pipeline.run(requested_date=date(2026, 8, 10))
             self.assertEqual("published", result["status"])
-            self.assertEqual("failed", result["newspaper_status"])
+            expected_status = "failed" if include_newspaper else "skipped"
+            self.assertEqual(expected_status, result["newspaper_status"])
+            self.assertEqual(
+                int(include_newspaper), pipeline._generate_verified_newspaper.call_count
+            )
             self.assertEqual("", result["newspaper_path"])
             self.assertTrue(Path(result["audio_path"]).is_file())
             manifest = json.loads(Path(result["manifest_path"]).read_text(encoding="utf-8"))
             self.assertIsNone(manifest["newspaper"])
+            self.assertEqual(expected_status, manifest["newspaper_status"])
             self.assertEqual([], manifest["newspaper_preview_paths"])
             self.assertIsNone(
                 pipeline.database.episode_for_date(date(2026, 8, 10))["newspaper_path"]

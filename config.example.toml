@@ -100,6 +100,8 @@ poll_minutes = 5
 tone = "warm"
 max_script_repairs = 2
 include_today_in_history = true
+# Skip all newspaper drafting, verification and rendering for podcast-only runs.
+include_newspaper = true
 # focused = specialized/lower-volume label; standard = balanced; comprehensive = broad news label.
 newspaper_edition_scale = "standard"
 # newsletter_first uses email bodies first and only safe direct article links as enrichment.

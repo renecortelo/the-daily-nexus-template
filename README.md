@@ -18,6 +18,12 @@ A complete run produces a narrated MP3, a synchronized transcript, source
 references, a reader-oriented PDF newspaper, preview images, metadata, and—when
 publishing is enabled—an updated private RSS feed.
 
+In GEN and SCHED, uncheck **Generate newspaper too** for podcast-only runs.
+This skips newspaper writing, quality review and PDF rendering; podcast
+verification and publication are unchanged. The choice is saved in favorites
+and schedules. Older saved records default to newspaper enabled until you
+change and save them. Unrequested papers show **skipped**, not failed.
+
 ## How it works
 
 ![Eight stages run top to bottom: collect approved Gmail newsletters and optional daily research; enrich newsletter-first evidence from safe public pages; rank and deduplicate stories; draft and verify the host script; branch into an independently written newspaper and Kokoro audio with a timed transcript; then finalize locally or, when enabled, publish and remotely verify the Firebase-hosted private feed. An optional band shows the same pipeline running unattended after a Cloudflare alarm or GEN wake-up dispatches a private GitHub Actions job.](assets/diagram-pipeline.svg)

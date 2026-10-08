@@ -35,6 +35,28 @@ function harness(names) {
   vm.runInContext(names.map(extract).join('\n'),context);
   return {context,nodes,images};
 }
+
+test('newspaper option preserves edition scale when disabled and defaults on for old favorites', () => {
+  const {context}=harness(['parameterData','syncNewspaperControls','applyParametersToForm']);
+  const values=new Map([['runName','Example'],['gmailLabel','Example/News'],['hostCount','1'],['includeNewspaper','on']]);
+  context.FormData=class {get(key){return values.get(key);}};
+  context.sectionValues=()=>['Data'];
+  context.setSections=(form,sections)=>{form.sections=sections;};
+  context.syncHostControls=()=>{};
+  context.HTMLInputElement=class {};
+  const form={elements:{editionScale:{value:'focused'},includeNewspaper:{checked:true},includeTih:{checked:true},namedItem(name){return this[name];}}};
+  assert.equal(context.parameterData(form).includeNewspaper,true);
+  values.delete('includeNewspaper'); form.elements.includeNewspaper.checked=false;
+  context.syncNewspaperControls(form);
+  assert.equal(form.elements.editionScale.disabled,true);
+  assert.equal(context.parameterData(form).editionScale,'focused');
+  context.applyParametersToForm(form,{sections:['Data']});
+  assert.equal(form.elements.includeNewspaper.checked,true);
+  assert.equal(form.elements.editionScale.disabled,false);
+  context.applyParametersToForm(form,{includeNewspaper:false,sections:['Data']});
+  assert.equal(form.elements.includeNewspaper.checked,false);
+  assert.deepEqual(form.sections,['Data']);
+});
 test('late reader responses cannot change the selected PDF or content', () => {
   const {context,images,nodes}=harness(['selectEdition']);
   const select=id=>context.selectEdition({id,title:id,url:`https://example.com/${id}.pdf`,pageCount:2});
