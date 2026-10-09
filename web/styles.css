@@ -21,6 +21,9 @@
   background: var(--background);
 }
 
+.favorite-retention { display: flex; align-items: center; gap: 0.6rem; margin: 0.65rem 0; color: var(--muted); font-size: 0.82rem; }
+.favorite-retention input { flex: 0 0 auto; width: 1.2rem; min-height: 1.2rem; accent-color: var(--amber); }
+
 * {
   box-sizing: border-box;
   scrollbar-color: var(--amber) var(--black);

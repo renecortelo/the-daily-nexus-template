@@ -43,6 +43,7 @@ from audiodigest.models import (
     NewspaperIssue,
     SourceItem,
     Story,
+    source_prompt_dicts,
 )
 from audiodigest.newspaper import (
     NewspaperRenderer,
@@ -690,7 +691,7 @@ class Pipeline:
             )
             source_payload_path.write_text(
                 json.dumps(
-                    [item.to_prompt_dict() for item in sources],
+                    source_prompt_dicts(sources),
                     ensure_ascii=False,
                     indent=2,
                 ),

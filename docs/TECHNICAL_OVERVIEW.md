@@ -125,9 +125,21 @@ not native-language voice switching or automatic transliteration of unknown name
   follows bounded redirects, limits response size and time, and treats an
   inaccessible article as optional enrichment rather than a reason to replace
   newsletter evidence.
-- The web session uses session-only Firebase persistence and signs out after 15
-  minutes of inactivity or one hour total. Active listening counts as activity,
-  but never bypasses the one-hour limit. Firestore authorization requires a matching owner UID.
+- Editorial payloads replace raw mailbox IDs with request-local source aliases;
+  validated extraction restores the internal source linkage for coverage and
+  deduplication. Recognized email addresses, mail utility lines and personalized
+  URL parameters are conservatively removed without changing the original source
+  records. Credential-bearing URLs are omitted rather than fetched. This does
+  not detect all personal information; selected reporting reaches Antigravity.
+- The web console uses session-only Firebase persistence and locks after 15
+  minutes of inactivity or one hour from the original sign-in time. Reloads and
+  token refresh cannot restart that deadline. Active listening counts as activity,
+  but never bypasses the one-hour limit. These browser controls do not revoke
+  copied tokens server-side. Firestore authorization requires a matching owner UID.
+  Logout clears private forms and session-only favorites. Device-retained
+  favorites require an explicit choice; legacy saved favorites remain available
+  with their retention option enabled. Console logout does not cancel schedules
+  or revoke the unlisted feed/media URLs.
   Playback bookmarks store only episode IDs and numeric positions in owner-scoped
   sessionStorage, at most 20 entries, and are removed at sign-out. Media Session
   controls are feature-detected; the episode title may appear on the device's

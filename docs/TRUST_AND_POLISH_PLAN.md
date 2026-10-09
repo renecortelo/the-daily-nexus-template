@@ -1,0 +1,123 @@
+# Trust and polish implementation plan
+
+This plan improves the existing per-user product without a provider migration,
+paid APIs, extra model-review passes, a shared multi-user service, or a broad UI
+redesign. Production credentials and deployment state must never enter the
+reusable public repository. Functional fixes must reach both repositories through
+a reviewed, allowlisted export.
+
+## Non-negotiable release controls
+
+- Keep `useG1Credits=false`, telemetry disabled, and provider no-spend controls.
+- Keep the protected runner budget and 60-minute workflow timeout.
+- Do not restart failed editions or change saved schedules unless requested.
+- Never weaken factual safety or publication verification to save compute.
+- Test locally first; do not generate full episodes merely to test UI changes.
+- Keep each increment small, reversible, tested and separately described.
+- Public scans cover both current files and history; logs and fixtures use only
+  synthetic identities and links.
+
+## 1. Privacy boundaries, session semantics and data minimization
+
+Status: in progress.
+
+First increment implemented on 2026-10-09: accurate disclosures, original-sign-in
+console deadlines, logout cleanup, favorite retention controls, model source
+aliases and recognized URL/email minimization. Local regression gates: 301 Python
+tests, 20 browser behavior tests, 9 clock tests, and Ruff. The server authorization
+gate below remains open; this increment does not claim complete token revocation
+or migrate historical cloud records.
+
+First increment:
+
+- Replace misleading cloud/local and browser-close claims with accurate wording.
+- Base the console's absolute deadline on Firebase's original authentication
+  time, not page load or token refresh; preserve idle state across reloads.
+- Clear sensitive form and favorite-picker state immediately on logout, and
+  prevent late authorization responses from reopening the console.
+- Make persistent favorites an explicit device choice while preserving existing
+  saved favorites and providing a session-only alternative.
+- Replace mailbox identifiers with per-request source aliases in model payloads,
+  restoring internal source linkage after validated extraction.
+- Remove recognized personal/tracking parameters and credential-bearing links;
+  redact email/contact utility content conservatively without discarding news.
+- Add regressions and explain the exact boundaries in setup/security docs.
+
+Acceptance: page reload and token refresh cannot extend the console deadline;
+expired or unverified authentication cannot open private views; logout empties
+private controls; generated reference fixtures retain functional article query
+arguments but no recognized personalization/authentication values; original
+mailbox IDs and personal email addresses do not appear in source prompts.
+
+Remaining authorization gate: the console and unattended runner currently share
+the owner identity. Browser timeout controls do not invalidate a copied token
+server-side. Design distinct automation authorization before adding server-side
+browser-session expiry. Do not apply a blanket owner-token age rule that breaks
+scheduled generation. Test credential/file access boundaries and feed-link
+rotation separately; no rotation of a working private feed is automatic.
+
+## 2. Original-source verification and source lineage
+
+Carry precise supporting excerpts for important claims; validate source and URL
+membership; use those excerpts in the existing factual-review calls. Preserve
+attribution, quantities, dates, translated names and uncertainty. Show coverage
+as collected/extracted/selected/duplicate/omitted, not a guarantee of accuracy.
+
+Acceptance: intentionally corrupted facts or forged links fail even when the
+script repeats an extracted record faithfully; supported multilingual reporting
+survives; no additional paid service or routine review call is introduced.
+
+## 3. Archive lifecycle and queue recovery
+
+Define retention in episodes or days explicitly; synchronize available/retired
+metadata with audio, paper and preview assets. Distinguish enqueue success from
+wake-up success; retry a wake without creating another generation request. Keep
+intentional distinct editions selectable and failed executions terminal.
+
+Acceptance: no selectable available record points to retired media; wake failure
+cannot cause accidental duplicate production; intentional reruns remain possible.
+
+## 4. Free-tier visibility and measured efficiency
+
+Expose runner time, queue delay and projected allowance headroom. Measure before
+optimizing model calls, synthesis and safe non-private caching. Account for
+Hosting release storage, paper previews and transfer separately. Explain quota
+deferral and missed ready-by targets instead of retrying indefinitely.
+
+Acceptance: no paid fallback, runtime-cap relaxation or unbounded retry; measured
+before/after results; factual checks and private production isolation remain.
+
+## 5. Podcast and newspaper quality
+
+Give lead developments depth and supporting briefs brevity. Use short A/B audio
+samples for spoken syntax, handoffs, names and pauses; measure final encoded
+loudness and peaks. Remove newspaper semantic repetition and empty overflow;
+use only explanatory, evidence-supported visuals, with explicit units and dates.
+
+Acceptance: no filler duration requirement, clipped assertions or unsupported
+implications; coherent two-page editions where practical; a third page only for
+substantive readable overflow; pronunciation and delivery reviewed by listening.
+
+## 6. Mobile accessibility, UX and maintainability
+
+Retain the retrofuturist identity; improve invisible touch targets, non-drag
+section ordering, focus, readable text and persistent errors. Add semantic mobile
+reading from approved issue data and exact, stable preview manifests. Share form
+logic; update only changing monitor fields; consolidate modules incrementally.
+
+Acceptance: real Safari/PWA, keyboard, screen-reader, zoom, reduced-motion and
+software-keyboard tests; no private offline caching by default; one build
+identity; public and private functionality synchronized with sanitized export.
+
+## Release procedure for each increment
+
+1. Review the diff and add focused regressions.
+2. Run Python, browser-behavior, clock, lint and syntax checks locally.
+3. Export only approved source/docs/tests to the public template, retaining its
+   generic defaults and deployment-free history.
+4. Scan current public source, complete history and known local private values.
+5. Commit/push each repository through the normal approval controls.
+6. Deploy only the relevant app assets, preserving the existing feed, clock,
+   authentication configuration and schedules; verify the hosted build.
+7. Record what shipped and what remains open. Never present a UI timeout or a
+   successful secret scan as complete server-side security certification.

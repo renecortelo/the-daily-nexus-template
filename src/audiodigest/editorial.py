@@ -15,6 +15,7 @@ from audiodigest.constants import (
     Section,
     editorial_section_definitions,
 )
+from audiodigest.content import minimize_editorial_text, normalize_url
 from audiodigest.episode_budget import EpisodeBudget, plan_episode
 from audiodigest.models import (
     AntigravityMetadata,
@@ -24,6 +25,7 @@ from audiodigest.models import (
     SourceItem,
     Story,
     VerificationResult,
+    source_prompt_dicts,
 )
 from audiodigest.preferences import editorial_tone
 
@@ -590,6 +592,21 @@ class EditorialPipeline:
     def __init__(self, settings: Settings, antigravity: AntigravityCLI):
         self.settings = settings
         self.antigravity = antigravity
+        self._source_aliases: dict[str, str] = {}
+
+    def _story_prompt_dict(self, story: Story) -> dict[str, Any]:
+        data = story.to_dict()
+        aliases = []
+        for source_id in story.source_ids:
+            if source_id not in self._source_aliases:
+                self._source_aliases[source_id] = f"source-{len(self._source_aliases) + 1:04d}"
+            aliases.append(self._source_aliases[source_id])
+        data["source_ids"] = aliases
+        data["source_urls"] = [safe for url in story.source_urls if (safe := normalize_url(url))]
+        for key in ("headline", "why_it_matters"):
+            data[key] = minimize_editorial_text(data[key])
+        data["facts"] = [minimize_editorial_text(fact) for fact in story.facts]
+        return data
 
     def _section_order_for_stories(self, stories: list[Story]) -> tuple[str, ...]:
         configured = getattr(
@@ -683,9 +700,17 @@ newsletter story, omit that story instead of assigning it to an unrelated desk. 
 data-engineering news, including its quantitative evidence, in DATA.
 Do not quote long passages. Omit marketing claims and stories without meaningful substance.
 """.strip()  # noqa: S608 - prompt string, not a query.
+        prompt_sources = source_prompt_dicts(sources)
+        alias_to_source = {
+            prompt["message_id"]: source.message_id
+            for source, prompt in zip(sources, prompt_sources, strict=True)
+        }
+        self._source_aliases = {
+            original: alias for alias, original in alias_to_source.items()
+        }
         payload = {
             "episode_date": episode_date.isoformat(),
-            "sources": [source.to_prompt_dict() for source in sources],
+            "sources": prompt_sources,
             "section_definitions": editorial_section_definitions(configured_sections),
         }
 
@@ -694,6 +719,13 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                 data,
                 allowed_sections=allowed_sections,
             )
+            for story in stories:
+                if any(alias not in alias_to_source for alias in story.source_ids):
+                    raise ValueError("extracted story uses an unknown source alias")
+                story.source_ids = [alias_to_source[alias] for alias in story.source_ids]
+                story.source_urls = [
+                    safe for url in story.source_urls if (safe := normalize_url(url))
+                ]
             if not configured_sections:
                 derived = {
                     story.section.value
@@ -906,7 +938,7 @@ Return JSON only:
         payload = {
             "episode_date": episode_date.isoformat(),
             "section_order": list(section_order),
-            "stories": [story.to_dict() for story in stories],
+            "stories": [self._story_prompt_dict(story) for story in stories],
             "closing_quote": closing_quote.to_dict(),
             "section_definitions": editorial_section_definitions(section_order),
             "hosts": active_hosts,
@@ -1171,7 +1203,7 @@ Return JSON only:
         payload = {
             "episode_date": episode_date.isoformat(),
             "editor": "Dario Novelli",
-            "stories": [story.to_dict() for story in stories],
+            "stories": [self._story_prompt_dict(story) for story in stories],
             "article_priority_story_ids": article_priority_story_ids,
             "edition_priority_story_ids": edition_priority_story_ids,
             "section_definitions": editorial_section_definitions(
@@ -1532,7 +1564,7 @@ If every claim is supported and the only defects concern style, repetition, or p
 return approved=false, factual_approved=true, and concrete editorial issues.
 """.strip()
         payload = {
-            "stories": [story.to_dict() for story in stories],
+            "stories": [self._story_prompt_dict(story) for story in stories],
             "newspaper": issue.to_dict(),
             "section_definitions": editorial_section_definitions(
                 tuple(story.section.value for story in stories)
@@ -1593,7 +1625,7 @@ or:
 {"approved": false, "issues": ["specific repair instruction"]}
 """.strip()
         payload = {
-            "stories": [story.to_dict() for story in stories],
+            "stories": [self._story_prompt_dict(story) for story in stories],
             "script": script.to_dict(),
             "closing_quote": closing_quote.to_dict(),
             "configured_hosts": self.settings.hosts.active_names,
