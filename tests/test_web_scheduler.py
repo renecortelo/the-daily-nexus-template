@@ -97,6 +97,18 @@ class WebSchedulerTests(TestCase):
                     {
                         "transcript_path": str(transcript),
                         "newspaper_status": "skipped",
+                        "source_mix": {
+                            "extracted_story_records": 9,
+                            "duplicate_story_records": 2,
+                            "consolidated_stories": 7,
+                            "selected_news_stories": 6,
+                            "omitted_news_stories": 1,
+                            "unrepresented_newsletters": 1,
+                            "source_passages_cited": 8,
+                            "source_ids": ["synthetic-mailbox-id"],
+                            "evidence": [{"excerpt": "Synthetic original reporting."}],
+                        },
+                        "stories": [{"evidence": [{"excerpt": "Synthetic original reporting."}]}],
                         "episode_budget": {
                             "newsletter_count": 3,
                             "available_stories": 12,
@@ -136,6 +148,12 @@ class WebSchedulerTests(TestCase):
             self.assertNotIn("selected_ids", metadata["episodeBudget"])
             self.assertNotIn("unapproved_field", metadata["episodeBudget"])
             self.assertEqual([True, False], [row["isHeading"] for row in metadata["transcript"]])
+            self.assertEqual(9, metadata["sourceMix"]["extracted_story_records"])
+            self.assertEqual(2, metadata["sourceMix"]["duplicate_story_records"])
+            self.assertEqual(1, metadata["sourceMix"]["omitted_news_stories"])
+            self.assertNotIn("source_ids", metadata["sourceMix"])
+            self.assertNotIn("evidence", json.dumps(metadata, default=str))
+            self.assertNotIn("Synthetic original reporting.", json.dumps(metadata, default=str))
 
     def test_post_publication_archive_failure_never_marks_generation_failed(self):
         class Client(_FakeWebClient):

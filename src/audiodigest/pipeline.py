@@ -35,6 +35,7 @@ from audiodigest.editorial import (
     newspaper_prose_word_count,
 )
 from audiodigest.episode_budget import plan_episode
+from audiodigest.evidence import review_evidence
 from audiodigest.execution_budget import RunBudgetExceeded, check_budget, reserve_time
 from audiodigest.gmail_client import GmailClient, fixture_sources
 from audiodigest.models import (
@@ -724,6 +725,37 @@ class Pipeline:
                 selected_stories=episode_budget.selected_news_stories,
                 unique_facts=episode_budget.unique_facts,
             )
+            extraction_counts = getattr(self.editorial, "extraction_counts", {})
+            if isinstance(extraction_counts, dict):
+                source_mix.update(extraction_counts)
+            source_mix.update({
+                "consolidated_stories": len(stories),
+                "selected_news_stories": episode_budget.selected_news_stories,
+                "omitted_news_stories": (
+                    episode_budget.available_stories - episode_budget.selected_news_stories
+                ),
+                "unrepresented_newsletters": (
+                    episode_budget.newsletter_count - episode_budget.represented_newsletters
+                ),
+                "source_passages_cited": len({
+                    support.passage_id for story in stories for support in story.evidence
+                }),
+            })
+            counts(
+                extracted_records=int(source_mix.get("extracted_story_records", len(stories))),
+                merged_duplicates=int(source_mix.get("duplicate_story_records", 0)),
+                omitted_stories=int(source_mix["omitted_news_stories"]),
+            )
+            print(
+                "Coverage ledger: "
+                f"{source_mix.get('extracted_story_records', len(stories))} extracted records; "
+                f"{source_mix.get('duplicate_story_records', 0)} duplicates merged; "
+                f"{episode_budget.selected_news_stories} news stories selected for audio; "
+                f"{source_mix['omitted_news_stories']} outside the audio shortlist; "
+                f"{source_mix['source_passages_cited']} original passages cited. "
+                "Counts describe lineage, not factual accuracy.",
+                flush=True,
+            )
             print(
                 f"Episode budget: {episode_budget.newsletter_count} newsletters; "
                 f"{episode_budget.selected_news_stories}/{episode_budget.available_stories} "
@@ -1196,6 +1228,18 @@ class Pipeline:
         ]
         if not stories:
             raise NoContentError("No valid verified stories were saved for this episode.")
+
+        # Check saved originals before spending a model call or replacing files.
+        # Old manifests remain playable/renderable, but summaries cannot stand
+        # in for original evidence when writing a new independent edition.
+        aliases = {
+            source: f"source-{index:04d}"
+            for index, source in enumerate(
+                dict.fromkeys(source for story in stories for source in story.source_ids),
+                start=1,
+            )
+        }
+        review_evidence(stories, aliases, None)
 
         _stage(1, 3, "Loading saved verified newsletter stories")
         _stage(2, 3, "Writing and quality-checking an independent Read edition")

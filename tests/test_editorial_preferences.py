@@ -1,5 +1,5 @@
 import copy
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock
@@ -24,6 +24,7 @@ from audiodigest.editorial import (
     _stories_validator,
     _validate_newspaper_word_budget,
 )
+from audiodigest.evidence import SourceEvidenceIndex
 from audiodigest.models import (
     AntigravityMetadata,
     DialogueTurn,
@@ -119,6 +120,16 @@ class EditorialPreferenceTests(TestCase):
         )
         quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/source")
         engine.extract_stories([], date(2026, 10, 6))
+        from audiodigest.models import SourceItem, source_prompt_dicts
+
+        source = SourceItem(
+            "newsletter", "Example News", "editor@example.com", "ETL release",
+            datetime(2026, 10, 6, tzinfo=UTC), story.facts[0],
+        )
+        engine._source_evidence = SourceEvidenceIndex([source], source_prompt_dicts([source]))
+        story.source_ids = ["source-0001"]
+        engine._source_evidence.bind(story, {"evidence_refs": [["source-0001:mail:001"]]})
+        story.source_ids = ["newsletter"]
         engine.generate_script([story], date(2026, 10, 6), quote)
         engine.generate_newspaper([story], date(2026, 10, 6))
         engine.verify_newspaper([story], Mock())

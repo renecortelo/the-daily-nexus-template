@@ -56,6 +56,14 @@ an unlisted feed/media link can access it. See the
 [security boundaries](docs/SECURITY_AND_PUBLIC_ROADMAP.md) and
 [prioritized improvement plan](docs/TRUST_AND_POLISH_PLAN.md).
 
+Factual review compares claims with original newsletter/public-page excerpts,
+not just extracted summaries, using the existing review calls. Links and source
+passage references are validated locally. This checks consistency with reporting,
+not independent truth. Source-lineage counts appear in References; original
+excerpts stay in private runtime manifests and are not published to Firebase.
+Historical editions without saved originals remain playable, but cannot be used
+to write a new independently verified newspaper without recollecting sources.
+
 ## Read this first
 
 This repository is a **public source template**. It contains no real account or

@@ -80,6 +80,7 @@ class SourcePrivacyTests(TestCase):
                 "headline": "A database adds connectors", "facts": ["It adds 12 connectors."],
                 "why_it_matters": "Teams have additional connectors.", "source_ids": [alias],
                 "source_urls": ["https://example.com/article?id=12"],
+                "evidence_refs": [[payload["sources"][0]["newsletter_passages"][0]["id"]]],
                 "confidence": 0.9, "rank_score": 1,
             }]}), Mock()
 
