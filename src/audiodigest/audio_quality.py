@@ -13,6 +13,7 @@ from audiodigest.execution_budget import operation_timeout
 
 AUDIT_SECONDS = 30
 PUBLISH_RESERVE_SECONDS = 120
+BALANCED_ENCODING_PROFILE = "balanced_speech_v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,10 +24,13 @@ class AudioQuality:
     true_peak_db: float | None = None
     loudness_range_lu: float | None = None
     analysis_seconds: float | None = None
+    encoding_profile: str | None = None
 
     def to_dict(self) -> dict[str, str | float]:
         # Never persist the command, filenames, decoder diagnostics or source text.
         result: dict[str, str | float] = {"status": self.status, "reason": self.reason}
+        if self.encoding_profile == BALANCED_ENCODING_PROFILE:
+            result["encoding_profile"] = self.encoding_profile
         for name in (
             "integrated_lufs", "true_peak_db", "loudness_range_lu", "analysis_seconds"
         ):

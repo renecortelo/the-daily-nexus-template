@@ -1,7 +1,10 @@
 import json
+import math
+import shutil
 import subprocess
 import tempfile
 import wave
+from array import array
 from importlib.util import find_spec
 from pathlib import Path
 from unittest import TestCase, skipUnless
@@ -12,6 +15,7 @@ from audiodigest.audio import (
     KokoroAudioRenderer,
     _combine_wav_chunks,
     _complete_audio_duration,
+    _speech_encoding_filter,
 )
 from audiodigest.audio_quality import AudioQuality
 from audiodigest.config import AudioSettings, HostSettings
@@ -19,6 +23,49 @@ from audiodigest.models import EpisodeScript
 
 
 class AudioHostTests(TestCase):
+    def test_balanced_filter_keeps_configured_target_and_has_no_timing_transform(self):
+        for loudness, peak in ((-16.0, -1.0), (-18.0, -2.0), (-70.0, -9.0), (-5.0, 0.0)):
+            value = _speech_encoding_filter(AudioSettings(target_lufs=loudness, true_peak_db=peak))
+            self.assertIn(f"loudnorm=I={loudness}:TP={max(-9.0, peak - 2.0)}:", value)
+            self.assertIn("ratio=2:attack=5:release=100:makeup=1", value)
+            self.assertIn("offset=0.5", value)
+            for forbidden in ("atempo", "asetrate", "atrim", "apad", "alimiter", "dual_mono"):
+                self.assertNotIn(forbidden, value)
+
+    @skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "optional local encoder")
+    def test_real_balanced_encoder_preserves_complete_pcm_duration(self):
+        # Synthetic four-second signal, not a voice/model/provider request.
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            root = Path(name)
+            source, encoded = root / "synthetic.wav", root / "synthetic.mp3"
+            rate, seconds = 24_000, 4
+            samples = array(
+                "h", (round(5000 * math.sin(2 * math.pi * 180 * i / rate))
+                      for i in range(rate * seconds))
+            )
+            with wave.open(str(source), "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(rate)
+                output.writeframes(samples.tobytes())
+            complete = subprocess.run(
+                [shutil.which("ffmpeg"), "-nostdin", "-hide_banner", "-loglevel", "error",
+                 "-i", str(source), "-ac", "1", "-ar", "44100", "-b:a", "64k",
+                 "-af", _speech_encoding_filter(AudioSettings()), str(encoded)],
+                capture_output=True, check=False, timeout=30,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            self.assertEqual(0, complete.returncode)
+            probe = subprocess.run(
+                [shutil.which("ffprobe"), "-v", "error", "-show_entries", "format=duration",
+                 "-of", "json", str(encoded)],
+                capture_output=True, text=True, check=False, timeout=30,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            self.assertEqual(0, probe.returncode)
+            actual = float(json.loads(probe.stdout)["format"]["duration"])
+            self.assertAlmostEqual(seconds, actual, delta=0.1)
+
     def test_duration_cap_rejects_complete_speech_instead_of_truncating_it(self):
         script = EpisodeScript.from_dict(
             {
@@ -109,6 +156,9 @@ class AudioHostTests(TestCase):
                     command, 0, json.dumps({"format": {"duration": wave_total_ms / 1000}}), ""
                 )
             concat = Path(command[command.index("-i") + 1])
+            self.assertEqual(
+                _speech_encoding_filter(renderer.settings), command[command.index("-af") + 1]
+            )
             for line in concat.read_text(encoding="utf-8").splitlines():
                 path = Path(line.removeprefix("file '").removesuffix("'"))
                 with wave.open(str(path), "rb") as frames:
@@ -135,6 +185,7 @@ class AudioHostTests(TestCase):
         self.assertEqual(500, question_segment.end_ms - question_segment.start_ms)
         self.assertEqual(wave_total_ms, result.transcript_segments[-1].end_ms)
         self.assertEqual(7, len(result.transcript_segments))
+        self.assertEqual("balanced_speech_v1", result.quality.to_dict()["encoding_profile"])
         for first, second in zip(
             result.transcript_segments, result.transcript_segments[1:], strict=False
         ):
@@ -210,6 +261,9 @@ class AudioHostTests(TestCase):
                         ),
                         "",
                     )
+                self.assertEqual(
+                    _speech_encoding_filter(renderer.settings), command[command.index("-af") + 1]
+                )
                 Path(command[-1]).write_bytes(b"x" * 1_100)
                 return subprocess.CompletedProcess(
                     command,

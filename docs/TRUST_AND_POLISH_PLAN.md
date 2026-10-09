@@ -202,6 +202,20 @@ work; it is not a claim of free compute or measured cloud speed improvement.
 English-voice pronunciation overrides remain approximations; listening feedback
 is required before claiming more natural delivery or choosing different voices.
 
+Measured volume increment implemented on 2026-10-09: `balanced_speech_v1` uses
+moderate speech compression before the existing loudness filter, a 0.5 dB offset
+and two-dB pre-codec peak margin (clamped to the supported filter range). Concat
+and streamed-WAV fallback share this exact chain. It changes amplitude dynamics
+only: there is no new pass, model call, quality retry, voice change, tempo/pitch
+change, transcript edit or bitrate increase. The existing final observer keeps
+the configured delivery targets; a fixed profile tag records adoption privately,
+not a claim that an unavailable measurement passed. The deadline and publishing
+reserve are unchanged. Twelve short offline clips across seven cached voices and
+mixed hosts improved from 5/12 to 11/12 meeting both targets; all processed peaks
+were below the ceiling. One alternative voice remains slightly quiet. A two-pass
+candidate was rejected because it added work without consistently solving peaks.
+Production overhead, subjective listening and naturalness remain unverified.
+
 ## 6. Mobile accessibility, UX and maintainability
 
 Retain the retrofuturist identity; improve invisible touch targets, non-drag
