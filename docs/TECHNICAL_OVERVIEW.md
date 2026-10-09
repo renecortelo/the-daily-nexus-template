@@ -91,6 +91,22 @@ in `speech.py`, shared by desktop and cloud. Written names remain unchanged;
 local validated overrides take precedence. These are English-voice approximations,
 not native-language voice switching or automatic transliteration of unknown names.
 
+The 2026-10-10 listening increment adds subject/action-first figure explanations,
+explicit pronoun references, direct answers and distinct host contributions to the
+existing draft request. Solo, broadcast and conversation remain separate styles;
+no extra model pass, mandatory joke, accent simulation or new style failure quota
+is added. Original-source factual approval, exact quotations and duration caps
+are unchanged. These are drafting instructions, not measured listening gains.
+Synthesis now protects existing phoneme annotations before expanding versions
+as well as before dictionary matching. Quoted terminal questions (including curly
+apostrophes and guillemets) use the existing response-gap rule; phase/heading
+priorities and silence subtraction are unchanged. Only these question boundaries
+may receive a different added gap; source text and displayed transcripts stay
+intact, and actual rendered timings still drive playback highlighting. Cached
+fictional pronunciation previews remain local and are not published or committed.
+English voices still approximate Spanish/Catalan names; native pronunciation or
+less robotic delivery cannot be promised without listening feedback.
+
 Audio quality observation measures the final decoded MP3 locally with FFmpeg's
 `ebur128` filter (integrated loudness, true peak and loudness range), rather than
 assuming the pre-encoding `loudnorm` target was achieved. Numeric values and fixed

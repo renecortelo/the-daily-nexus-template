@@ -216,6 +216,22 @@ were below the ceiling. One alternative voice remains slightly quiet. A two-pass
 candidate was rejected because it added work without consistently solving peaks.
 Production overhead, subjective listening and naturalness remain unverified.
 
+Listening/preparation increment implemented on 2026-10-10: the existing script
+request now prioritizes subject/action before dense figures, explicit references,
+direct answers and distinct host contributions, without templated takeaways or
+forced handoffs. Solo, broadcast and conversation instructions remain distinct.
+These are drafting preferences, not new subjective rejection quotas; factual
+approval, original evidence, coverage and exact quotations remain mandatory.
+Version expansion can no longer rewrite existing phoneme-annotation labels.
+Terminal questions inside closing quotes/brackets use the existing short response
+gap, including curly apostrophes/guillemets; heading/phase priorities and existing
+silence subtraction remain. No new pronunciation entries, voice, pitch, synthesis
+speed, extra model pass, paid service or deadline change is introduced. Regression
+tests use fictional examples; no production edition is generated for testing.
+The existing cached pronunciation comparisons can be auditioned locally. There
+is no claim of measured improvement in accent, emotion or perceived naturalness;
+subjective listening feedback and newspaper-design work remain open.
+
 ## 6. Mobile accessibility, UX and maintainability
 
 Retain the retrofuturist identity; improve invisible touch targets, non-drag

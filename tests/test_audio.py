@@ -15,14 +15,27 @@ from audiodigest.audio import (
     KokoroAudioRenderer,
     _combine_wav_chunks,
     _complete_audio_duration,
+    _DeliveryBlock,
     _speech_encoding_filter,
 )
 from audiodigest.audio_quality import AudioQuality
 from audiodigest.config import AudioSettings, HostSettings
-from audiodigest.models import EpisodeScript
+from audiodigest.models import DialogueTurn, EpisodeScript
 
 
 class AudioHostTests(TestCase):
+    def test_quoted_question_uses_response_gap_without_changing_phase_priorities(self):
+        following = _DeliveryBlock(DialogueTurn("Nox", "Not yet."), False, "section-0")
+        for question in ("‘Ready?’", "«Ready?»", "(Ready?)"):
+            block = _DeliveryBlock(DialogueTurn("Dalia", question), False, "section-0")
+            self.assertEqual(160, KokoroAudioRenderer._pause_after(block, following))
+            self.assertEqual(question, block.turn.text)
+            next_phase = _DeliveryBlock(following.turn, False, "conclusion")
+            self.assertEqual(420, KokoroAudioRenderer._pause_after(block, next_phase))
+            heading = _DeliveryBlock(DialogueTurn("Dalia", "AI"), True, "section-1")
+            self.assertEqual(600, KokoroAudioRenderer._pause_after(block, heading))
+            self.assertEqual(0, KokoroAudioRenderer._pause_after(block, None))
+
     def test_balanced_filter_keeps_configured_target_and_has_no_timing_transform(self):
         for loudness, peak in ((-16.0, -1.0), (-18.0, -2.0), (-70.0, -9.0), (-5.0, 0.0)):
             value = _speech_encoding_filter(AudioSettings(target_lufs=loudness, true_peak_db=peak))

@@ -990,6 +990,20 @@ Do not insert um, uh, fake laughter, theatrical interruptions, or emotion/SSML t
 wit emerge from wording and a concrete supported contrast, not exclamation marks or a stock
 joke. Keep formal delivery precise without making every sentence sound like a press release.
 Readability edits must preserve every evidence-backed claim, uncertainty, and attribution.
+Give listeners the subject and action before a cluster of figures; keep each exact figure
+beside its supplied unit, period and qualifier so it is understandable on first hearing. Resolve
+ambiguous 'it', 'this' and 'they' with a short explicit subject, not extra background.
+Vary sentence openings instead of repeatedly using 'Meanwhile', 'In other news' or
+'This highlights the importance of'. Avoid announcing what you are about to explain;
+explain the supported development directly. Do not append a generic takeaway to every story.
+In conversation mode, answer a useful question directly before elaborating. The next host
+should contribute a distinct supported detail, clarification or consequence, not echo the
+previous turn with a new adjective. A host can continue across multiple ideas when connected;
+do not manufacture a question or reaction just to hand the microphone over. In broadcast
+mode, keep clean news handoffs rather than adding conversational banter. In solo mode, use
+connected narration without simulated exchanges. Personality and tone guide wording, not
+phonetic spellings, invented accents, stage directions or fabricated personal anecdotes.
+Keep proper names in their original spelling: synthesis handles pronunciation separately.
 When repairing, retain useful detail from valid stories rather than shrinking the entire
 edition into headlines. Coverage means explaining distinct supported facts, not only citing IDs.
 Do not modernize or paraphrase the approved closing quotation.
@@ -1788,6 +1802,10 @@ In conversation mode, distinguish genuine response and clarification from merely
 report paragraphs. For non-formal hosts, prefer natural contractions and everyday spoken
 phrasing over corporate boilerplate. Treat those register preferences as advice, not factual
 failures, and do not impose a number of contractions, questions or jokes.
+Consider ambiguous pronouns, figure clusters without units or periods, repeated generic
+takeaways and performative handoffs as listening advice, not grounds to reject otherwise
+accurate supported reporting. Do not demand phonetic respellings of proper names.
+If an omitted unit or period changes a claim's meaning, that is still a factual issue.
 Request the smallest local wording repair, not a wholesale shorter rewrite. Do not demand
 filler, fake hesitations, a fixed turn length, new factual background, or a mandatory joke.
 Do not reject a factually sound script solely for subjective style, preferred sentence length,

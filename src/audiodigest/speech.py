@@ -51,6 +51,7 @@ _NEWS_NAME_PRONUNCIATIONS = {
 # Explicit membership prevents markup, URLs, control characters and arbitrary
 # Unicode; the old range check accidentally rejected supported ᵊ and ᵻ.
 _ENGLISH_PHONES = frozenset("bdfhjklmnpstvwzɡŋɹʃʒðθʤʧəiuɑɔɛɜɪʊʌæaAIWYQOᵊᵻɾːˈˌ ")
+_ANNOTATION = re.compile(r"\[[^\]\n]+\]\(/[^/\n]+/\)")
 _VERSIONS = re.compile(
     r"\b(?P<term>GPT|Python|Kokoro|Antigravity|Node(?:\.js)?|FFmpeg|version|v)"
     r"(?P<separator>[ \t]*-?[ \t]*)(?P<version>\d+(?:\.\d+){1,3})(?!\d|\.\d)"
@@ -92,25 +93,37 @@ def prepare_speech(
         term = "version" if match["term"] == "v" else match["term"]
         return term + " " + match["version"].replace(".", " point ")
 
-    spoken = _VERSIONS.sub(speak_version, text)
     dictionary = {
         **_PRONUNCIATIONS,
         **_NEWS_NAME_PRONUNCIATIONS,
         **validate_pronunciations({} if pronunciations is None else pronunciations),
     }
     terms = re.compile(
-        r"\[[^\]\n]+\]\(/[^/\n]+/\)|(?<!\w)(?:"
+        r"(?<!\w)(?:"
         + "|".join(re.escape(term) for term in sorted(dictionary, key=len, reverse=True))
         + r")(?!\w)"
     )
-    return terms.sub(
-        lambda match: (
-            match.group()
-            if match.group().startswith("[")
-            else f"[{match.group()}](/{dictionary[match.group()]}/)"
-        ),
-        spoken,
-    )
+    def prepare_plain(fragment: str) -> str:
+        return terms.sub(
+            lambda match: f"[{match.group()}](/{dictionary[match.group()]}/)",
+            _VERSIONS.sub(speak_version, fragment),
+        )
+
+    # Protect annotations before *all* transformations, not only dictionary
+    # matching: their labels can contain dotted versions or known names too.
+    fragments = []
+    position = 0
+    for annotation in _ANNOTATION.finditer(text):
+        fragments.extend((prepare_plain(text[position:annotation.start()]), annotation.group()))
+        position = annotation.end()
+    fragments.append(prepare_plain(text[position:]))
+    return "".join(fragments)
+
+
+def ends_with_spoken_question(text: str) -> bool:
+    """Recognize a terminal question inside closing quotes, without rewriting it."""
+
+    return text.rstrip().rstrip("\"'”’»)]} \t\r\n").endswith("?")
 
 
 def boundary_pause_ms(
