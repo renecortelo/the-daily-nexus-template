@@ -91,6 +91,25 @@ in `speech.py`, shared by desktop and cloud. Written names remain unchanged;
 local validated overrides take precedence. These are English-voice approximations,
 not native-language voice switching or automatic transliteration of unknown names.
 
+Audio quality observation measures the final decoded MP3 locally with FFmpeg's
+`ebur128` filter (integrated loudness, true peak and loudness range), rather than
+assuming the pre-encoding `loudnorm` target was achieved. Numeric values and fixed
+status codes remain in the private run manifest; decoder paths, metadata and
+diagnostics are never forwarded. The observer is capped at 30 seconds and skipped
+when fewer than 150 seconds remain, protecting a two-minute publication reserve.
+Missing/failed measurement is unavailable, not zero; a target warning does not
+retry synthesis or block a verified podcast. No automatic second normalization,
+extra model call or voice/rhythm change is introduced. This bounded local decode
+adds compute time; production overhead and listening quality are not yet measured.
+The configured target is compared with a +/-1 LU loudness tolerance and its true
+peak ceiling; FFmpeg's summary is rounded to one decimal, not a certification.
+Non-finite, empty, non-mono or silent synthesis samples are rejected before PCM
+encoding. Oversized samples alone are attenuated linearly to avoid PCM clipping;
+quiet speech is not boosted or dynamically compressed per host.
+
+References: [FFmpeg loudness filters](https://ffmpeg.org/ffmpeg-filters.html#ebur128)
+and [Apple podcast audio recommendations](https://podcasters.apple.com/support/893-audio-requirements).
+
 ## Archive lifecycle and queue recovery
 
 `[app].retention_episodes` is a hosted edition count, not a day count: 1–30,

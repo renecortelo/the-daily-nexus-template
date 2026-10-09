@@ -8,6 +8,24 @@ from audiodigest.config import load_settings
 
 
 class ConfigTests(TestCase):
+    def test_loudness_settings_reject_nonfinite_and_unsupported_filter_values(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            path = Path(name) / "config.toml"
+            for field, values in (
+                ("target_lufs", ("nan", "inf", "-71", "-4")),
+                ("true_peak_db", ("nan", "-inf", "-10", "1")),
+            ):
+                for value in values:
+                    path.write_text(f'[audio]\n{field} = "{value}"\n', encoding="utf-8")
+                    with (
+                        self.subTest(field=field, value=value),
+                        self.assertRaisesRegex(ValueError, field),
+                    ):
+                        load_settings(path)
+            path.write_text('[audio]\ntarget_lufs = -18\ntrue_peak_db = -2\n', encoding="utf-8")
+            self.assertEqual(-18, load_settings(path).audio.target_lufs)
+            self.assertEqual(-2, load_settings(path).audio.true_peak_db)
+
     def test_optional_local_pronunciation_table_is_validated(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
             path = Path(name) / "config.toml"
