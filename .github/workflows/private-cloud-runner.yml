@@ -41,7 +41,10 @@ jobs:
     steps:
       - name: Reserve time for protected shutdown
         shell: bash
-        run: echo "TDN_RUNNER_DEADLINE_EPOCH=$(( $(date +%s) + 55 * 60 ))" >> "$GITHUB_ENV"
+        run: |
+          runner_started=$(date +%s)
+          echo "TDN_RUNNER_STARTED_EPOCH=$runner_started" >> "$GITHUB_ENV"
+          echo "TDN_RUNNER_DEADLINE_EPOCH=$(( runner_started + 55 * 60 ))" >> "$GITHUB_ENV"
 
       - name: Check out the private deployment
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

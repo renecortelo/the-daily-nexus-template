@@ -24,6 +24,17 @@
 .favorite-retention { display: flex; align-items: center; gap: 0.6rem; margin: 0.65rem 0; color: var(--muted); font-size: 0.82rem; }
 .favorite-retention input { flex: 0 0 auto; width: 1.2rem; min-height: 1.2rem; accent-color: var(--amber); }
 
+.resource-breakdown {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.resource-breakdown summary { cursor: pointer; color: var(--amber); }
+.resource-breakdown .item-meta { white-space: normal; line-height: 1.6; }
+.resource-breakdown a { display: inline-block; margin-right: 16px; }
+
 * {
   box-sizing: border-box;
   scrollbar-color: var(--amber) var(--black);

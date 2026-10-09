@@ -1082,6 +1082,7 @@ class Pipeline:
                 ),
                 "remote_verified": (publish_result.remote_verified if publish_result else False),
                 "retained_guids": list(publish_result.retained_guids) if publish_result else [],
+                "publication_metrics": publish_result.asset_metrics if publish_result else {},
             }
         except Exception as exc:
             self.database.finish_run(day, "failed", str(exc))

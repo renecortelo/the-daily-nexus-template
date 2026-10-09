@@ -25,7 +25,7 @@ function harness(names) {
     appState: {authorized:true, authEpoch:0, user:{uid:'synthetic-user'}, subscriptions:[]},
     byId(id){if(!nodes.has(id)) nodes.set(id,node()); return nodes.get(id);},
     document: {querySelectorAll(){return []; }},
-    element(){const image=node(); images.push(image); return image;},
+    element(_tag,_class,text){const image=node(); if(text!==undefined) image.textContent=text; images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
@@ -42,6 +42,34 @@ function storageFixture() {
   return {data, getItem:key=>data.get(key) ?? null,
     setItem:(key,value)=>data.set(key,value), removeItem:key=>data.delete(key)};
 }
+
+test('resource visibility distinguishes measurements, forecasts and unknown account balances', () => {
+  const {context,nodes}=harness(['metricNumber','renderResourceSummary']);
+  context.timestampText=()=> 'A TIME'; context.durationText=value=>`${value/1000}s`;
+  context.appState.schedules=new Map([['synthetic',{enabled:true,weekdays:[0,1,2,3,4,5,6]}]]);
+  context.appState.resourceProfile={status:'completed',elapsed_seconds:600,at:'2026-10-09T05:00:00Z',
+    measurements:{setup_seconds:40,ready_by_late_seconds:60},ready_by_at:'2026-10-09T04:00:00Z',
+    stage_seconds:{'7':500,'private':20},resources:{new_paper_bytes:0,new_preview_bytes:1024},
+    recent:[...Array(3).fill({status:'completed',elapsed_seconds:600}),{status:'failed',elapsed_seconds:400}]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(child=>child.textContent).join('\n');
+  assert.match(text,/INCLUDING FAILED ATTEMPTS/); assert.match(text,/7 scheduled editions ≈ 70 min/);
+  assert.match(text,/ACCOUNT ACTIONS BALANCE \/\/ UNKNOWN/); assert.match(text,/NOT remaining allowance/);
+  assert.match(text,/NEW PDF \/\/ 0.0 MiB/); assert.doesNotMatch(text,/private/);
+  context.appState.resourceProfile=null; context.renderResourceSummary();
+  assert.match(nodes.get('resource-summary').children[0].textContent,/NO TERMINAL MEASUREMENT/);
+});
+
+test('unsuccessful scheduled measurement never claims ready-by delivery', () => {
+  const {context,nodes}=harness(['metricNumber','renderResourceSummary']);
+  context.timestampText=()=> 'A TIME'; context.durationText=()=> 'A DURATION';
+  context.appState.resourceProfile={status:'failed',elapsed_seconds:400,ready_by_at:'2026-10-09T04:00:00Z',
+    measurements:{ready_by_late_seconds:0},recent:[{status:'failed',elapsed_seconds:400}]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(child=>child.textContent).join('\n');
+  assert.match(text,/NOT COMPLETED; NO AUTOMATIC RETRY/); assert.doesNotMatch(text,/COMPLETED WITHIN TARGET/);
+  assert.doesNotMatch(text,/7-DAY GENERATION REFERENCE/);
+});
 
 test('wake retry never creates a generation and concurrent wakes share a dispatch', async () => {
   const {context}=harness(['requestRunnerWake']); let resolveWake, calls=0, writes=0;
@@ -260,10 +288,20 @@ test('logout unloads audio and clears private reader/player state', () => {
 test('monitor refresh has consistent page size and ignores logged-out responses', async () => {
   const {context}=harness(['refreshMonitor']); let observedLimit, renders=0;
   Object.assign(context,{doc(){},collection(){},orderBy(){},limit(n){observedLimit=n;},query(){},
-    async getDoc(){return {};},async getDocs(){return {};},renderRunner(){renders++;},renderRunRequests(){renders++;}});
+    async getDoc(){return {};},async getDocFromServer(){return {};},async getDocs(){return {};},renderResourceProfile(){},renderRunner(){renders++;},renderRunRequests(){renders++;}});
   await context.refreshMonitor(); assert.equal(observedLimit,100); assert.equal(renders,2);
   const pending=context.refreshMonitor(); context.appState.authorized=false;
   await pending; assert.equal(renders,2);
+});
+
+test('a resource read outage does not suppress the runner and queue refresh', async () => {
+  const {context}=harness(['refreshMonitor']); let renders=0;
+  Object.assign(context,{doc(){},collection(){},orderBy(){},limit(){},query(){},
+    async getDoc(){return {};}, async getDocs(){return {};}, async getDocFromServer(){throw new Error('synthetic outage');},
+    renderRunner(){renders++;},renderRunRequests(){renders++;},renderResourceSummary(){renders++;}});
+  await context.refreshMonitor();
+  assert.equal(renders,3);assert.equal(context.appState.resourceReadUnavailable,true);
+  assert(context.appState.monitorRefreshedAt instanceof Date);
 });
 test('transcript follows only a changed segment without scrolling the page', () => {
   const {context}=harness(['formatPlaybackTime','setRangeProgress','syncPlayer']);

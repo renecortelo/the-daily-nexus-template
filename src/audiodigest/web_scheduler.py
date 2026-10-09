@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import signal
 from collections.abc import Callable
@@ -24,6 +25,7 @@ from audiodigest.jobs import (
 from audiodigest.pipeline import Pipeline
 from audiodigest.progress import ProgressReporter, increment
 from audiodigest.publisher import MAX_REMOTE_EPISODES, load_remote_publication
+from audiodigest.resource_metrics import append_sample, measured_profile, timestamp
 from audiodigest.rss import REMOTE_GUID_PATTERN
 from audiodigest.web_runner import FirebaseWebRunnerClient, WebRunnerError
 
@@ -226,9 +228,14 @@ def _runner_status(
     )
 
 
-def _save_timing_profile(client: FirebaseWebRunnerClient, profile: dict) -> None:
+def _save_timing_profile(client: FirebaseWebRunnerClient, profile: dict, **context) -> None:
     try:
-        client.set_private_document("runner", "lastProfile", profile)
+        measured = measured_profile(profile, environment=dict(os.environ), **context)
+        try:
+            previous = client.get_private_runner_document("lastProfile")
+        except Exception:
+            previous = None  # A read outage must not suppress the latest measurement.
+        client.set_private_document("runner", "lastProfile", append_sample(previous, measured))
     except Exception:
         # A status outage must not change a completed/failed execution claim.
         increment("progress_updates_failed")
@@ -533,6 +540,8 @@ def _execute_generation(
     episode_date: date,
     pipeline_factory: Callable[[Settings], Pipeline],
     request_id: str = "",
+    expected_start: datetime | None = None,
+    ready_by: datetime | None = None,
 ) -> dict[str, Any]:
     configured = apply_generation_parameters(settings, parameters)
     # The hosted console exists to create a finished private episode.  Keeping
@@ -564,6 +573,10 @@ def _execute_generation(
             "episode_date": episode_date.isoformat(),
         }
     database.claim_scheduled_execution(execution_id, episode_date)
+    generation_started_at = datetime.now(UTC)
+    timing_context = {"started_at": generation_started_at, "expected_start": expected_start,
+                      "ready_by": ready_by}
+    resources: dict = {}
     _runner_status(
         client,
         state="running",
@@ -612,6 +625,7 @@ def _execute_generation(
             run_sequence=publication_sequence,
             recent_quote_ids=recent_quote_ids,
         )
+        resources = result.get("publication_metrics", {})
         publication_confirmed = result.get("status") == "published"
         episode_id, metadata = _published_metadata(
             configured,
@@ -672,7 +686,7 @@ def _execute_generation(
                 },
             )
         profile = reporter.finish("completed")
-        _save_timing_profile(client, profile)
+        _save_timing_profile(client, profile, resources=resources, **timing_context)
         _runner_status(
             client,
             state="idle",
@@ -759,7 +773,7 @@ def _execute_generation(
                     action()
                 except Exception:
                     increment("progress_updates_failed")
-            _save_timing_profile(client, profile)
+            _save_timing_profile(client, profile, resources=resources, **timing_context)
             return {
                 "status": "published",
                 "synchronization_pending": True,
@@ -783,7 +797,7 @@ def _execute_generation(
             "interrupted" if isinstance(exc, GenerationInterrupted) else "failed",
             reason=reason,
         )
-        _save_timing_profile(client, profile)
+        _save_timing_profile(client, profile, resources=resources, **timing_context)
         local_detail = f"{error_name}: {exc}"[:4000]
         remote_detail = (
             f"Generation stopped at stage {profile['stage']}/8 ({profile['label']}) "
@@ -824,6 +838,17 @@ def _execute_generation(
         budget.close()
         reporter.close()
         _restore_generation_interrupt_handlers(previous_signal_handlers)
+
+
+def _schedule_timing(
+    schedule: ScheduledJob, current: datetime, occurrence: date | None = None,
+) -> dict[str, datetime]:
+    local = schedule.local_now(current)
+    local_day = occurrence or local.date()
+    return {
+        "expected_start": datetime.combine(local_day, schedule.start_time, local.tzinfo),
+        "ready_by": datetime.combine(local_day, schedule.ready_by, local.tzinfo),
+    }
 
 
 def run_web_runner_tick(
@@ -932,6 +957,7 @@ def run_web_runner_tick(
             parameters=selected.parameters,
             episode_date=episode_date,
             pipeline_factory=pipeline_factory,
+            **_schedule_timing(selected, current, schedule_date),
         )
 
     due = [schedule for schedule in schedules if schedule.is_due(current)]
@@ -954,6 +980,7 @@ def run_web_runner_tick(
             parameters=selected.parameters,
             episode_date=selected.episode_date(current),
             pipeline_factory=pipeline_factory,
+            **_schedule_timing(selected, current),
         )
 
     queued = _active_manual_requests(
@@ -979,6 +1006,7 @@ def run_web_runner_tick(
             episode_date=requested_date,
             pipeline_factory=pipeline_factory,
             request_id=request_id,
+            expected_start=timestamp(selected_request.get("requestedAt")),
         )
 
     detail = "No task is due."

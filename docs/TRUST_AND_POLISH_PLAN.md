@@ -124,6 +124,9 @@ older Hosting versions, alter schedules, requeue failures or raise runtime caps.
 
 ## 4. Free-tier visibility and measured efficiency
 
+Status: measurement and owner-console visibility implemented on 2026-10-09.
+Provider-wide quota integration and measured runtime optimizations remain open.
+
 Expose runner time, queue delay and projected allowance headroom. Measure before
 optimizing model calls, synthesis and safe non-private caching. Account for
 Hosting release storage, paper previews and transfer separately. Explain quota
@@ -131,6 +134,30 @@ deferral and missed ready-by targets instead of retrying indefinitely.
 
 Acceptance: no paid fallback, runtime-cap relaxation or unbounded retry; measured
 before/after results; factual checks and private production isolation remain.
+
+The owner monitor now exposes the latest terminal stage/operation measurements,
+start delay, preparation time, observed job time and scheduled ready-by outcome.
+One bounded owner document retains at most 20 sanitized task samples, including
+unsuccessful attempts. A seven-day scheduled-generation reference requires at
+least three completed samples and is explicitly not a remaining allowance.
+The existing final-profile write gains one owner-only read; the console gains
+one document subscription and a read on explicit refresh. There is no new
+polling job, model call, account token or dispatch retry.
+
+Publication exposes measured new audio/PDF/preview sizes, staged file bytes and
+retained feed audio sizes (remote sizes are declared by the verified RSS). These
+are not total Hosting usage: remote paper sizes, retained older releases and
+actual transfer remain unknown. Missing measurements are omitted, not shown as
+zero. Measurement failures never invalidate publication or restart generation.
+
+Account-wide Actions allowance and Firebase storage/transfer headroom remain
+explicitly unknown, with links to the owner provider consoles. Repository task
+duration alone cannot account for other repositories/workflows, setup/cleanup,
+platform billing rules or exhausted provider quotas. No quota-based automatic
+deferral or speed improvement is claimed. A read-only production baseline was
+reviewed privately; generation dominated setup, so dependency changes were not
+made merely to claim a performance gain. Evaluate the next normal runs before
+making a separately tested optimization.
 
 ## 5. Podcast and newspaper quality
 

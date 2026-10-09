@@ -148,6 +148,9 @@ function clearPrivateInterface() {
   appState.generationSubmitting = false;
   appState.requeuingRequests = new Set();
   appState.runner = null;
+  appState.resourceProfile = null;
+  appState.resourceReadUnavailable = false;
+  byId("resource-summary").replaceChildren();
   appState.monitorRefreshedAt = null;
   appState.activeEpisode = null;
   appState.activeEdition = null;
@@ -972,6 +975,7 @@ function renderSchedules(snapshot) {
     appState.schedules.set(scheduleDocument.id, scheduleDocument.data());
   }
   queueClockReconciliation();
+  renderResourceSummary();
   byId("schedule-count").textContent = String(snapshot.size);
   if (snapshot.empty) {
     container.className = "schedule-list empty-state";
@@ -1421,6 +1425,83 @@ function updateRunnerDetail() {
   ].filter(Boolean).join(" // ");
 }
 
+function metricNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1e12
+    ? value : null;
+}
+
+function renderResourceProfile(snapshot) {
+  appState.resourceReadUnavailable = false;
+  appState.resourceProfile = snapshot.exists() ? snapshot.data() : null;
+  renderResourceSummary();
+}
+
+function renderResourceSummary() {
+  const container = byId("resource-summary");
+  container.replaceChildren();
+  const profile = appState.resourceProfile;
+  const add = text => container.append(element("p", "item-meta", text));
+  const secondsText = value => durationText(value * 1000);
+  if (appState.resourceReadUnavailable) add("RESOURCE REFRESH UNAVAILABLE // Previous measurements may be stale; runner and queue refresh are independent.");
+  if (!profile) {
+    add("NO TERMINAL MEASUREMENT YET // Recorded after the next normal generation; no test episode is needed.");
+  } else {
+    const total = metricNumber(profile.elapsed_seconds);
+    const state = ["completed", "failed", "interrupted"].includes(profile.status) ? profile.status.toUpperCase() : "UNKNOWN";
+    add(`LAST MEASUREMENT ${timestampText(profile.at)} // ${state}${total !== null ? ` // GENERATION ${secondsText(total)}` : ""}`);
+    const reasons = { time_budget: "PROTECTED TIME BUDGET EXHAUSTED", cost_guard: "NO-SPEND SAFETY GUARD",
+      verification_failure: "VERIFICATION FAILED", model_failure: "MODEL FAILURE", audio_failure: "AUDIO FAILURE",
+      publish_failure: "PUBLICATION FAILURE", interrupted: "INTERRUPTED", no_content: "NO APPROVED CONTENT",
+      subprocess_timeout: "OPERATION TIMEOUT", other: "OTHER FAILURE", sync_pending: "PUBLISHED; METADATA SYNC PENDING" };
+    if (Object.hasOwn(reasons, profile.reason)) add(`OUTCOME DETAIL // ${reasons[profile.reason]}`);
+    const measurements = profile.measurements || {};
+    const labels = { start_delay_seconds: "START DELAY (INCLUDES SETUP)", setup_seconds: "JOB SETUP BEFORE GENERATION",
+      job_observed_seconds: "JOB TIME OBSERVED SO FAR (EXCLUDES FINAL CLEANUP)", protected_remaining_seconds: "PROTECTED TIME LEFT AT FINISH" };
+    for (const [key, label] of Object.entries(labels)) {
+      const value = metricNumber(measurements[key]);
+      if (value !== null) add(`${label} // ${secondsText(value)}`);
+    }
+    if (profile.ready_by_at) {
+      const late = metricNumber(measurements.ready_by_late_seconds);
+      add(`READY-BY TARGET ${timestampText(profile.ready_by_at)} // ${state !== "COMPLETED" ? "NOT COMPLETED; NO AUTOMATIC RETRY" : late === null ? "NOT MEASURED" : late > 0 ? `COMPLETED ${secondsText(late)} AFTER TARGET` : "COMPLETED WITHIN TARGET"}`);
+    }
+    const stageLabels = ["Preparation", "Newsletters", "Articles", "Extraction", "Script", "Verification", "Paper", "Audio", "Publication"];
+    const stages = Object.entries(profile.stage_seconds || {}).filter(([key, value]) =>
+      /^[0-8]$/.test(key) && metricNumber(value) !== null && value >= 1).sort((a, b) => Number(a[0]) - Number(b[0]));
+    if (stages.length) add(`STAGE TIMES // ${stages.map(([key, value]) => `${stageLabels[Number(key)]} ${secondsText(value)}`).join(" · ")}`);
+    const operations = ["model", "speech", "voice_model", "audio_encode", "paper_render"]
+      .filter(key => metricNumber(profile.operations?.[key]?.seconds) !== null);
+    if (operations.length) add(`OPERATIONS (ALREADY INCLUDED IN STAGES) // ${operations.map(key =>
+      `${key.replaceAll("_", " ")} ${secondsText(profile.operations[key].seconds)}`).join(" · ")}`);
+    const samples = (Array.isArray(profile.recent) ? profile.recent : [profile]).slice(-20);
+    const valid = samples.filter(sample => sample && ["completed", "failed", "interrupted"].includes(sample.status) && metricNumber(sample.elapsed_seconds) !== null);
+    const completed = valid.filter(sample => sample.status === "completed");
+    if (valid.length) add(`LAST ${valid.length} TASK SAMPLES // ${completed.length} completed · ${valid.length - completed.length} unsuccessful // ${secondsText(valid.reduce((sum, sample) => sum + sample.elapsed_seconds, 0))} generation time, INCLUDING FAILED ATTEMPTS; NOT BILLING USAGE`);
+    if (completed.length >= 3) {
+      const weekly = [...appState.schedules.values()].filter(schedule => schedule.enabled)
+        .reduce((sum, schedule) => sum + new Set((schedule.weekdays || []).filter(day => Number.isInteger(day) && day >= 0 && day <= 6)).size, 0);
+      const mean = completed.reduce((sum, sample) => sum + sample.elapsed_seconds, 0) / completed.length;
+      if (weekly) add(`7-DAY GENERATION REFERENCE // ${weekly} scheduled editions ≈ ${Math.ceil(weekly * mean / 60)} min at the recent content mix. Excludes setup, retries, manual runs and other workflows; NOT remaining allowance.`);
+    }
+    const resources = profile.resources || {};
+    if (metricNumber(resources.retained_audio_count) !== null && metricNumber(resources.retention_episodes) !== null) {
+      add(`HOSTED RETENTION // ${resources.retained_audio_count} editions · limit ${resources.retention_episodes} editions, not days`);
+    }
+    const resourceLabels = { retained_audio_bytes: "CURRENT FEED AUDIO (DECLARED/MEASURED)", new_audio_bytes: "NEW AUDIO", new_paper_bytes: "NEW PDF", new_preview_bytes: "NEW PAPER PREVIEWS", staged_bytes: "STAGED RELEASE FILES ONLY" };
+    for (const [key, label] of Object.entries(resourceLabels)) {
+      const value = metricNumber(resources[key]);
+      if (value !== null) add(`${label} // ${(value / (1024 * 1024)).toFixed(1)} MiB`);
+    }
+  }
+  add("ACCOUNT ACTIONS BALANCE // UNKNOWN. These are task measurements, not billed minutes or a verified monthly balance.");
+  add("HOSTING TOTAL STORAGE AND TRANSFER // UNKNOWN. Older releases and actual downloads are not included in file-size measurements. Check provider usage before assuming free-tier headroom.");
+  for (const [label, url] of [["GitHub account usage", "https://github.com/settings/billing/usage"], ["Firebase usage console", "https://console.firebase.google.com/"]]) {
+    const link = element("a", "item-meta", label);
+    link.href = url; link.target = "_blank"; link.rel = "noopener noreferrer";
+    container.append(link);
+  }
+}
+
 function renderRunRequests(snapshot) {
   appState.runRequests = snapshot.docs.map((item) => ({
     id: item.id,
@@ -1498,11 +1579,15 @@ function renderRunRequestList() {
       header.append(wake);
     }
     card.append(header);
+    const requested = dateValue(data.requestedAt), started = dateValue(data.startedAt), finished = dateValue(data.finishedAt);
     const timeline = [
       `QUEUED ${timestampText(data.requestedAt)}`,
       data.startedAt ? `STARTED ${timestampText(data.startedAt)}` : "",
       data.finishedAt ? `${status} ${timestampText(data.finishedAt)}` : "",
       !data.finishedAt && data.updatedAt ? `UPDATED ${timestampText(data.updatedAt)}` : "",
+      requested && started && started >= requested ? `WAIT ${durationText(started - requested)}` : "",
+      requested && !started && data.status === "queued" ? `WAIT SO FAR ${durationText(Date.now() - requested)}` : "",
+      started && finished && finished >= started ? `DURATION ${durationText(finished - started)}` : "",
     ].filter(Boolean).join(" // ");
     card.append(element("p", "request-timeline", timeline));
     if (data.status === "running") {
@@ -1942,7 +2027,8 @@ async function refreshMonitor() {
   button.textContent = "REFRESHING";
   try {
     const uid = appState.user.uid;
-    const [runner, requests] = await Promise.all([
+    const epoch = appState.authEpoch;
+    const [runner, requests, profile] = await Promise.all([
       getDoc(doc(appState.db, "users", uid, "runner", "status")),
       getDocs(
         query(
@@ -1951,9 +2037,12 @@ async function refreshMonitor() {
           limit(ARCHIVE_PAGE_SIZE),
         ),
       ),
+      getDocFromServer(doc(appState.db, "users", uid, "runner", "lastProfile")).catch(() => null),
     ]);
-    if (!appState.authorized || appState.user?.uid !== uid) return;
+    if (!appState.authorized || appState.user?.uid !== uid || epoch !== appState.authEpoch) return;
     renderRunner(runner);
+    if (profile) renderResourceProfile(profile);
+    else { appState.resourceReadUnavailable = true; renderResourceSummary(); }
     renderRunRequests(requests);
     appState.monitorRefreshedAt = new Date();
     showAlert("Private runner status refreshed.");
@@ -2465,8 +2554,9 @@ function setupWebPlayer() {
 
 function subscribeToPrivateData(uid) {
   clearSubscriptions();
+  const epoch = appState.authEpoch;
   const privateSnapshot = callback => snapshot => {
-    if (appState.authorized && appState.user?.uid === uid) callback(snapshot);
+    if (appState.authorized && appState.user?.uid === uid && epoch === appState.authEpoch) callback(snapshot);
   };
   appState.subscriptions.push(
     onSnapshot(
@@ -2500,6 +2590,16 @@ function subscribeToPrivateData(uid) {
       doc(appState.db, "users", uid, "runner", "status"),
       privateSnapshot(renderRunner),
       (error) => showAlert(firebaseErrorMessage(error), true),
+    ),
+    onSnapshot(
+      doc(appState.db, "users", uid, "runner", "lastProfile"),
+      privateSnapshot(renderResourceProfile),
+      () => {
+        if (appState.authorized && appState.user?.uid === uid && epoch === appState.authEpoch) {
+          appState.resourceReadUnavailable = true;
+          renderResourceSummary();
+        }
+      },
     ),
   );
 }
