@@ -2,18 +2,46 @@
 
 ## What is safe today
 
-The current application is a personal Windows desktop app:
+The application is an independently operated, per-user deployment: a Windows
+desktop app, an owner-locked web console, and an optional private cloud runner.
 
-- Gmail access is read-only and restricted to messages carrying the configured label.
-- The Gmail refresh token and cached connected-account email are stored in Windows Credential
-  Manager.
+- Gmail's read-only OAuth scope is mailbox-wide. The application, not the Google
+  grant, restricts collection to messages carrying the configured label.
+- Desktop Gmail tokens and account identity use Windows Credential Manager.
+  Unattended grants use encrypted secrets in the operator's private repository;
+  the ephemeral runner temporarily processes those credentials and newsletter data.
 - **Sign in with Google** opens Google's system-browser OAuth flow and requests only
   `gmail.readonly`.
 - **Disconnect account** revokes the saved Google grant and deletes the local authorization
   and account identity.
 - Antigravity uses a separate Google OAuth session and refuses G1 credit fallback.
-- Newsletter content and credentials are never committed to Git.
+- Newsletter content and credentials must never be committed to Git. Public
+  readiness checks cover both the current source and repository history.
+- Model source payloads use per-request source aliases rather than raw mailbox
+  message IDs. Recognized email addresses, utility lines and personalized URL
+  parameters are removed conservatively. This is not a full personal-data detector:
+  selected newsletter reporting still goes to Antigravity's cloud service.
 - Wikimedia receives only the selected episode date and the app's user-agent.
+
+## Console session and retained data
+
+The web console uses session-only Firebase persistence. Its one-hour deadline
+derives from the original sign-in time, not a page reload or token refresh. It
+also locks after 15 minutes idle; active listening counts as activity but cannot
+extend the absolute deadline. Sign-out clears private forms, views and
+session-only favorites. Device-retained favorites are an explicit option;
+existing saved favorites remain available with that option shown as enabled.
+They contain settings, not credentials, but labels and run names may be private.
+
+These are browser behavior controls, not server-side revocation of copied tokens.
+Owner-scoped Firestore rules are still the server access boundary. The console
+and unattended runner currently share the owner's identity: distinct automation
+authorization must precede server-side browser-session expiry rules. Closing a
+tab is not guaranteed to revoke provider credentials or erase downloaded files.
+Console sign-out does not cancel scheduled jobs or revoke a published feed URL.
+
+See [the implementation plan](TRUST_AND_POLISH_PLAN.md) for remaining security
+and operational gates. A clean secret scan is evidence, not a zero-risk guarantee.
 
 The private deployment repository must not be made public because its earlier
 history can retain deployment locators and personal commit metadata even after

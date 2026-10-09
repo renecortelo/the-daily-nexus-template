@@ -46,6 +46,16 @@ minimum-duration expansion call or filler. The complete MP3 must stay within
 30 minutes. The podcast shortlist balances sources; the independent newspaper
 receives all extracted stories. Existing episodes are not changed by this rule.
 
+The Google read-only grant is mailbox-wide; the app enforces your selected label.
+Selected newsletter reporting is processed by Antigravity in the cloud. The
+console locks after 15 minutes idle or one hour from sign-in, including reloads;
+this browser timer does not revoke copied tokens server-side. New favorites are
+session-only unless you choose to remember them on that device. Signing out
+clears the console, not unattended schedules or published media: anyone holding
+an unlisted feed/media link can access it. See the
+[security boundaries](docs/SECURITY_AND_PUBLIC_ROADMAP.md) and
+[prioritized improvement plan](docs/TRUST_AND_POLISH_PLAN.md).
+
 ## Read this first
 
 This repository is a **public source template**. It contains no real account or

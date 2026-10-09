@@ -37,9 +37,12 @@ TRACKING_DOMAIN_SUFFIXES = (
     "convertk.it",
     "rs6.net",
     "acemlnb.com",
+    "linksg.ara.cat",
 )
 
 TRACKING_HOSTS = {
+    "gruporeforma.reforma.com",
+    "hs.ara.cat",
     "open.substack.com",
 }
 
@@ -89,6 +92,15 @@ TRACKING_PARAMETERS = {
     "mkt_tok",
     "ref",
     "referrer",
+    "mc_tok", "_hsenc", "_hsmi", "cdlcid", "ncid", "emc", "regi_id",
+    "segment_id", "subscriber_id", "subscriber_email", "recipient_id",
+    "recipient_email", "email", "email_address", "user_id", "user_email",
+}
+
+CREDENTIAL_PARAMETERS = {
+    "access_token", "refresh_token", "id_token", "auth_token", "authorization",
+    "password", "passwd", "api_key", "apikey", "x-api-key", "token",
+    "signature", "sig", "x-amz-signature", "x-goog-signature",
 }
 
 
@@ -180,26 +192,76 @@ def clean_html(value: str) -> str:
 
 
 def normalize_url(value: str) -> str:
-    parts = urlsplit(html.unescape(value.strip()))
-    if parts.scheme.lower() != "https" or not parts.hostname:
+    try:
+        parts = urlsplit(html.unescape(value.strip()))
+        port = parts.port
+    except (ValueError, UnicodeError):
+        return ""
+    if parts.scheme.lower() != "https" or not parts.hostname or parts.username or parts.password:
+        return ""
+    arguments = parse_qsl(parts.query, keep_blank_values=True)
+    if any(key.casefold() in CREDENTIAL_PARAMETERS | {"upn"} for key, _ in arguments):
+        # Never turn a credential-bearing or opaque subscriber link into a fetch.
         return ""
     query = [
         (key, val)
-        for key, val in parse_qsl(parts.query, keep_blank_values=True)
-        if not key.lower().startswith("utm_") and key.lower() not in TRACKING_PARAMETERS
+        for key, val in arguments
+        if not key.casefold().startswith(("utm_", "cs_", "dfp_"))
+        and key.casefold() not in TRACKING_PARAMETERS
     ]
     try:
         hostname = parts.hostname.encode("idna").decode("ascii").lower()
     except UnicodeError:
         return ""
     netloc = f"[{hostname}]" if ":" in hostname else hostname
-    if parts.port and parts.port != 443:
-        netloc = f"{netloc}:{parts.port}"
+    if port and port != 443:
+        netloc = f"{netloc}:{port}"
     path = quote(
         re.sub(r"/{2,}", "/", parts.path or "/"),
         safe="/%:@!$&'()*+,;=-._~",
     )
     return urlunsplit(("https", netloc, path, urlencode(query, doseq=True), ""))
+
+
+def minimize_editorial_text(value: str) -> str:
+    """Conservative prompt minimization, not a guarantee of full PII detection.
+
+    Preserve reporting, names and statistics; remove obvious mail utility lines,
+    email addresses and unsafe/personalized URLs without rewriting the source.
+    """
+    lines = []
+    for index, line in enumerate(value.splitlines()):
+        stripped = line.strip()
+        if len(stripped) <= 220 and re.match(
+            r"^(?:unsubscribe\b|manage (?:your )?preferences\b"
+            r"|view (?:this email )?in (?:a )?browser\b"
+            r"|this (?:email|message) was sent to\b|you (?:are receiving|received) this\b"
+            r"|has rebut aquest (?:correu|missatge)\b|has recibido este (?:correo|mensaje)\b)",
+            stripped, re.I,
+        ):
+            continue
+        if index < 3 and len(stripped) <= 80 and re.fullmatch(
+            r"(?:hi|hello|dear|hola|bon dia)[ ,]+[\wÀ-ÿ '-]{1,55}[,!]", stripped, re.I,
+        ):
+            continue
+        lines.append(line)
+    text = "\n".join(lines)
+
+    def replace_url(match: re.Match[str]) -> str:
+        original = match.group(0)
+        trimmed = original.rstrip(".,;:!?)]}")
+        try:
+            safe = normalize_url(trimmed)
+            if safe and is_tracking_url(safe):
+                safe = ""
+        except (ValueError, UnicodeError):
+            safe = ""
+        return (safe or "[link removed]") + original[len(trimmed):]
+
+    text = re.sub(r"https?://[^\s<>\"']+", replace_url, text)
+    return re.sub(
+        r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w.-]+\.[A-Za-z]{2,}", "[email removed]", text,
+    ).strip()
 
 
 def _host_matches_suffix(hostname: str, suffix: str) -> bool:

@@ -29,6 +29,7 @@ import {
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 const SESSION_MAX_MS = 60 * 60 * 1000;
+const CONSOLE_SESSION_KEY = "tdn-console-session-v1";
 const ARCHIVE_PAGE_SIZE = 100;
 const EDITION_ZOOM_STEPS = Object.freeze([0.75, 1, 1.25, 1.5, 1.75]);
 const LOCAL_VOICE_GENDERS = Object.freeze({
@@ -44,6 +45,7 @@ const appState = {
   db: null,
   user: null,
   authorized: false,
+  authEpoch: 0,
   schedules: new Map(),
   subscriptions: [],
   idleAt: Date.now() + IDLE_LIMIT_MS,
@@ -98,6 +100,9 @@ function clearSubscriptions() {
 
 function clearPrivateInterface() {
   clearPlaybackSession();
+  clearFavoriteSession();
+  clearConsoleSession();
+  clearPrivateForms();
   appState.authorized = false;
   clearSubscriptions();
   const audio = byId("episode-audio");
@@ -152,17 +157,72 @@ function showAuth() {
   clearPrivateInterface();
   appShell.hidden = true;
   authScreen.hidden = false;
-  setAuthStatus("Session-only sign-in. Closing this app clears the web session.");
+  setAuthStatus("Sign in to open your console. Automatic lock: 15 minutes idle or one hour after sign-in.");
 }
 
-function showApp(user) {
+function clearPrivateForms() {
+  for (const form of [generationForm, scheduleForm]) {
+    form.reset();
+    setSections(form, []);
+    syncHostControls(form);
+    syncNewspaperControls(form);
+  }
+  generationForm.elements.requestedDate.value = generationForm.elements.requestedDate.max;
+  byId("profile-name").value = "";
+  byId("profile-picker").replaceChildren(element("option", "", "LOAD FAVORITE…"));
+  byId("remember-favorites").checked = false;
+  byId("update-profile-button").disabled = true;
+  byId("delete-profile-button").disabled = true;
+  byId("cancel-edit-button").hidden = true;
+  globalAlert.textContent = "";
+  globalAlert.hidden = true;
+}
+
+function clearConsoleSession() {
+  try { window.sessionStorage.removeItem(CONSOLE_SESSION_KEY); } catch { /* No retained browser state. */ }
+  appState.sessionAuthenticatedAt = null;
+  appState.sessionEndsAt = null;
+}
+
+function persistConsoleSession() {
+  try {
+    window.sessionStorage.setItem(CONSOLE_SESSION_KEY, JSON.stringify({
+      authenticatedAt: appState.sessionAuthenticatedAt,
+      idleAt: appState.idleAt,
+    }));
+  } catch { /* Absolute expiry still derives from Firebase authentication time. */ }
+}
+
+async function consoleSessionFor(user) {
+  const result = await user.getIdTokenResult();
+  // authTime is the original sign-in time; token refresh must not extend it.
+  // This protects console behavior, not server-side revocation of copied tokens.
+  const authenticatedAt = Date.parse(result.authTime);
+  const now = Date.now();
+  if (!Number.isFinite(authenticatedAt) || authenticatedAt > now + 5000) {
+    throw new Error("The sign-in time could not be verified. Please sign in again.");
+  }
+  const sessionEndsAt = authenticatedAt + SESSION_MAX_MS;
+  let saved = null;
+  try { saved = JSON.parse(window.sessionStorage.getItem(CONSOLE_SESSION_KEY)); } catch { /* No saved idle state. */ }
+  const idleAt = saved?.authenticatedAt === authenticatedAt && Number.isFinite(saved.idleAt)
+    ? Math.min(saved.idleAt, sessionEndsAt)
+    : Math.min(authenticatedAt + IDLE_LIMIT_MS, sessionEndsAt);
+  if (now >= sessionEndsAt || now >= idleAt) {
+    throw new Error("Your console session expired. Please sign in again.");
+  }
+  return { sessionAuthenticatedAt: authenticatedAt, sessionEndsAt, idleAt };
+}
+
+function showApp(user, session) {
+  Object.assign(appState, session);
   appState.user = user;
   appState.authorized = true;
-  appState.sessionEndsAt = Date.now() + SESSION_MAX_MS;
   authScreen.hidden = true;
   appShell.hidden = false;
   byId("signed-in-user").textContent = user.email || "Verified Google account";
-  resetIdleTimer();
+  persistConsoleSession();
+  restoreFavoritePreference();
   renderProfiles();
   subscribeToPrivateData(user.uid);
   void refreshCloudClockStatus();
@@ -225,18 +285,21 @@ async function signInUser() {
 }
 
 async function signOutUser(reason = "You signed out securely.") {
+  appState.authEpoch += 1;
+  showAuth();
+  let detail = reason;
   try {
     await signOut(appState.auth);
+  } catch {
+    detail = "Console locked locally. Sign-out could not be confirmed; close this tab before signing in again.";
   } finally {
-    showAuth();
-    setAuthStatus(reason);
+    setAuthStatus(detail);
   }
 }
 
 async function verifyOwner(user) {
   const owner = await getDoc(doc(appState.db, "owners", user.uid));
   if (!owner.exists()) {
-    await signOut(appState.auth);
     throw new Error("This Google account is authenticated but is not an authorized owner.");
   }
 }
@@ -245,7 +308,37 @@ function resetIdleTimer() {
   if (!appState.authorized) {
     return;
   }
-  appState.idleAt = Math.min(Date.now() + IDLE_LIMIT_MS, appState.sessionEndsAt);
+  const now = Date.now();
+  const audio = byId("episode-audio");
+  const listening = Boolean(audio.src && !audio.paused && !audio.ended);
+  if (now >= appState.sessionEndsAt || (now >= appState.idleAt && !listening)) {
+    void signOutUser("Your console session expired. Please sign in again.");
+    return;
+  }
+  appState.idleAt = Math.min(now + IDLE_LIMIT_MS, appState.sessionEndsAt);
+  persistConsoleSession();
+}
+
+async function handleAuthState(user) {
+  const epoch = ++appState.authEpoch;
+  if (!user) {
+    showAuth();
+    return;
+  }
+  setAuthStatus("Verifying private owner access…");
+  try {
+    const session = await consoleSessionFor(user);
+    if (epoch !== appState.authEpoch) return;
+    await verifyOwner(user);
+    if (epoch !== appState.authEpoch) return;
+    if (Date.now() >= session.sessionEndsAt || Date.now() >= session.idleAt) {
+      throw new Error("Your console session expired. Please sign in again.");
+    }
+    showApp(user, session);
+  } catch (error) {
+    if (epoch !== appState.authEpoch) return;
+    await signOutUser(error.message || firebaseErrorMessage(error));
+  }
 }
 
 async function checkIdleTimer() {
@@ -254,7 +347,7 @@ async function checkIdleTimer() {
   }
   const audio = byId("episode-audio");
   const listening = Boolean(audio.src && !audio.paused && !audio.ended);
-  if (listening) resetIdleTimer();
+  if (listening && Date.now() < appState.sessionEndsAt) resetIdleTimer();
   const remaining = Math.max(0, (listening ? appState.sessionEndsAt : appState.idleAt) - Date.now());
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
@@ -504,9 +597,57 @@ function profileStorageKey() {
   return appState.user ? `tdn-private-profiles:${appState.user.uid}` : "";
 }
 
-function savedProfiles() {
+function restoreFavoritePreference() {
+  let remember = false;
   try {
-    const raw = window.localStorage.getItem(profileStorageKey());
+    const key = profileStorageKey();
+    // Preserve deliberately saved legacy favorites; show their device retention.
+    remember = window.localStorage.getItem(`${key}:remember`) === "true"
+      || window.localStorage.getItem(key) !== null;
+  } catch { /* Default to session-only favorites. */ }
+  appState.rememberFavorites = remember;
+  byId("remember-favorites").checked = remember;
+}
+
+function clearFavoriteSession() {
+  try { window.sessionStorage.removeItem(profileStorageKey()); } catch { /* No retained favorites. */ }
+  appState.rememberFavorites = false;
+}
+
+function storeProfiles(profiles) {
+  if (!appState.authorized || !appState.user) throw new Error("Sign in before saving favorites.");
+  const storage = appState.rememberFavorites ? window.localStorage : window.sessionStorage;
+  storage.setItem(profileStorageKey(), JSON.stringify(profiles.slice(0, 20)));
+}
+
+function changeFavoriteStorage() {
+  if (!appState.authorized || !appState.user) return;
+  const previous = Boolean(appState.rememberFavorites);
+  const profiles = savedProfiles();
+  const remember = byId("remember-favorites").checked;
+  try {
+    const key = profileStorageKey();
+    const target = remember ? window.localStorage : window.sessionStorage;
+    const old = previous ? window.localStorage : window.sessionStorage;
+    target.setItem(key, JSON.stringify(profiles));
+    if (remember) window.localStorage.setItem(`${key}:remember`, "true");
+    else window.localStorage.removeItem(`${key}:remember`);
+    if (old !== target) old.removeItem(key);
+    appState.rememberFavorites = remember;
+    showAlert(remember
+      ? "Favorites will remain on this device after sign-out. No passwords or tokens are stored with them."
+      : "Favorites are now session-only and will be removed when you sign out.");
+  } catch {
+    byId("remember-favorites").checked = previous;
+    showAlert("Favorite storage could not be changed. Your existing favorites were kept.", true);
+  }
+}
+
+function savedProfiles() {
+  if (!appState.authorized || !appState.user) return [];
+  try {
+    const storage = appState.rememberFavorites ? window.localStorage : window.sessionStorage;
+    const raw = storage.getItem(profileStorageKey());
     const profiles = raw ? JSON.parse(raw) : [];
     return Array.isArray(profiles) ? profiles : [];
   } catch {
@@ -577,12 +718,12 @@ function saveFavoriteProfile() {
       throw new Error("A favorite with that name already exists. Load it, then choose UPDATE to edit it.");
     }
     profiles.unshift({ name, parameters });
-    window.localStorage.setItem(profileStorageKey(), JSON.stringify(profiles.slice(0, 20)));
+    storeProfiles(profiles);
     byId("profile-name").value = name;
     renderProfiles();
     byId("profile-picker").value = name;
     syncFavoriteActions();
-    showAlert("Favorite saved only in this browser for this signed-in owner.");
+    showAlert(appState.rememberFavorites ? "Favorite saved on this device for this owner." : "Favorite saved for this console session only.");
   } catch (error) {
     showAlert(error.message || "Favorite could not be saved.", true);
   }
@@ -616,7 +757,7 @@ function updateFavoriteProfile() {
       (item) => item.name !== selected.name,
     );
     profiles.unshift({ name, parameters });
-    window.localStorage.setItem(profileStorageKey(), JSON.stringify(profiles.slice(0, 20)));
+    storeProfiles(profiles);
     renderProfiles();
     byId("profile-picker").value = name;
     byId("profile-name").value = name;
@@ -637,7 +778,8 @@ function deleteFavoriteProfile() {
     return;
   }
   const profiles = savedProfiles().filter((item) => item.name !== selected.name);
-  window.localStorage.setItem(profileStorageKey(), JSON.stringify(profiles));
+  try { storeProfiles(profiles); }
+  catch { showAlert("The favorite could not be removed. Please try again.", true); return; }
   byId("profile-name").value = "";
   renderProfiles();
   showAlert(`Favorite deleted: ${selected.name}.`);
@@ -1770,21 +1912,46 @@ function syncPlayer() {
   }
 }
 
+function minimizeReferenceURL(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    const credentialKeys = new Set([
+      "access_token", "refresh_token", "id_token", "auth_token", "authorization",
+      "password", "passwd", "api_key", "apikey", "x-api-key", "token",
+      "signature", "sig", "x-amz-signature", "x-goog-signature", "upn",
+    ]);
+    const trackingKeys = new Set([
+      "fbclid", "gclid", "mc_cid", "mc_eid", "mkt_tok", "ref", "referrer",
+      "mc_tok", "_hsenc", "_hsmi", "cdlcid", "ncid", "emc", "regi_id",
+      "segment_id", "subscriber_id", "subscriber_email", "recipient_id",
+      "recipient_email", "email", "email_address", "user_id", "user_email",
+    ]);
+    for (const key of [...url.searchParams.keys()]) {
+      const normalized = key.toLowerCase();
+      if (credentialKeys.has(normalized)) return null;
+      if (trackingKeys.has(normalized) || /^(utm_|cs_|dfp_)/.test(normalized)) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.hash = "";
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 function safeReference(value) {
   if (typeof value !== "string") return null;
   const match = value.match(/https:\/\/[^\s)]+/i);
   if (!match) return null;
-  const url = match[0].replace(/[.,;:!?]+$/, "");
+  const url = minimizeReferenceURL(match[0].replace(/[.,;:!?]+$/, ""));
+  if (!url) return null;
   const description = value
     .slice(0, match.index)
     .replace(/[\s\-–—|:]+$/, "")
     .trim();
-  let fallback = "Open source";
-  try {
-    fallback = new URL(url).hostname.replace(/^www\./i, "");
-  } catch {
-    // The URL has already passed the private-host safety check upstream.
-  }
+  const fallback = new URL(url).hostname.replace(/^www\./i, "");
   return { text: description || fallback, url };
 }
 
@@ -2291,6 +2458,7 @@ async function initialize() {
   byId("save-profile-button").addEventListener("click", saveFavoriteProfile);
   byId("update-profile-button").addEventListener("click", updateFavoriteProfile);
   byId("delete-profile-button").addEventListener("click", deleteFavoriteProfile);
+  byId("remember-favorites").addEventListener("change", changeFavoriteStorage);
   byId("profile-picker").addEventListener("change", loadFavoriteProfile);
   for (const form of [generationForm, scheduleForm]) {
     setupSectionEditor(form);
@@ -2343,20 +2511,7 @@ async function initialize() {
     appState.db = getFirestore(firebaseApp);
     await setPersistence(appState.auth, browserSessionPersistence);
     await getRedirectResult(appState.auth);
-    onAuthStateChanged(appState.auth, async (user) => {
-      if (!user) {
-        showAuth();
-        return;
-      }
-      setAuthStatus("Verifying private owner access…");
-      try {
-        await verifyOwner(user);
-        showApp(user);
-      } catch (error) {
-        showAuth();
-        setAuthStatus(error.message || firebaseErrorMessage(error), true);
-      }
-    });
+    onAuthStateChanged(appState.auth, handleAuthState);
   } catch (error) {
     setAuthStatus(
       "The secure web configuration is not ready. Complete the V4 Firebase setup first.",

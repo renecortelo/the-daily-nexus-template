@@ -11,6 +11,7 @@ from audiodigest.constants import (
     SectionReference,
     parse_section,
 )
+from audiodigest.content import minimize_editorial_text, normalize_url
 
 
 class DataValidationError(ValueError):
@@ -93,23 +94,33 @@ class SourceItem:
     articles: list[ArticleReference] = field(default_factory=list)
     link_stats: dict[str, int] = field(default_factory=dict)
 
-    def to_prompt_dict(self) -> dict[str, Any]:
+    def to_prompt_dict(self, *, source_alias: str) -> dict[str, Any]:
         return {
-            "message_id": self.message_id,
-            "publication": self.publication,
+            "message_id": source_alias,
+            "publication": minimize_editorial_text(self.publication),
             "source_type": self.source_type,
-            "subject": self.subject,
+            "subject": minimize_editorial_text(self.subject),
             "received_at": self.received_at.isoformat(),
-            "email_text": self.email_text[:50_000],
-            "source_urls": self.article_urls,
+            "email_text": minimize_editorial_text(self.email_text[:50_000]),
+            "source_urls": [safe for url in self.article_urls if (safe := normalize_url(url))],
             "articles": [
                 {
-                    **article.to_dict(),
-                    "text": article.text[:50_000],
+                    "url": normalize_url(article.url),
+                    "canonical_url": normalize_url(article.canonical_url),
+                    "title": minimize_editorial_text(article.title),
+                    "text": minimize_editorial_text(article.text[:50_000]),
+                    "status": article.status,
                 }
                 for article in self.articles
             ],
         }
+
+
+def source_prompt_dicts(sources: Sequence[SourceItem]) -> list[dict[str, Any]]:
+    return [
+        source.to_prompt_dict(source_alias=f"source-{index:04d}")
+        for index, source in enumerate(sources, start=1)
+    ]
 
 
 @dataclass(slots=True)

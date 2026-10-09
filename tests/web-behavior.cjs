@@ -22,12 +22,13 @@ function harness(names) {
     };
   }
   const context = { URL, Date, Map, console, ARCHIVE_PAGE_SIZE: 100,
-    appState: {authorized:true, user:{uid:'synthetic-user'}, subscriptions:[]},
+    appState: {authorized:true, authEpoch:0, user:{uid:'synthetic-user'}, subscriptions:[]},
     byId(id){if(!nodes.has(id)) nodes.set(id,node()); return nodes.get(id);},
     document: {querySelectorAll(){return []; }},
     element(){const image=node(); images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
+    clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
     window: {clearTimeout(){}, matchMedia(){return {matches:false};}},
     showAlert(){}, firebaseErrorMessage(){return 'safe error';},
   };
@@ -35,6 +36,102 @@ function harness(names) {
   vm.runInContext(names.map(extract).join('\n'),context);
   return {context,nodes,images};
 }
+
+function storageFixture() {
+  const data = new Map();
+  return {data, getItem:key=>data.get(key) ?? null,
+    setItem:(key,value)=>data.set(key,value), removeItem:key=>data.delete(key)};
+}
+
+test('historic references hide personalized parameters and reject credential-bearing URLs', () => {
+  const {context}=harness(['minimizeReferenceURL','safeReference']);
+  Object.assign(context,{URL});
+  const reference=context.safeReference('Synthetic source - https://example.com/story?id=12&utm_source=mail&cs_email=synthetic%40example.com&regi_id=synthetic#footer');
+  assert.equal(reference.text,'Synthetic source');
+  assert.equal(reference.url,'https://example.com/story?id=12');
+  for (const value of ['https://example.com/?token=synthetic','https://example.com/?upn=synthetic',
+    'https://synthetic:synthetic@example.com/story','https://example.com:invalid/story']) {
+    assert.equal(context.safeReference(`Synthetic - ${value}`),null);
+  }
+  assert.equal(context.minimizeReferenceURL('http://example.com/story'),null);
+});
+
+test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {
+  const {context}=harness(['consoleSessionFor']);
+  const storage=storageFixture(); const started=Date.parse('2026-10-09T06:00:00Z');
+  Object.assign(context,{SESSION_MAX_MS:3600000,IDLE_LIMIT_MS:900000,CONSOLE_SESSION_KEY:'synthetic-session'});
+  context.window.sessionStorage=storage; context.Date={parse:Date.parse,now:()=>started+600000};
+  storage.setItem('synthetic-session',JSON.stringify({authenticatedAt:started,idleAt:started+840000}));
+  const user={async getIdTokenResult(){return {authTime:new Date(started).toUTCString(),issuedAtTime:new Date(started+600000).toUTCString()};}};
+  const first=await context.consoleSessionFor(user);
+  context.Date.now=()=>started+660000;
+  const second=await context.consoleSessionFor(user);
+  assert.equal(first.sessionEndsAt,started+3600000);
+  assert.equal(second.sessionEndsAt,first.sessionEndsAt);
+  assert.equal(second.idleAt,started+840000);
+  context.Date.now=()=>started+840001;
+  await assert.rejects(context.consoleSessionFor(user),/expired/);
+});
+
+test('expired, missing and future sign-in times fail closed without opening private views', async () => {
+  const {context}=harness(['consoleSessionFor']); const started=Date.parse('2026-10-09T06:00:00Z');
+  Object.assign(context,{SESSION_MAX_MS:3600000,IDLE_LIMIT_MS:900000,CONSOLE_SESSION_KEY:'synthetic-session'});
+  context.window.sessionStorage=storageFixture(); context.Date={parse:Date.parse,now:()=>started+3600001};
+  await assert.rejects(context.consoleSessionFor({async getIdTokenResult(){return {authTime:new Date(started).toUTCString()};}}),/expired/);
+  await assert.rejects(context.consoleSessionFor({async getIdTokenResult(){return {};}}),/could not be verified/);
+  await assert.rejects(context.consoleSessionFor({async getIdTokenResult(){return {authTime:new Date(started+7200000).toUTCString()};}}),/could not be verified/);
+});
+
+test('late authentication response cannot reopen the console after logout', async () => {
+  const {context}=harness(['handleAuthState']); let resolveSession, opens=0, owners=0;
+  context.consoleSessionFor=()=>new Promise(resolve=>{resolveSession=resolve;});
+  context.verifyOwner=async()=>{owners++;}; context.showApp=()=>{opens++;};
+  context.showAuth=()=>{}; context.setAuthStatus=()=>{};
+  const pending=context.handleAuthState({uid:'synthetic-user'});
+  await context.handleAuthState(null);
+  resolveSession({sessionEndsAt:Date.now()+3600000,idleAt:Date.now()+900000});
+  await pending; assert.equal(opens,0); assert.equal(owners,0);
+});
+
+test('logout empties private generation and schedule controls and favorite labels', () => {
+  const {context}=harness(['clearPrivateForms']); const cleared=[];
+  const form=()=>({elements:{requestedDate:{value:'2026-10-08',max:'2026-10-09'},runName:{value:'Synthetic private run'}},reset(){this.elements.runName.value='';}});
+  context.generationForm=form(); context.scheduleForm=form();
+  context.setSections=(f,sections)=>{cleared.push(sections.length);};
+  context.syncHostControls=()=>{}; context.syncNewspaperControls=()=>{};
+  context.globalAlert=context.byId('global-alert'); context.globalAlert.textContent='Synthetic private message';
+  context.byId('profile-name').value='Synthetic favorite';
+  context.clearPrivateForms();
+  assert.equal(context.generationForm.elements.runName.value,'');
+  assert.equal(context.scheduleForm.elements.runName.value,'');
+  assert.deepEqual(cleared,[0,0]); assert.equal(context.byId('profile-name').value,'');
+  assert.equal(context.globalAlert.textContent,''); assert.equal(context.globalAlert.hidden,true);
+});
+
+test('new favorites are session-only; device retention is explicit and reversible', () => {
+  const {context}=harness(['profileStorageKey','restoreFavoritePreference','savedProfiles','storeProfiles','changeFavoriteStorage','clearFavoriteSession']);
+  const local=storageFixture(), session=storageFixture();
+  Object.assign(context.window,{localStorage:local,sessionStorage:session});
+  context.restoreFavoritePreference(); assert.equal(context.appState.rememberFavorites,false);
+  context.storeProfiles([{name:'Synthetic favorite',parameters:{gmailLabel:'Example/News'}}]);
+  assert.equal(local.data.size,0); assert.equal(session.data.size,1);
+  context.byId('remember-favorites').checked=true; context.changeFavoriteStorage();
+  assert.equal(local.data.size,2); assert.equal(session.data.size,0);
+  context.byId('remember-favorites').checked=false; context.changeFavoriteStorage();
+  assert.equal(local.data.size,0); assert.equal(session.data.size,1);
+  context.clearFavoriteSession(); assert.equal(session.data.size,0);
+});
+
+test('legacy device favorites remain visible and are not silently erased on logout', () => {
+  const {context}=harness(['profileStorageKey','restoreFavoritePreference','savedProfiles','clearFavoriteSession']);
+  const local=storageFixture(), session=storageFixture();
+  Object.assign(context.window,{localStorage:local,sessionStorage:session});
+  local.setItem(context.profileStorageKey(),JSON.stringify([{name:'Synthetic existing favorite'}]));
+  context.restoreFavoritePreference();
+  assert.equal(context.appState.rememberFavorites,true);
+  assert.equal(context.savedProfiles()[0].name,'Synthetic existing favorite');
+  context.clearFavoriteSession(); assert.equal(local.data.size,1);
+});
 
 test('newspaper option preserves edition scale when disabled and defaults on for old favorites', () => {
   const {context}=harness(['parameterData','syncNewspaperControls','applyParametersToForm']);
@@ -107,6 +204,15 @@ test('active listening extends inactivity but never the absolute session limit',
   assert.equal(context.appState.idleAt,200000);
   context.Date.now=()=>200001;
   await context.checkIdleTimer(); assert.equal(signouts,1);
+});
+
+test('returning to an idle tab cannot revive an expired console with a click', () => {
+  const {context}=harness(['resetIdleTimer']); let signouts=0;
+  context.IDLE_LIMIT_MS=900000; context.Date={now:()=>100000};
+  context.appState.idleAt=99999; context.appState.sessionEndsAt=200000;
+  context.signOutUser=()=>{signouts++;};
+  context.resetIdleTimer();
+  assert.equal(signouts,1); assert.equal(context.appState.idleAt,99999);
 });
 
 test('resume bookmarks contain only IDs and positions and disappear at logout', () => {
