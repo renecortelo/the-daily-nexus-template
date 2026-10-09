@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import re
 import secrets
@@ -547,6 +548,12 @@ def validate_settings(settings: Settings) -> None:
     validate_gmail_label(settings.app.gmail_label)
     if not 0.90 <= settings.audio.synthesis_speed <= 1.10:
         raise ValueError("audio.synthesis_speed must be from 0.90 to 1.10")
+    for name, value, lower, upper in (
+        ("target_lufs", settings.audio.target_lufs, -70, -5),
+        ("true_peak_db", settings.audio.true_peak_db, -9, 0),
+    ):
+        if not math.isfinite(value) or not lower <= value <= upper:
+            raise ValueError(f"audio.{name} must be finite and from {lower} to {upper}")
     validate_pronunciations(settings.audio.pronunciations)
     selected_voice = voice_profile(settings.audio.voice)
     if settings.audio.language_code != selected_voice.language_code:

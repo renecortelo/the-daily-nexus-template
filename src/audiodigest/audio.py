@@ -12,6 +12,7 @@ from array import array
 from dataclasses import dataclass
 from pathlib import Path
 
+from audiodigest.audio_quality import AudioQuality, measure_encoded_audio
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.episode_budget import MAX_EPISODE_SECONDS
 from audiodigest.execution_budget import check_budget, operation_timeout
@@ -44,6 +45,7 @@ class AudioResult:
     path: Path
     duration_seconds: float
     transcript_segments: tuple[TranscriptSegment, ...] = ()
+    quality: AudioQuality = AudioQuality()
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +197,15 @@ class KokoroAudioRenderer:
         except ImportError as exc:
             raise AudioGenerationError("numpy is required for local audio rendering") from exc
         combined = np.concatenate(audio_parts)
+        if combined.ndim != 1 or not combined.size or not np.isfinite(combined).all():
+            raise AudioGenerationError("Kokoro returned invalid mono speech samples")
+        peak = float(np.max(np.abs(combined)))
+        if peak <= 1e-6:
+            raise AudioGenerationError("Kokoro returned silent speech samples")
+        # PCM16 otherwise clips values beyond full scale before loudnorm can help.
+        # Only attenuate oversized waveforms; never boost or compress quiet speech.
+        if peak >= 1:
+            combined = combined * (0.999 / peak)
         sf.write(str(output), combined, 24_000)
 
     def _voice_for_host(self, host_name: str) -> str:
@@ -470,8 +481,22 @@ class KokoroAudioRenderer:
             raise AudioGenerationError(
                 f"Episode duration {duration:.1f}s is below the safety minimum"
             )
+        quality = measure_encoded_audio(
+            ffmpeg, output,
+            target_lufs=self.settings.target_lufs,
+            true_peak_db=self.settings.true_peak_db,
+        )
+        if quality.integrated_lufs is not None:
+            print(
+                f"Final encoded audio: {quality.integrated_lufs:.1f} LUFS; "
+                f"true peak {quality.true_peak_db:.1f} dBTP; {quality.status}.",
+                flush=True,
+            )
+        else:
+            print(f"Final audio measurement unavailable: {quality.reason}.", flush=True)
         return AudioResult(
             path=output,
             duration_seconds=duration,
             transcript_segments=tuple(transcript_segments),
+            quality=quality,
         )

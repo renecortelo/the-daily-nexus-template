@@ -2,8 +2,9 @@ import json
 import subprocess
 import tempfile
 import wave
+from importlib.util import find_spec
 from pathlib import Path
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from unittest.mock import patch
 
 from audiodigest.audio import (
@@ -12,6 +13,7 @@ from audiodigest.audio import (
     _combine_wav_chunks,
     _complete_audio_duration,
 )
+from audiodigest.audio_quality import AudioQuality
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.models import EpisodeScript
 
@@ -121,6 +123,7 @@ class AudioHostTests(TestCase):
             patch.object(renderer, "_write_speech_chunk", side_effect=speech),
             patch.object(renderer, "_write_silence", side_effect=silence),
             patch("audiodigest.audio.subprocess.run", side_effect=run),
+            patch("audiodigest.audio.measure_encoded_audio", return_value=AudioQuality()),
         ):
             result = renderer.render(script, Path(name) / "episode.mp3")
 
@@ -231,6 +234,7 @@ class AudioHostTests(TestCase):
                     side_effect=lambda path, _milliseconds: self._write_test_wav(path),
                 ),
                 patch("audiodigest.audio.subprocess.run", side_effect=run),
+                patch("audiodigest.audio.measure_encoded_audio", return_value=AudioQuality()),
             ):
                 result = renderer.render(script, output)
 
@@ -245,6 +249,42 @@ class AudioHostTests(TestCase):
                 [item.start_ms for item in result.transcript_segments],
             )
             self.assertTrue(all(item.end_ms > item.start_ms for item in result.transcript_segments))
+
+    @skipUnless(find_spec("numpy") and find_spec("soundfile"), "optional audio dependencies")
+    def test_invalid_synthesis_samples_are_rejected_before_pcm_encoding(self):
+        import numpy as np
+
+        renderer = KokoroAudioRenderer(AudioSettings(), HostSettings())
+        for samples in (
+            np.array([]), np.zeros(20), np.array([0.1, np.nan]),
+            np.array([0.1, np.inf]), np.zeros((20, 2)),
+        ):
+            with (
+                self.subTest(samples=samples),
+                patch("soundfile.write") as write,
+                self.assertRaises(AudioGenerationError),
+            ):
+                renderer._write_speech_chunk(
+                    lambda *_args, _samples=samples, **_kwargs: [("", "", _samples)], "fictional",
+                    Path("fictional.wav"), voice="af_heart",
+                )
+            write.assert_not_called()
+
+    @skipUnless(find_spec("numpy") and find_spec("soundfile"), "optional audio dependencies")
+    def test_oversized_samples_are_attenuated_before_pcm_clipping_without_compression(self):
+        import numpy as np
+
+        renderer = KokoroAudioRenderer(AudioSettings(), HostSettings())
+        for samples in (np.array([0.2, -0.3]), np.array([0.4, -1.2, 0.8])):
+            with patch("soundfile.write") as write:
+                renderer._write_speech_chunk(
+                    lambda *_args, _samples=samples, **_kwargs: [("", "", _samples)], "fictional",
+                    Path("fictional.wav"), voice="af_heart",
+                )
+                actual = write.call_args.args[1]
+            expected = samples if np.max(np.abs(samples)) < 1 else samples * (0.999 / 1.2)
+            np.testing.assert_allclose(expected, actual)
+            self.assertLess(np.max(np.abs(actual)), 1)
 
     def test_solo_nox_reads_disclosure_and_section_headings(self):
         hosts = HostSettings(count=1, solo_name="Nox")

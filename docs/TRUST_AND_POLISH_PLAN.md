@@ -176,6 +176,9 @@ was not changed.
 
 ## 5. Podcast and newspaper quality
 
+Status: first audio-safety/measurement increment implemented on 2026-10-09.
+Subjective listening changes and newspaper-design work remain open.
+
 Give lead developments depth and supporting briefs brevity. Use short A/B audio
 samples for spoken syntax, handoffs, names and pauses; measure final encoded
 loudness and peaks. Remove newspaper semantic repetition and empty overflow;
@@ -184,6 +187,20 @@ use only explanatory, evidence-supported visuals, with explicit units and dates.
 Acceptance: no filler duration requirement, clipped assertions or unsupported
 implications; coherent two-page editions where practical; a third page only for
 substantive readable overflow; pronunciation and delivery reviewed by listening.
+
+The final encoded MP3 now receives a bounded local loudness/true-peak/range audit,
+with numeric results in its private manifest. This is observation, not an extra
+encode, synthesis retry or new publication gate. It skips near the protected
+deadline, retains two minutes for publishing, and times out after 30 seconds;
+unavailable measurements are explicit. Existing targets, voices, pauses, speed,
+original transcripts and duration limits stay unchanged. Invalid/silent synthesis
+samples cannot become PCM speech; only oversized waveforms are attenuated before
+PCM16 would clip them. Non-finite/out-of-range loudnorm settings fail early.
+Synthetic cached-voice previews and local measurements are used, with no provider
+request or generated production episode. This observation adds bounded decode
+work; it is not a claim of free compute or measured cloud speed improvement.
+English-voice pronunciation overrides remain approximations; listening feedback
+is required before claiming more natural delivery or choosing different voices.
 
 ## 6. Mobile accessibility, UX and maintainability
 

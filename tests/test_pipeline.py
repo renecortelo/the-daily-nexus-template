@@ -13,6 +13,7 @@ from audiodigest.antigravity_client import (
     AntigravityPaymentRiskError,
 )
 from audiodigest.audio import AudioResult
+from audiodigest.audio_quality import AudioQuality
 from audiodigest.config import load_settings
 from audiodigest.gmail_client import fixture_sources
 from audiodigest.models import (
@@ -543,7 +544,13 @@ class OptionalNewspaperTests(TestCase):
 
             def render(_script, output):
                 output.write_bytes(b"audio" * 300)
-                return AudioResult(output, 1200)
+                return AudioResult(
+                    output, 1200,
+                    quality=AudioQuality(
+                        status="outside_target", reason="measured",
+                        integrated_lufs=-17.2, true_peak_db=-1.1, loudness_range_lu=2.8,
+                    ),
+                )
 
             with (
                 patch("audiodigest.pipeline.run_cost_guard"),
@@ -567,6 +574,9 @@ class OptionalNewspaperTests(TestCase):
             self.assertIsNone(manifest["newspaper"])
             self.assertEqual(expected_status, manifest["newspaper_status"])
             self.assertEqual([], manifest["newspaper_preview_paths"])
+            self.assertEqual("outside_target", manifest["audio_quality"]["status"])
+            self.assertEqual(-17.2, manifest["audio_quality"]["integrated_lufs"])
+            renderer.return_value.render.assert_called_once()
             self.assertIsNone(
                 pipeline.database.episode_for_date(date(2026, 8, 10))["newspaper_path"]
             )

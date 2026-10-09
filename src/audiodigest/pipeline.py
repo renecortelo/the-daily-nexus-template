@@ -18,6 +18,7 @@ from audiodigest.antigravity_client import (
     AntigravityPaymentRiskError,
 )
 from audiodigest.audio import AudioResult, KokoroAudioRenderer
+from audiodigest.audio_quality import AudioQuality
 from audiodigest.closing_quotes import (
     load_closing_quotes,
     quote_ids_from_episodes,
@@ -587,6 +588,7 @@ class Pipeline:
         closing_quote_id: str = "",
         episode_budget: dict[str, Any] | None = None,
         newspaper_status: str = "failed",
+        audio_quality: AudioQuality | None = None,
     ) -> None:
         manifest = {
             "episode_date": day.isoformat(),
@@ -605,6 +607,7 @@ class Pipeline:
             "antigravity_calls": antigravity_metadata,
             "duration_seconds": duration_seconds,
             "audio_sha256": checksum,
+            "audio_quality": (audio_quality or AudioQuality()).to_dict(),
             "edition_name": " ".join(edition_name.split()),
             "closing_quote_id": closing_quote_id,
         }
@@ -1005,6 +1008,7 @@ class Pipeline:
                 transcript_path=transcript_path,
                 antigravity_metadata=metadata,
                 duration_seconds=audio_result.duration_seconds,
+                audio_quality=audio_result.quality,
                 checksum=checksum,
                 guid=guid,
                 edition_name=run_name if execution_id else "",
