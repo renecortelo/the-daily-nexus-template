@@ -124,6 +124,46 @@ def source_prompt_dicts(sources: Sequence[SourceItem]) -> list[dict[str, Any]]:
 
 
 @dataclass(slots=True)
+class StoryEvidence:
+    """Original, privacy-minimized source passage; not a model-written quotation."""
+
+    fact_index: int
+    source_id: str
+    passage_id: str
+    source_type: str
+    kind: str
+    publication: str
+    url: str
+    excerpt: str
+    excerpt_sha256: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StoryEvidence:
+        if not isinstance(data, dict):
+            raise DataValidationError("story evidence must be an object")
+        index = data.get("fact_index")
+        if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+            raise DataValidationError("story evidence fact index must be a nonnegative integer")
+        kind = _required_str(data, "kind")
+        if kind not in {"body", "article"}:
+            raise DataValidationError("story evidence kind must be body or article")
+        return cls(
+            fact_index=index,
+            source_id=_required_str(data, "source_id"),
+            passage_id=_required_str(data, "passage_id"),
+            source_type=_required_str(data, "source_type"),
+            kind=kind,
+            publication=str(data.get("publication", "")),
+            url=str(data.get("url", "")),
+            excerpt=_required_str(data, "excerpt"),
+            excerpt_sha256=_required_str(data, "excerpt_sha256"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class Story:
     story_id: str
     section: SectionReference
@@ -134,6 +174,7 @@ class Story:
     source_urls: list[str]
     confidence: float
     rank_score: float
+    evidence: list[StoryEvidence] = field(default_factory=list)
 
     @classmethod
     def from_dict(
@@ -155,6 +196,9 @@ class Story:
             raise DataValidationError("confidence must be a number from 0 to 1")
         if not isinstance(rank_score, (int, float)):
             raise DataValidationError("rank_score must be numeric")
+        raw_evidence = data.get("evidence", [])
+        if not isinstance(raw_evidence, list):
+            raise DataValidationError("story evidence must be a list")
         return cls(
             story_id=_required_str(data, "story_id"),
             section=section,
@@ -165,6 +209,7 @@ class Story:
             source_urls=_string_list(data, "source_urls"),
             confidence=float(confidence),
             rank_score=float(rank_score),
+            evidence=[StoryEvidence.from_dict(item) for item in raw_evidence],
         )
 
     def to_dict(self) -> dict[str, Any]:

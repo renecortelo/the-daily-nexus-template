@@ -58,6 +58,9 @@ rotation separately; no rotation of a working private feed is automatic.
 
 ## 2. Original-source verification and source lineage
 
+Status: implemented on 2026-10-09; production adoption is evaluated on subsequent
+runs, without generating extra editions for testing.
+
 Carry precise supporting excerpts for important claims; validate source and URL
 membership; use those excerpts in the existing factual-review calls. Preserve
 attribution, quantities, dates, translated names and uncertainty. Show coverage
@@ -66,6 +69,22 @@ as collected/extracted/selected/duplicate/omitted, not a guarantee of accuracy.
 Acceptance: intentionally corrupted facts or forged links fail even when the
 script repeats an extracted record faithfully; supported multilingual reporting
 survives; no additional paid service or routine review call is introduced.
+
+Extraction now supplies one or two original-passage references for every fact.
+The runtime resolves those references itself, retains adjacent qualifications,
+rejects unrelated links and sources, and preserves supports during consolidation.
+The existing script and newspaper reviewers receive deduplicated original text;
+repair drafts receive the same evidence. Factual approval must be explicit.
+Numeric lineage counts reach the owner console; original excerpts do not.
+
+Limitations: regression reviewers are simulated, not an independent truth oracle.
+The original reporting itself may be wrong, and model review can still err.
+Prompt text increases, although regular call count and runtime caps do not;
+there is no claim of measured production speed improvement. Excerpt packets are
+bounded and fail explicitly rather than silently clipping missing context.
+Saved originals remain in private local/run manifests, not the public template
+or Hosting release. Historical manifests without them cannot be used to write
+a new independently verified newspaper; existing media/rendering remain usable.
 
 ## 3. Archive lifecycle and queue recovery
 

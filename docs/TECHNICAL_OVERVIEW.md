@@ -24,9 +24,9 @@ deployment.
 | --- | --- | --- |
 | 1 | Query Gmail for the exact label and selected date; optionally load date-specific research | Approved newsletter bodies and evidence records |
 | 2 | Decode supported tracking wrappers inside the runtime, reject utility links, enforce HTTPS/public-address checks, check robots rules for the original URL and every redirect destination, and retrieve readable public pages | Newsletter-first evidence enriched with safe public text |
-| 3 | Ask Antigravity for structured story extraction, classification, ranking, and duplicate consolidation | Evidence-linked story records |
+| 3 | Ask Antigravity for structured story extraction, classification and ranking; resolve original-passage references and consolidate duplicates locally | Evidence-linked story records |
 | 4 | Generate the configured solo or two-host podcast script with ordered or content-derived sections | Structured host dialogue and show notes |
-| 5 | Verify coverage and factual support; repair rejected drafts within bounded attempts | Approved spoken script |
+| 5 | Check script claims against original source excerpts, not just extraction summaries; repair rejected drafts within bounded attempts | Source-consistency-reviewed spoken script |
 | 6 | If requested, generate and quality-check an independent reader-facing newspaper, targeting two pages with a third page allowed only for readable overflow | Structured newspaper JSON, PDF, and page previews, or an explicit skipped status |
 | 7 | Synthesize each host with Kokoro inside the selected private runtime, assemble segments, preserve transcript timing, and normalize the MP3 with FFmpeg | MP3 and timed transcript |
 | 8 | Finalize locally or publish an incremental Firebase Hosting release, then fetch the remote RSS feed and verify the new episode | Local archive or remotely verified private feed |
@@ -34,6 +34,31 @@ deployment.
 Temporary source payloads are removed in the pipeline's cleanup path. A run is
 not marked published merely because files were uploaded: remote RSS verification
 must also succeed.
+
+Each extracted fact cites one or two passage IDs from collected newsletters or
+retrieved pages. The runtime copies the actual source text and adjacent context,
+validates source/URL membership, and remaps supports when merging duplicates.
+The existing script and newspaper review calls receive deduplicated original
+passages plus a fact-to-passage map; repair drafts receive the same evidence.
+Original-source factual approval must be explicit. This is a consistency check,
+not independent proof that a publisher is correct; translation, chronology,
+units, qualifications and attribution still require fallible model judgment.
+Sources are untrusted data, never instructions for the reviewer.
+
+Unique review excerpts are capped at 120,000 characters; oversized packets fail
+explicitly rather than silently removing evidence. Regular review-call count is
+unchanged, but the added source text can increase latency. Original excerpts and
+integrity hashes are stored only in the private runtime manifest, not Firebase
+archive metadata or Hosting files. Hashes detect corruption, not authenticity
+against a malicious editor. Temporary input payloads are removed; saved manifest
+excerpts follow the private archive's retention. Legacy manifests without saved
+originals cannot independently rebuild a newspaper without recollecting sources;
+existing PDF rendering and playback are unaffected.
+
+The owner console's lineage ledger distinguishes extracted records, merged
+duplicates, consolidated stories, selected/omitted audio stories, unrepresented
+newsletters and cited passages. These are bookkeeping counts, not accuracy
+scores or a promise to include every fact from every newsletter.
 
 GEN, SCHED and saved favorites carry `includeNewspaper` (boolean, default true
 for older records). It maps to `[podcast].include_newspaper` in the runtime.

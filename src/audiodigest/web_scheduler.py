@@ -304,6 +304,13 @@ def _published_metadata(
                         "safe_article_links",
                         "safe_articles_retrieved",
                         "research_sources",
+                        "extracted_story_records",
+                        "duplicate_story_records",
+                        "consolidated_stories",
+                        "selected_news_stories",
+                        "omitted_news_stories",
+                        "unrepresented_newsletters",
+                        "source_passages_cited",
                     }
                     and isinstance(value, (str, int))
                     and not isinstance(value, bool)

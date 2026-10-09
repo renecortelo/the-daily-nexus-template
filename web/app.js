@@ -1980,9 +1980,13 @@ function renderPlayerDetails(mode = "references") {
       container.append(element("p", "item-meta evidence-mix",
         `AUDIO COVERAGE // ${budget.selected_news_stories} OF ${budget.available_stories} NEWS STORIES // ${budget.represented_newsletters} NEWSLETTERS REPRESENTED // CONTENT-SIZED; NO MINIMUM DURATION`));
     }
+    if (Number.isFinite(mix.extracted_story_records)) {
+      container.append(element("p", "item-meta evidence-mix",
+        `SOURCE LINEAGE // ${mix.extracted_story_records} EXTRACTED RECORDS // ${mix.duplicate_story_records || 0} DUPLICATES MERGED // ${mix.omitted_news_stories || 0} NEWS STORIES OUTSIDE AUDIO SHORTLIST // ${mix.source_passages_cited || 0} ORIGINAL PASSAGES CITED. COUNTS ARE NOT A GUARANTEE OF ACCURACY.`));
+    }
     if (!refs.length) {
-      container.className = "player-details empty-state";
-      container.textContent = "References will appear for newly synchronized episodes.";
+      container.append(element("p", "empty-state",
+        "No public article links were provided. Newsletter evidence can still support this edition."));
       return;
     }
     for (const reference of refs) {

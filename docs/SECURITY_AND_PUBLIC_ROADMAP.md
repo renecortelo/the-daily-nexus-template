@@ -22,6 +22,13 @@ desktop app, an owner-locked web console, and an optional private cloud runner.
   parameters are removed conservatively. This is not a full personal-data detector:
   selected newsletter reporting still goes to Antigravity's cloud service.
 - Wikimedia receives only the selected episode date and the app's user-agent.
+- Extracted facts must reference real source passages; unsupported source IDs
+  and unrelated URLs are rejected locally. Existing factual reviewers see
+  original text, not only model summaries. This reduces circular verification
+  but cannot guarantee that a source or a model judgment is correct.
+- Saved source excerpts are private runtime-manifest data. They are excluded
+  from owner archive metadata and Hosting publication, and must never enter
+  repository source or public fixtures. Integrity hashes are not signatures.
 
 ## Console session and retained data
 

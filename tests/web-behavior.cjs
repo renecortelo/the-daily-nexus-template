@@ -56,6 +56,23 @@ test('historic references hide personalized parameters and reject credential-bea
   assert.equal(context.minimizeReferenceURL('http://example.com/story'),null);
 });
 
+test('newsletter-only references retain coverage and lineage even without public URLs', () => {
+  const {context,nodes}=harness(['renderPlayerDetails','minimizeReferenceURL','safeReference']);
+  context.element=(tag,className,text)=>({tag,className,textContent:text});
+  context.appState.activeEpisode={references:[],sourceMix:{
+    mode:'newsletter_only',newsletter_messages:3,newsletter_backed_stories:7,
+    extracted_story_records:9,duplicate_story_records:2,omitted_news_stories:1,
+    source_passages_cited:6,
+  },episodeBudget:{selected_news_stories:6,available_stories:7,represented_newsletters:3}};
+  context.renderPlayerDetails('references');
+  const texts=nodes.get('player-details').children.map(item=>item.textContent).join('\n');
+  assert.match(texts,/3 NEWSLETTERS/);
+  assert.match(texts,/9 EXTRACTED RECORDS/);
+  assert.match(texts,/2 DUPLICATES MERGED/);
+  assert.match(texts,/COUNTS ARE NOT A GUARANTEE/);
+  assert.match(texts,/Newsletter evidence can still support/);
+});
+
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {
   const {context}=harness(['consoleSessionFor']);
   const storage=storageFixture(); const started=Date.parse('2026-10-09T06:00:00Z');
