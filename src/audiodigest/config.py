@@ -76,7 +76,7 @@ def read_firebase_secret(project_id: str) -> str:
 
 @dataclass(slots=True)
 class AppSettings:
-    timezone: str = "UTC"
+    timezone: str = "Europe/Madrid"
     gmail_label: str = "AudioDigest/Source"
     retention_days: int = 30
     target_min_words: int = 2850
@@ -87,6 +87,11 @@ class AppSettings:
         default_factory=lambda: Path(os.getenv("LOCALAPPDATA", ".")) / "AudioDigest"
     )
     backup_dir: Path | None = None
+
+    @property
+    def retention_episodes(self) -> int:
+        """Hosted edition count; retention_days is a legacy configuration alias."""
+        return self.retention_days
 
 
 @dataclass(slots=True)
@@ -189,9 +194,7 @@ class WebSettings:
     enabled: bool = False
     firebase_api_key: str = ""
     owner_uid: str = ""
-    oauth_client_secret_path: Path = Path(
-        "%LOCALAPPDATA%/AudioDigest/secrets/client_secret_web_runner.json"
-    )
+    oauth_client_secret_path: Path = Path("client_secret_web_runner.json")
     token_service: str = (
         "TheDailyNexusWebRunner"  # noqa: S105 - Credential Manager service name.
     )
@@ -302,10 +305,13 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
 
     runtime_dir = _expand_path(str(app_raw.get("runtime_dir", "%LOCALAPPDATA%/AudioDigest")), base)
     backup_value = str(app_raw.get("backup_dir", "")).strip()
+    if ("retention_episodes" in app_raw and "retention_days" in app_raw
+            and app_raw["retention_episodes"] != app_raw["retention_days"]):
+        raise ValueError("retention_episodes and legacy retention_days disagree")
     app = AppSettings(
-        timezone=str(app_raw.get("timezone", "UTC")),
+        timezone=str(app_raw.get("timezone", "Europe/Madrid")),
         gmail_label=str(app_raw.get("gmail_label", "AudioDigest/Source")),
-        retention_days=int(app_raw.get("retention_days", 30)),
+        retention_days=int(app_raw.get("retention_episodes", app_raw.get("retention_days", 30))),
         target_min_words=int(app_raw.get("target_min_words", 2850)),
         target_max_words=int(app_raw.get("target_max_words", 3800)),
         max_newsletters=int(app_raw.get("max_newsletters", 80)),
@@ -444,7 +450,7 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
             str(
                 web_raw.get(
                     "oauth_client_secret_path",
-                    "%LOCALAPPDATA%/AudioDigest/secrets/client_secret_web_runner.json",
+                    "client_secret_web_runner.json",
                 )
             ),
             base,
@@ -622,7 +628,7 @@ def validate_settings(settings: Settings) -> None:
     if not 1 <= settings.podcast.max_script_repairs <= 3:
         raise ValueError("podcast.max_script_repairs must be between 1 and 3")
     if settings.app.retention_days < 1 or settings.app.retention_days > 30:
-        raise ValueError("retention_days must be between 1 and 30 for the Spark pilot")
+        raise ValueError("retention_episodes must be between 1 and 30 for the Spark pilot")
     if settings.app.target_min_words < 100:
         raise ValueError("target_min_words is unexpectedly small")
     if settings.app.target_max_words < settings.app.target_min_words:

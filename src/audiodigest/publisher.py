@@ -38,6 +38,7 @@ class PublishError(RuntimeError):
 
 MAX_SPARK_PUBLIC_TREE_BYTES = 1024 * 1024 * 1024
 MAX_REMOTE_FEED_BYTES = 2 * 1024 * 1024
+MAX_REMOTE_EPISODES = 1000
 REMOTE_VERIFY_TIMEOUT_SECONDS = 30
 REMOTE_VERIFY_RETRY_DELAYS_SECONDS = (0.0, 1.0, 2.0, 4.0)
 WEB_APP_FILES = (
@@ -316,7 +317,9 @@ def _remote_episode_record(remote: RemoteFeedEpisode) -> dict:
 def _remote_media_paths(remote: RemoteFeedEpisode) -> tuple[str, ...]:
     result = [urlsplit(remote.audio_url).path]
     if remote.newspaper_url:
-        result.append(urlsplit(remote.newspaper_url).path)
+        paper_path = urlsplit(remote.newspaper_url).path
+        result.append(paper_path)
+        result.extend(f"{paper_path[:-4]}-{page}.png" for page in range(1, 4))
     return tuple(result)
 
 
@@ -332,6 +335,7 @@ def _verify_remote_private_feed_once(
     *,
     expected_host: str,
     expected_guid: str,
+    expected_guids: tuple[str, ...] | None = None,
 ) -> int:
     feed_bytes, content_type = _fetch_remote(
         _cache_busted_url(feed_url),
@@ -349,6 +353,8 @@ def _verify_remote_private_feed_once(
         raise PublishError(f"remote Apple RSS validation failed: {exc}") from exc
     if expected_guid not in report.guids:
         raise PublishError("the newly published episode is missing from the remote feed")
+    if expected_guids is not None and set(report.guids) != set(expected_guids):
+        raise PublishError("remote feed retention inventory differs from the published edition set")
     audio_url = report.enclosure_urls[report.guids.index(expected_guid)]
     _sample, audio_content_type = _fetch_remote(
         audio_url,
@@ -369,6 +375,7 @@ def verify_remote_private_feed(
     feed_url: str,
     *,
     expected_guid: str,
+    expected_guids: tuple[str, ...] | None = None,
     retry_delays: tuple[float, ...] = REMOTE_VERIFY_RETRY_DELAYS_SECONDS,
 ) -> int:
     parsed_feed_url = urlsplit(feed_url)
@@ -392,6 +399,7 @@ def verify_remote_private_feed(
                 feed_url,
                 expected_host=expected_host,
                 expected_guid=expected_guid,
+                expected_guids=expected_guids,
             )
         except PublishError as exc:
             last_error = exc
@@ -410,6 +418,7 @@ class PublishResult:
     episode_count: int
     hosted_bytes: int
     remote_verified: bool = True
+    retained_guids: tuple[str, ...] = ()
 
 
 class FirebasePublisher:
@@ -436,8 +445,13 @@ class FirebasePublisher:
 
         local_episodes = self.database.feed_episodes(
             include_staged_date=episode_date,
-            limit=self.settings.app.retention_days,
+            limit=self.settings.app.retention_episodes,
         )
+        current_episode = self.database.episode_for_date(episode_date)
+        current_guid = str(current_episode["guid"]) if current_episode else ""
+        if (current_episode and current_episode.get("status") in {"published", "staged"}
+                and current_guid not in {str(item["guid"]) for item in local_episodes}):
+            local_episodes.append(current_episode)
         local_guids = {str(episode["guid"]) for episode in local_episodes}
         combined = {
             remote.guid: _remote_episode_record(remote)
@@ -452,9 +466,12 @@ class FirebasePublisher:
         )
         episodes = sorted(
             combined.values(),
-            key=lambda episode: str(episode["episode_date"]),
+            key=lambda episode: (
+                str(episode["guid"]) == current_guid, str(episode["episode_date"]),
+                str(episode.get("published_at") or ""), str(episode["guid"]),
+            ),
             reverse=True,
-        )[: self.settings.app.retention_days]
+        )[: self.settings.app.retention_episodes]
         retained_guids = {
             str(episode["guid"])
             for episode in episodes
@@ -535,7 +552,7 @@ class FirebasePublisher:
         if self.settings.firebase.deployment_token_file_path is not None:
             remote_episodes = load_remote_publication(
                 self.settings,
-                maximum_episodes=self.settings.app.retention_days + 1,
+                maximum_episodes=MAX_REMOTE_EPISODES,
             )
         episodes, hosted_bytes, removed_paths = self._build_tree(
             episode_date,
@@ -624,10 +641,12 @@ class FirebasePublisher:
         remote_episode_count = verify_remote_private_feed(
             feed_url,
             expected_guid=str(expected_episode["guid"]),
+            expected_guids=tuple(str(episode["guid"]) for episode in episodes),
         )
         self.database.mark_published(episode_date)
         return PublishResult(
             feed_url=feed_url,
             episode_count=remote_episode_count,
             hosted_bytes=hosted_bytes,
+            retained_guids=tuple(str(episode["guid"]) for episode in episodes),
         )

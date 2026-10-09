@@ -1,7 +1,7 @@
 [app]
 timezone = "UTC"
 gmail_label = "AudioDigest/Source"
-retention_days = 30
+retention_episodes = 30 # Hosted editions, not calendar days; legacy retention_days still works.
 # Legacy word preferences remain upper guidance: evidence-sized episodes have no minimum.
 target_min_words = 2850
 target_max_words = 3800

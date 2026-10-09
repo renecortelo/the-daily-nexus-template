@@ -197,6 +197,39 @@ class WebSchedulerTests(TestCase):
             self.assertFalse(any(data.get("status") == "failed" for _, _, data in client.writes))
             self.assertTrue(any(collection == "episodes" for collection, _, _ in client.writes))
 
+    def test_retirement_sync_failure_is_terminal_success_not_another_generation(self):
+        class PublishedPipeline:
+            calls = 0
+
+            def __init__(self, _settings):
+                pass
+
+            def run(self, **_kwargs):
+                self.__class__.calls += 1
+                return {"status": "published", "remote_verified": True,
+                        "retained_guids": ["synthetic-guid"]}
+
+        with tempfile.TemporaryDirectory() as name:
+            client = _FakeWebClient([])
+            parameters = GenerationParameters.from_dict(schedule_payload()["parameters"])
+            with patch("audiodigest.web_scheduler._published_metadata",
+                       return_value=("edition", {"status": "published"})), patch(
+                "audiodigest.web_scheduler._reconcile_archive_lifecycle",
+                side_effect=WebRunnerError("Synthetic lifecycle synchronization failure"),
+            ) as reconcile:
+                result = _execute_generation(
+                    self._settings(Path(name)), client, execution_id="synthetic-execution",
+                    display_name="An edition", parameters=parameters,
+                    episode_date=date(2026, 10, 8), pipeline_factory=PublishedPipeline,
+                )
+            self.assertEqual(1, PublishedPipeline.calls)
+            self.assertEqual("published", result["status"])
+            self.assertTrue(result["synchronization_pending"])
+            reconcile.assert_called_once()
+            self.assertEqual("completed", client.private_execution_status(
+                "synthetic-execution", "2026-10-08",
+            ))
+
     def setUp(self):
         remote = patch("audiodigest.web_scheduler.load_remote_publication", return_value=())
         self.remote_publication = remote.start()

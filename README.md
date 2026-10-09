@@ -64,6 +64,12 @@ excerpts stay in private runtime manifests and are not published to Firebase.
 Historical editions without saved originals remain playable, but cannot be used
 to write a new independently verified newspaper without recollecting sources.
 
+Hosted retention is an edition count: `[app].retention_episodes` defaults to 30,
+not 30 days (the old `retention_days` name remains accepted). Retired episodes
+stay in history but cannot be selected for playback/reading. Local archives are
+not deleted. A queued item's **WAKE RUNNER** retries dispatch without creating
+another generation; **REQUEUE** creates an intentional fresh failed/expired retry.
+
 ## Read this first
 
 This repository is a **public source template**. It contains no real account or

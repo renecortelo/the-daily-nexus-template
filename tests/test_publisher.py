@@ -1,10 +1,11 @@
 import shutil
 import tempfile
+from dataclasses import replace
 from datetime import date
 from email.message import Message
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
@@ -156,7 +157,7 @@ class PublisherTests(TestCase):
                 published_at="2026-07-27T06:00:00+00:00",
                 audio_url=(
                     "https://test.web.app/p/"
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/audio/"
+                    "0123456789abcdef0123456789abcdef/audio/"
                     "2026-07-27-existing-guid.mp3"
                 ),
                 audio_bytes=123456,
@@ -164,7 +165,7 @@ class PublisherTests(TestCase):
                 show_notes=("A verified story",),
                 newspaper_url=(
                     "https://test.web.app/p/"
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/read/"
+                    "0123456789abcdef0123456789abcdef/read/"
                     "2026-07-27-existing-guid.pdf"
                 ),
             )
@@ -178,6 +179,38 @@ class PublisherTests(TestCase):
             self.assertTrue(episodes[0]["remote_only"])
             self.assertEqual(123456, episodes[0]["audio_bytes"])
             self.assertEqual((), removed)
+
+            older = replace(
+                remote, episode_date=date(2026, 7, 26), guid="older-guid",
+                audio_url=remote.audio_url.replace("2026-07-27-existing", "2026-07-26-older"),
+                newspaper_url=remote.newspaper_url.replace(
+                    "2026-07-27-existing", "2026-07-26-older",
+                ),
+            )
+            _, _, removed = publisher._build_tree(
+                date(2026, 7, 28), remote_episodes=(older, remote),
+            )
+            self.assertEqual(5, len(removed))
+            self.assertTrue(all("older-guid" in path for path in removed))
+
+            # A deliberately generated historical edition must be retained even
+            # when more recent dates already fill the hosted edition limit.
+            audio = root / "current.mp3"
+            audio.write_bytes(b"synthetic audio")
+            current = {
+                "episode_date": "2026-07-20", "guid": "historical-guid", "status": "staged",
+                "title": "A historical edition", "audio_path": str(audio),
+                "duration_seconds": 120, "show_notes": ["Synthetic news"],
+            }
+            stub = Mock()
+            stub.feed_episodes.return_value = []
+            stub.episode_for_date.return_value = current
+            with patch("audiodigest.publisher._validate_apple_audio"):
+                episodes, _, removed = FirebasePublisher(settings, stub)._build_tree(
+                    date(2026, 7, 20), remote_episodes=(remote,),
+                )
+            self.assertEqual(["historical-guid"], [item["guid"] for item in episodes])
+            self.assertEqual(5, len(removed))
             self.assertFalse(
                 (
                     settings.firebase.public_dir
@@ -214,7 +247,7 @@ class PublisherTests(TestCase):
                 published_at="2026-08-02T04:00:00+00:00",
                 audio_url=(
                     "https://test.web.app/p/"
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/audio/old-guid.mp3"
+                    "0123456789abcdef0123456789abcdef/audio/old-guid.mp3"
                 ),
                 audio_bytes=123456,
                 duration_seconds=1200,
@@ -252,11 +285,11 @@ class PublisherTests(TestCase):
             )
             feed_url = (
                 "https://test.web.app/p/"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/feed.xml"
+                "0123456789abcdef0123456789abcdef/feed.xml"
             )
             audio_url = (
                 "https://test.web.app/p/"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/audio/"
+                "0123456789abcdef0123456789abcdef/audio/"
                 "2026-07-20-episode-guid.mp3"
             )
             responses = [
@@ -306,7 +339,7 @@ class PublisherTests(TestCase):
             )
             feed_url = (
                 "https://test.web.app/p/"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/feed.xml"
+                "0123456789abcdef0123456789abcdef/feed.xml"
             )
             with patch(
                 "audiodigest.publisher.urlopen",
@@ -350,11 +383,11 @@ class PublisherTests(TestCase):
             )
             feed_url = (
                 "https://test.web.app/p/"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/feed.xml"
+                "0123456789abcdef0123456789abcdef/feed.xml"
             )
             audio_url = (
                 "https://test.web.app/p/"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/audio/"
+                "0123456789abcdef0123456789abcdef/audio/"
                 "2026-07-29-expected-guid.mp3"
             )
             responses = [
@@ -385,7 +418,7 @@ class PublisherTests(TestCase):
     def test_remote_http_error_does_not_expose_private_feed_url(self):
         private_url = (
             "https://daily-nexus-private.web.app/p/"
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/feed.xml"
+            "0123456789abcdef0123456789abcdef/feed.xml"
         )
         error = HTTPError(private_url, 404, "Not Found", {}, None)
         with patch("audiodigest.publisher.urlopen", side_effect=error):

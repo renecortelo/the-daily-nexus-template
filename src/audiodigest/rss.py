@@ -281,7 +281,10 @@ def parse_remote_feed_bytes(
         raise ValueError("configured Firebase URL is invalid")
     private_root = f"/p/{quote(secret_path, safe='')}"
     result: list[RemoteFeedEpisode] = []
-    for item in channel.findall("item")[:maximum_episodes]:
+    items = channel.findall("item")
+    if len(items) > maximum_episodes:
+        raise ValueError("remote RSS inventory exceeds the safe episode limit")
+    for item in items:
         guid = item.findtext("guid", "").strip()
         if not REMOTE_GUID_PATTERN.fullmatch(guid):
             raise ValueError("remote RSS episode GUID is invalid")

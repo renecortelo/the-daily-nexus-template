@@ -1081,6 +1081,7 @@ class Pipeline:
                     round(publish_result.hosted_bytes / (1024 * 1024), 2) if publish_result else 0
                 ),
                 "remote_verified": (publish_result.remote_verified if publish_result else False),
+                "retained_guids": list(publish_result.retained_guids) if publish_result else [],
             }
         except Exception as exc:
             self.database.finish_run(day, "failed", str(exc))

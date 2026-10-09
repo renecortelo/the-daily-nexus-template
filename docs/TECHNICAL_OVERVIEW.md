@@ -91,6 +91,43 @@ in `speech.py`, shared by desktop and cloud. Written names remain unchanged;
 local validated overrides take precedence. These are English-voice approximations,
 not native-language voice switching or automatic transliteration of unknown names.
 
+## Archive lifecycle and queue recovery
+
+`[app].retention_episodes` is a hosted edition count, not a day count: 1–30,
+default 30. The legacy `retention_days` configuration alias remains accepted;
+conflicting aliases are rejected. Existing private values are not migrated or
+changed. With two editions daily, a 30-edition window is roughly 15 days.
+The current publication is retained even if its episode date is historical;
+remaining slots use the newest prior episode dates with deterministic ties.
+Local archives are not automatically deleted by this hosted retention setting.
+
+The incremental publisher removes retired MP3/PDF paths and each of the three
+possible page-preview paths from the new release. It loads a complete bounded
+live-feed inventory and rejects overflow rather than silently truncating it.
+The existing remote feed verification checks the exact intended retained GUID
+set, without a separate feed fetch. Only after verified publication does the
+runner reconcile the complete owner archive, scoped to that exact feed prefix.
+It patches `mediaState`, `retiredAt` and `updatedAt`, preserving original
+publication history, references, transcript and sequence identity. Retired
+records are non-selectable. Opening a cached episode/PDF requires a fresh
+Firestore server read and fails closed if that check is unavailable.
+
+GEN distinguishes saving a request from waking the runner. A queued item's
+WAKE RUNNER retries only the existing dispatch path; it does not write a request
+or reset a terminal execution. Concurrent wake attempts share one in-flight
+request. REQUEUE is restricted to failed/expired requests and creates a fresh
+immutable attempt; intentional additional editions remain supported.
+An accepted dispatch does not mean GitHub has assigned a runner, and a generic
+wake retains the existing due-schedule/oldest-eligible-request selection logic.
+Authentication changes invalidate late wake and archive-selection responses.
+
+Hosting release and Firestore metadata updates are not atomic. If synchronization
+fails after verified publication, the execution stays completed with a visible
+sync-pending warning; it is never automatically regenerated. A later successful
+publication repeats idempotent reconciliation. Already orphaned historical assets
+and old Hosting versions are not cleaned by this change; those need a separate
+reviewed inventory. No paid fallback, polling scheduler or timeout increase is added.
+
 ## What each intelligence component does
 
 - **Antigravity CLI** handles structured editorial reasoning: story extraction,

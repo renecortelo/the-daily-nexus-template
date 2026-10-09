@@ -437,7 +437,7 @@ class FirebaseWebRunnerClient:
         document_id: str,
         data: dict[str, Any],
     ) -> None:
-        if collection_name not in {"runRequests", "runner"}:
+        if collection_name not in {"runRequests", "runner", "episodes"}:
             raise WebRunnerError("runner refused an unexpected Firestore patch")
         if not document_id or "/" in document_id or len(document_id) > 160:
             raise WebRunnerError("runner refused an invalid Firestore document ID")
@@ -446,6 +446,10 @@ class FirebaseWebRunnerClient:
             if document_id != "status":
                 raise WebRunnerError("runner refused an unexpected progress document")
             allowed_fields = {"progress", "checkedAt"}
+        elif collection_name == "episodes":
+            allowed_fields = {"mediaState", "retiredAt", "updatedAt"}
+            if data.get("mediaState") not in {"available", "retired"}:
+                raise WebRunnerError("runner refused an invalid episode lifecycle state")
         if not data or any(key not in allowed_fields for key in data):
             raise WebRunnerError("runner refused an unexpected Firestore patch field")
         uid = urllib.parse.quote(self.uid, safe="")

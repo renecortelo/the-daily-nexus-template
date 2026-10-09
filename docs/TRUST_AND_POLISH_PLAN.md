@@ -88,6 +88,9 @@ a new independently verified newspaper; existing media/rendering remain usable.
 
 ## 3. Archive lifecycle and queue recovery
 
+Status: implemented on 2026-10-09; normal future publications reconcile existing
+archive records. No historical media cleanup or extra generation was triggered.
+
 Define retention in episodes or days explicitly; synchronize available/retired
 metadata with audio, paper and preview assets. Distinguish enqueue success from
 wake-up success; retry a wake without creating another generation request. Keep
@@ -95,6 +98,29 @@ intentional distinct editions selectable and failed executions terminal.
 
 Acceptance: no selectable available record points to retired media; wake failure
 cannot cause accidental duplicate production; intentional reruns remain possible.
+
+`retention_episodes` names the count explicitly (1–30; default 30); the legacy
+`retention_days` alias still works without changing saved deployment values.
+The current publication is retained, even for a historical date, alongside the
+newest prior dated editions. Retirement removes audio, PDF and up to three
+previews from the new Hosting release. Remote verification compares the exact
+retained GUID set in its existing feed fetch, before owner archive metadata is
+reconciled. Published history and numbering are preserved; `mediaState=retired`
+makes a record non-selectable. Cached selections require a fresh owner-server
+check, with logout and stale-response guards.
+
+Queued items have WAKE RUNNER: dispatch retry only, never a new generation.
+REQUEUE remains an explicit fresh attempt for terminal failed/expired requests.
+Concurrent submits/wakes are guarded, and enqueue success is distinguished from
+accepted dispatch and actual runner start. A confirmed feed plus failed metadata
+synchronization is still terminal success, with a synchronization warning; the
+next successful publication retries reconciliation, not production.
+
+Limits: Hosting and Firestore cannot change atomically. A network failure can
+leave a temporary metadata mismatch; reconciliation converges on the next normal
+publication. Previously orphaned assets absent from the live feed require a
+separate, explicitly reviewed inventory cleanup. The release does not reclaim
+older Hosting versions, alter schedules, requeue failures or raise runtime caps.
 
 ## 4. Free-tier visibility and measured efficiency
 

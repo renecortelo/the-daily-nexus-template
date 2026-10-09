@@ -43,6 +43,76 @@ function storageFixture() {
     setItem:(key,value)=>data.set(key,value), removeItem:key=>data.delete(key)};
 }
 
+test('wake retry never creates a generation and concurrent wakes share a dispatch', async () => {
+  const {context}=harness(['requestRunnerWake']); let resolveWake, calls=0, writes=0;
+  context.renderRunRequestList=()=>{};
+  context.addDoc=()=>{writes++;};
+  context.cloudClockRequest=()=>{calls++; return new Promise(resolve=>{resolveWake=resolve;});};
+  const first=context.requestRunnerWake('synthetic-request');
+  const second=context.requestRunnerWake('synthetic-other');
+  assert.equal(calls,1); resolveWake({status:'dispatched'}); await Promise.all([first,second]);
+  assert.equal(writes,0); assert.equal(context.appState.wakeStates.get('synthetic-request'),'confirmed');
+  context.cloudClockRequest=async()=>{throw Error('Synthetic network outage');};
+  await context.requestRunnerWake('synthetic-request');
+  assert.equal(context.appState.wakeStates.get('synthetic-request'),'unconfirmed');
+  assert.equal(writes,0);
+});
+
+test('double submission queues once and failed wake does not advise another generation', async () => {
+  const {context}=harness(['queueGeneration','requestRunnerWake']); let release, writes=0;
+  const alerts=[]; context.showAlert=(message)=>alerts.push(message);
+  context.renderRunRequestList=()=>{}; context.FormData=function() {this.get=()=> '2026-10-08';};
+  context.generationForm={querySelector(){return {};},elements:{requestedDate:{max:'2026-10-09'}}};
+  context.validateParameters=()=>({}); context.parameterData=()=>({});
+  context.collection=()=>({}); context.serverTimestamp=()=>({});
+  context.addDoc=()=>{writes++; return new Promise(resolve=>{release=resolve;});};
+  context.cloudClockRequest=async()=>{throw Error('Synthetic network outage');};
+  const event={preventDefault(){}};
+  const first=context.queueGeneration(event); await context.queueGeneration(event);
+  assert.equal(writes,1); release({id:'synthetic-request'}); await first;
+  assert.match(alerts.at(-1),/WAKE RUNNER/); assert.equal(writes,1);
+  assert.equal(context.appState.generationSubmitting,false);
+});
+
+test('requeue only accepts terminal records and each retry has one immutable request', async () => {
+  const {context}=harness(['requeueRequest']); let writes=0, release;
+  context.collection=()=>({}); context.serverTimestamp=()=>({}); context.requestRunnerWake=async()=>{};
+  context.appState.runRequests=[{id:'synthetic',status:'failed',requestedDate:'2026-10-08',parameters:{}}];
+  context.addDoc=()=>{writes++; return new Promise(resolve=>{release=resolve;});};
+  const first=context.requeueRequest('synthetic'); await context.requeueRequest('synthetic');
+  assert.equal(writes,1); release({id:'new-synthetic'}); await first;
+  assert.equal(context.appState.runRequests[0].status,'failed');
+  context.appState.runRequests[0].status='queued'; await context.requeueRequest('synthetic');
+  assert.equal(writes,1);
+});
+
+test('retired archive media is not selectable and stale cached selections check the server', async () => {
+  const {context}=harness(['archiveMediaURL','availableArchiveRecord']);
+  context.safePrivateURL=(url)=>url; context.doc=()=>({}); context.renderEpisodeArchives=()=>{};
+  const record={id:'synthetic-edition',status:'published',mediaState:'retired',audioUrl:'https://test.web.app/p/example/audio/edition.mp3'};
+  context.appState.episodeRecords=[{...record,mediaState:'available'}];
+  assert.equal(context.archiveMediaURL(record,'.mp3'),null);
+  context.getDocFromServer=async()=>({exists:()=>true,data:()=>record});
+  await assert.rejects(context.availableArchiveRecord(record.id,'.mp3'),/retired/);
+  assert.equal(context.appState.episodeRecords[0].mediaState,'retired');
+  context.getDocFromServer=async()=>{throw Error('Synthetic network outage');};
+  await assert.rejects(context.availableArchiveRecord(record.id,'.mp3'),/network/);
+});
+
+test('late archive responses cannot override newer selections or load after logout', async () => {
+  const {context}=harness(['openArchivedEpisode']); const pending=new Map(), selected=[];
+  context.availableArchiveRecord=id=>new Promise(resolve=>pending.set(id,resolve));
+  context.archiveMediaURL=record=>record.audioUrl; context.selectEpisode=record=>selected.push(record.id);
+  const first=context.openArchivedEpisode({id:'first'}); const second=context.openArchivedEpisode({id:'second'});
+  pending.get('second')({audioUrl:'second.mp3'}); await second;
+  pending.get('first')({audioUrl:'first.mp3'}); await first;
+  assert.deepEqual(selected,['second']);
+  const third=context.openArchivedEpisode({id:'third'});
+  context.appState.audioSelectionToken=null; context.appState.authorized=false;
+  pending.get('third')({audioUrl:'third.mp3'}); await third;
+  assert.deepEqual(selected,['second']);
+});
+
 test('historic references hide personalized parameters and reject credential-bearing URLs', () => {
   const {context}=harness(['minimizeReferenceURL','safeReference']);
   Object.assign(context,{URL});
