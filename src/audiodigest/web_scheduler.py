@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from audiodigest.closing_quotes import load_closing_quotes, quote_ids_from_episodes
 from audiodigest.config import Settings
@@ -22,7 +23,8 @@ from audiodigest.jobs import (
 )
 from audiodigest.pipeline import Pipeline
 from audiodigest.progress import ProgressReporter, increment
-from audiodigest.publisher import load_remote_publication
+from audiodigest.publisher import MAX_REMOTE_EPISODES, load_remote_publication
+from audiodigest.rss import REMOTE_GUID_PATTERN
 from audiodigest.web_runner import FirebaseWebRunnerClient, WebRunnerError
 
 MANUAL_REQUEST_EXPIRY_DAYS = 2
@@ -345,6 +347,8 @@ def _published_metadata(
         if newspaper_path and Path(str(newspaper_path)).is_file():
             newspaper_url = f"{root}/read/{filename}.pdf"
     metadata = {
+        "guid": str(episode["guid"]),
+        "mediaState": "available" if status == "published" else "unpublished",
         "episodeDate": episode_date.isoformat(),
         "title": str(episode["title"]),
         "durationMinutes": round(float(episode["duration_seconds"]) / 60, 1),
@@ -366,6 +370,57 @@ def _published_metadata(
         "closingQuoteId": closing_quote_id,
     }
     return f"{episode_date.isoformat()}-{execution_id}"[:160], metadata
+
+
+def _reconcile_archive_lifecycle(
+    settings: Settings, client: FirebaseWebRunnerClient, retained_guids: list[str],
+) -> None:
+    """Reconcile owner records only after a verified publication, never from a partial page.
+
+    Published history and numbering remain intact. This is idempotent metadata
+    convergence, not atomic cross-service deletion or a generation retry.
+    """
+    if (not isinstance(retained_guids, list) or not retained_guids
+            or len(retained_guids) > MAX_REMOTE_EPISODES
+            or any(not isinstance(guid, str) or not REMOTE_GUID_PATTERN.fullmatch(guid)
+                   for guid in retained_guids)):
+        raise WebRunnerError("verified publication has an invalid retention inventory")
+    retained = set(retained_guids)
+    base = urlsplit(settings.firebase.base_url)
+    prefix = f"/p/{settings.firebase.secret_path}/audio/"
+    # A complete read prevents first-page retirement of still-retained editions.
+    records = client.list_private_collection(
+        "episodes", all_pages=True,
+        field_mask=["audioUrl", "guid", "status", "mediaState"],
+    )
+    now = datetime.now(UTC)
+    for record in records:
+        if record.get("status") != "published":
+            continue
+        try:
+            url = urlsplit(str(record.get("audioUrl", "")))
+        except ValueError:
+            continue
+        if (url.scheme != "https" or url.netloc != base.netloc or url.query or url.fragment
+                or not url.path.startswith(prefix) or not url.path.endswith(".mp3")):
+            continue  # A different deployment/feed is never retired by this inventory.
+        filename = url.path.removeprefix(prefix)
+        guid = filename[11:-4]
+        if ("/" in filename or not REMOTE_GUID_PATTERN.fullmatch(guid)
+                or record.get("guid", guid) != guid):
+            continue
+        try:
+            date.fromisoformat(filename[:10])
+        except ValueError:
+            continue
+        media_state = "available" if guid in retained else "retired"
+        if record.get("mediaState") == media_state:
+            continue
+        client.patch_private_document(
+            "episodes", str(record["document_id"]),
+            {"mediaState": media_state, "retiredAt": now if media_state == "retired" else None,
+             "updatedAt": now},
+        )
 
 
 def _publication_sequence_key(label: str) -> str:
@@ -450,7 +505,7 @@ def _next_publication_sequence(
     # fails. Never reuse a new-format number already delivered to subscribers.
     for remote in load_remote_publication(
         settings,
-        maximum_episodes=settings.app.retention_days + 1,
+        maximum_episodes=MAX_REMOTE_EPISODES,
     ):
         match = title_pattern.fullmatch(remote.title.strip())
         if (
@@ -567,6 +622,8 @@ def _execute_generation(
             publication_sequence=publication_sequence,
         )
         client.set_private_document("episodes", episode_id, metadata)
+        if publication_confirmed and result.get("remote_verified") is True:
+            _reconcile_archive_lifecycle(configured, client, result.get("retained_guids", []))
         if metadata.get("status") == "published":
             try:
                 client.set_private_document(

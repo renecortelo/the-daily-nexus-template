@@ -15,6 +15,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getFirestore,
   limit,
@@ -142,10 +143,16 @@ function clearPrivateInterface() {
   byId("runner-status").parentElement.classList.remove("running", "error");
   byId("runner-detail").textContent = "Awaiting the private cloud runner status.";
   appState.runRequests = [];
+  appState.wakeStates = new Map();
+  appState.wakePromise = null;
+  appState.generationSubmitting = false;
+  appState.requeuingRequests = new Set();
   appState.runner = null;
   appState.monitorRefreshedAt = null;
   appState.activeEpisode = null;
   appState.activeEdition = null;
+  appState.audioSelectionToken = null;
+  appState.editionSelectionToken = null;
   appState.user = null;
   appState.authorized = false;
   appState.clockProjectionSignature = "";
@@ -1243,6 +1250,11 @@ async function removeSchedule(scheduleId) {
 
 async function queueGeneration(event) {
   event.preventDefault();
+  if (!appState.authorized || appState.generationSubmitting) return;
+  const epoch = appState.authEpoch;
+  appState.generationSubmitting = true;
+  const button = generationForm.querySelector('button[type="submit"]');
+  if (button) button.disabled = true;
   try {
     const values = new FormData(generationForm);
     const requestedDate = String(values.get("requestedDate") || "");
@@ -1254,7 +1266,7 @@ async function queueGeneration(event) {
     }
     const parameters = validateParameters(parameterData(generationForm));
     parameters.dateMode = "today";
-    await addDoc(
+    const queued = await addDoc(
       collection(appState.db, "users", appState.user.uid, "runRequests"),
       {
         parameters,
@@ -1265,24 +1277,48 @@ async function queueGeneration(event) {
         updatedAt: serverTimestamp(),
       },
     );
-    let wake = null;
-    try {
-      wake = await cloudClockRequest("/v1/wake", {
-        body: { schemaVersion: 1 },
-      });
-    } catch (_error) {
-      showAlert("Generation queued, but the cloud clock did not confirm a wake-up. Requeue it after checking Cloud Clock status.", true);
-      return;
-    }
-    if (wake?.status === "dispatched") {
-      showAlert("Generation queued. The private cloud clock dispatched the runner now.");
-    } else if (wake?.status === "already-requested") {
-      showAlert("Generation queued. A private runner wake-up is already in progress.");
-    } else {
-      showAlert("Generation queued. Cloud Clock setup is required before the private runner can start it.", true);
-    }
+    if (appState.authorized && epoch === appState.authEpoch) await requestRunnerWake(queued.id);
   } catch (error) {
-    showAlert(error.message || firebaseErrorMessage(error), true);
+    if (appState.authorized && epoch === appState.authEpoch) {
+      showAlert(error.message || firebaseErrorMessage(error), true);
+    }
+  } finally {
+    if (epoch === appState.authEpoch) {
+      appState.generationSubmitting = false;
+      if (button) button.disabled = false;
+    }
+  }
+}
+
+async function requestRunnerWake(requestId) {
+  if (!appState.authorized) return;
+  const epoch = appState.authEpoch;
+  appState.wakeStates ||= new Map();
+  appState.wakeStates.set(requestId, "requesting");
+  renderRunRequestList();
+  const pending = appState.wakePromise || cloudClockRequest("/v1/wake", {
+    body: { schemaVersion: 1 },
+  });
+  appState.wakePromise = pending;
+  try {
+    const wake = await pending;
+    if (!appState.authorized || appState.authEpoch !== epoch) return;
+    const confirmed = ["dispatched", "already-requested"].includes(wake?.status);
+    appState.wakeStates.set(requestId, confirmed ? "confirmed" : "unconfirmed");
+    showAlert(wake?.status === "dispatched"
+      ? "Request saved. Runner wake accepted; generation starts when GitHub assigns a runner."
+      : wake?.status === "already-requested"
+        ? "Request saved. A recent wake was accepted; this does not confirm the runner has started."
+        : "Request saved, but wake is not confirmed. Check Cloud Clock, then use WAKE RUNNER on this queued item—not GENERATE again.", !confirmed);
+  } catch (_error) {
+    if (!appState.authorized || appState.authEpoch !== epoch) return;
+    appState.wakeStates.set(requestId, "unconfirmed");
+    showAlert("Request saved, but wake is not confirmed. Use WAKE RUNNER on the queued item to retry without creating another episode.", true);
+  } finally {
+    if (epoch === appState.authEpoch) {
+      if (appState.wakePromise === pending) appState.wakePromise = null;
+      renderRunRequestList();
+    }
   }
 }
 
@@ -1454,6 +1490,12 @@ function renderRunRequestList() {
       remove.addEventListener("click", () => deleteRunRequest(data.id));
       actions.append(retry, remove);
       header.append(actions);
+    } else if (data.status === "queued") {
+      const wake = element("button", "ghost-button requeue-button", "WAKE RUNNER");
+      wake.type = "button";
+      wake.disabled = appState.wakeStates?.get(data.id) === "requesting";
+      wake.addEventListener("click", () => requestRunnerWake(data.id));
+      header.append(wake);
     }
     card.append(header);
     const timeline = [
@@ -1474,12 +1516,13 @@ function renderRunRequestList() {
         ),
       );
     } else if (data.status === "queued") {
+      const wakeState = appState.wakeStates?.get(data.id);
       card.append(
         element(
           "p",
           "request-detail",
           cloudClockEndpoint()
-            ? "QUEUED // PRIVATE CLOUD CLOCK WILL WAKE THE RUNNER"
+            ? `REQUEST SAVED // ${wakeState === "requesting" ? "REQUESTING WAKE" : wakeState === "confirmed" ? "WAKE ACCEPTED; WAITING FOR RUNNER" : "WAKE NOT CONFIRMED IN THIS SESSION"}. WAKE RUNNER RETRIES DISPATCH ONLY.`
             : "QUEUED // CLOUD CLOCK SETUP REQUIRED",
         ),
       );
@@ -1493,14 +1536,19 @@ function renderRunRequestList() {
 }
 
 async function requeueRequest(requestId) {
+  if (!appState.authorized) return;
+  appState.requeuingRequests ||= new Set();
+  if (appState.requeuingRequests.has(requestId)) return;
+  appState.requeuingRequests.add(requestId);
+  const epoch = appState.authEpoch;
   try {
     const original = appState.runRequests.find((item) => item.id === requestId);
-    if (!original || !original.parameters || !/^\d{4}-\d{2}-\d{2}$/.test(String(original.requestedDate || ""))) {
+    if (!original || !["failed", "expired"].includes(original.status) || !original.parameters || !/^\d{4}-\d{2}-\d{2}$/.test(String(original.requestedDate || ""))) {
       throw new Error("This request is incomplete and cannot be requeued safely.");
     }
     // A retry is a new immutable execution, not a status reset. This keeps the
     // original failure visible and prevents Cloud Clock from reclaiming it.
-    await addDoc(
+    const queued = await addDoc(
       collection(appState.db, "users", appState.user.uid, "runRequests"),
       {
         parameters: original.parameters,
@@ -1511,22 +1559,11 @@ async function requeueRequest(requestId) {
         updatedAt: serverTimestamp(),
       },
     );
-    try {
-      const wake = await cloudClockRequest("/v1/wake", {
-        body: { schemaVersion: 1 },
-      });
-      showAlert(
-        wake?.status === "dispatched"
-          ? "Fresh retry queued. The private cloud clock dispatched the runner now."
-          : wake?.status === "already-requested"
-            ? "Fresh retry queued. A private runner wake-up is already in progress."
-            : "Fresh retry queued. Cloud Clock setup is required before the private runner can start it.",
-      );
-    } catch (_error) {
-      showAlert("Fresh retry queued, but the cloud clock did not confirm a wake-up. Check its status, then requeue again.", true);
-    }
+    if (appState.authorized && epoch === appState.authEpoch) await requestRunnerWake(queued.id);
   } catch (error) {
-    showAlert(firebaseErrorMessage(error), true);
+    if (appState.authorized && epoch === appState.authEpoch) showAlert(firebaseErrorMessage(error), true);
+  } finally {
+    if (epoch === appState.authEpoch) appState.requeuingRequests.delete(requestId);
   }
 }
 
@@ -1688,7 +1725,85 @@ function episodeDisplayTitles(records) {
   return labels;
 }
 
+function archiveMediaURL(record, extension) {
+  if (record.status !== "published" || record.mediaState === "retired") return null;
+  return safePrivateURL(extension === ".mp3" ? record.audioUrl : record.newspaperUrl, extension);
+}
+
+async function availableArchiveRecord(id, extension) {
+  const epoch = appState.authEpoch;
+  if (!appState.authorized || !appState.user) return null;
+  const snapshot = await getDocFromServer(doc(appState.db, "users", appState.user.uid, "episodes", id));
+  if (!appState.authorized || epoch !== appState.authEpoch) return null;
+  const record = snapshot.exists() ? { ...snapshot.data(), id } : null;
+  if (!record || !archiveMediaURL(record, extension)) {
+    if (record) {
+      appState.episodeRecords = appState.episodeRecords.map(item => item.id === id ? record : item);
+      if (appState.olderEpisodes?.has(id)) appState.olderEpisodes.set(id, record);
+      renderEpisodeArchives();
+    }
+    throw new Error("This edition is retired or its requested media is unavailable. Choose another edition.");
+  }
+  return record;
+}
+
+async function openArchivedEpisode(episode, autoplay = false) {
+  const token = {};
+  const epoch = appState.authEpoch;
+  appState.audioSelectionToken = token;
+  try {
+    const record = await availableArchiveRecord(episode.id, ".mp3");
+    if (!record || token !== appState.audioSelectionToken) return;
+    selectEpisode({ ...episode, audioURL: archiveMediaURL(record, ".mp3") });
+    if (autoplay) await byId("episode-audio").play();
+  } catch (error) {
+    if (appState.authorized && epoch === appState.authEpoch && token === appState.audioSelectionToken) {
+      showAlert(error.message || firebaseErrorMessage(error), true);
+    }
+  }
+}
+
+async function openArchivedEdition(edition) {
+  const token = {};
+  const epoch = appState.authEpoch;
+  appState.editionSelectionToken = token;
+  try {
+    const record = await availableArchiveRecord(edition.id, ".pdf");
+    if (!record || token !== appState.editionSelectionToken) return;
+    selectEdition({ ...edition, url: archiveMediaURL(record, ".pdf"), pageCount: record.newspaperPages });
+  } catch (error) {
+    if (appState.authorized && epoch === appState.authEpoch && token === appState.editionSelectionToken) {
+      showAlert(error.message || firebaseErrorMessage(error), true);
+    }
+  }
+}
+
 function renderEpisodeArchives() {
+  const retiredIds = new Set((appState.episodeRecords || [])
+    .filter(record => record.mediaState === "retired").map(record => record.id));
+  if (retiredIds.has(appState.activeEpisode?.id)) {
+    const audio = byId("episode-audio");
+    audio.pause(); audio.removeAttribute("src"); audio.load();
+    appState.activeEpisode = null;
+    appState.audioSelectionToken = null;
+    appState.playbackStopped = true;
+    byId("mini-player").hidden = true;
+    byId("player-title").textContent = "EDITION RETIRED // SELECT ANOTHER EPISODE";
+    byId("player-details").replaceChildren();
+    if (typeof navigator !== "undefined" && navigator.mediaSession) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    }
+  }
+  if (retiredIds.has(appState.activeEdition?.id)) {
+    appState.activeEdition = null;
+    appState.readerToken = null;
+    appState.editionSelectionToken = null;
+    byId("edition-pages").replaceChildren();
+    byId("edition-pdf-link").removeAttribute("href");
+    byId("edition-pdf-link").hidden = true;
+    byId("edition-title").textContent = "EDITION RETIRED // SELECT ANOTHER EDITION";
+  }
   const play = byId("episode-list");
   const read = byId("edition-list");
   play.replaceChildren();
@@ -1716,8 +1831,7 @@ function renderEpisodeArchives() {
   )) {
     const episodeId = String(data.id);
     const title = playTitles.get(episodeId) || data.title || `The Daily Nexus // ${data.episodeDate || ""}`;
-    const audioURL = safePrivateURL(data.audioUrl, ".mp3");
-    const pdfURL = safePrivateURL(data.newspaperUrl, ".pdf");
+    const audioURL = archiveMediaURL(data, ".mp3");
     const episode = audioURL ? {
       id: episodeId,
       title,
@@ -1744,7 +1858,7 @@ function renderEpisodeArchives() {
       ),
     );
     if (audioURL) {
-      const selectEpisodeCard = () => selectEpisode(episode);
+      const selectEpisodeCard = () => openArchivedEpisode(episode);
       playCard.addEventListener("click", selectEpisodeCard);
       playCard.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -1753,7 +1867,8 @@ function renderEpisodeArchives() {
         }
       });
     } else {
-      playCard.append(element("p", "item-meta", "AUDIO URL NOT SYNCHRONIZED"));
+      playCard.append(element("p", "item-meta", data.mediaState === "retired"
+        ? "RETIRED // OUTSIDE HOSTED RETENTION WINDOW" : "AUDIO URL NOT SYNCHRONIZED"));
     }
     play.append(playCard);
   }
@@ -1764,9 +1879,7 @@ function renderEpisodeArchives() {
   )) {
     const editionId = String(data.id);
     const title = readTitles.get(editionId) || data.title || `The Daily Nexus // ${data.episodeDate || ""}`;
-    const pdfURL = data.status === "published"
-      ? safePrivateURL(data.newspaperUrl, ".pdf")
-      : null;
+    const pdfURL = archiveMediaURL(data, ".pdf");
     const readCard = element("article", "edition-list-item");
     readCard.tabIndex = pdfURL ? 0 : -1;
     readCard.setAttribute("role", pdfURL ? "button" : "article");
@@ -1781,7 +1894,7 @@ function renderEpisodeArchives() {
       ),
     );
     if (pdfURL) {
-      const selectEditionCard = () => selectEdition({ id: editionId, title, url: pdfURL, pageCount: data.newspaperPages });
+      const selectEditionCard = () => openArchivedEdition({ id: editionId, title });
       readCard.addEventListener("click", selectEditionCard);
       readCard.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -1790,7 +1903,9 @@ function renderEpisodeArchives() {
         }
       });
     } else {
-      readCard.append(element("p", "item-meta", data.newspaperStatus === "failed"
+      readCard.append(element("p", "item-meta", data.mediaState === "retired"
+        ? "RETIRED // OUTSIDE HOSTED RETENTION WINDOW"
+        : data.newspaperStatus === "failed"
         ? "NEWSPAPER FAILED // VERIFIED PODCAST AVAILABLE IN PLAY"
         : data.newspaperStatus === "skipped"
           ? "PODCAST ONLY // NEWSPAPER NOT REQUESTED"
@@ -2154,8 +2269,7 @@ function selectRelativeEpisode(direction) {
   if (index < 0 || !appState.episodes.length) return;
   const target = appState.episodes[(index + direction + appState.episodes.length) % appState.episodes.length];
   const wasPlaying = !byId("episode-audio").paused;
-  selectEpisode(target);
-  if (wasPlaying) byId("episode-audio").play().catch(() => {});
+  openArchivedEpisode(target, wasPlaying);
 }
 
 function selectEdition(edition) {
