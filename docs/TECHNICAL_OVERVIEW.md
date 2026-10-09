@@ -110,6 +110,28 @@ quiet speech is not boosted or dynamically compressed per host.
 References: [FFmpeg loudness filters](https://ffmpeg.org/ffmpeg-filters.html#ebur128)
 and [Apple podcast audio recommendations](https://podcasters.apple.com/support/893-audio-requirements).
 
+The `balanced_speech_v1` amplitude-processing profile, added on 2026-10-09,
+uses the same single encoder invocation and the same filter in the concat and
+streamed-WAV fallback paths. A 2:1 speech compressor (threshold -24 dBFS, 5 ms
+attack, 100 ms release, unity makeup) precedes loudnorm. The configured integrated
+target remains unchanged; a modest 0.5 dB offset and a two-dB pre-codec true-peak
+margin improve the measured final MP3. The pre-codec peak is clamped to loudnorm's
+supported minimum of -9 dBFS; very low configured ceilings therefore receive less
+margin. This changes amplitude dynamics, not voice identity, pitch, tempo, pauses,
+sample rate, bitrate, source WAVs or transcript timing. There is no extra encode,
+analysis pass, model request or automatic quality-correction retry. The existing
+final measurement still compares against the original configured delivery target.
+Its allowlisted profile tag is saved in the private manifest, including when
+measurement is unavailable; the tag records adoption, not a quality guarantee.
+
+In 12 local fictional short clips (seven cached voices, public-name/acronym
+previews and mixed hosts), five original encodes met both volume and peak targets;
+11 processed encodes did. All 12 processed peaks were below the configured
+ceiling; one alternative male voice remained slightly quiet. The mixed-host clip
+changed from -17.4 to -16.8 LUFS. These are offline objective measurements, not
+production results or a subjective listening approval. Processing adds modest
+encoder work; actual cloud overhead is unmeasured and the protected limits remain.
+
 ## Archive lifecycle and queue recovery
 
 `[app].retention_episodes` is a hosted edition count, not a day count: 1–30,

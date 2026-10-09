@@ -9,10 +9,14 @@ import tempfile
 import warnings
 import wave
 from array import array
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from audiodigest.audio_quality import AudioQuality, measure_encoded_audio
+from audiodigest.audio_quality import (
+    BALANCED_ENCODING_PROFILE,
+    AudioQuality,
+    measure_encoded_audio,
+)
 from audiodigest.config import AudioSettings, HostSettings
 from audiodigest.episode_budget import MAX_EPISODE_SECONDS
 from audiodigest.execution_budget import check_budget, operation_timeout
@@ -31,6 +35,21 @@ def _complete_audio_duration(duration: float, timeline_ms: int) -> bool:
     # minutes. Check both short and overlong output, including NaN/Infinity.
     expected = timeline_ms / 1000
     return math.isfinite(duration) and expected > 0 and abs(duration - expected) <= 2.0
+
+
+def _speech_encoding_filter(settings: AudioSettings) -> str:
+    """One shared amplitude-only chain for normal encoding and the WAV fallback.
+
+    Moderate 2:1 compression reduces speech crest factor before loudnorm. A
+    two-dB pre-codec margin helps with MP3 reconstruction peaks; the final MP3
+    still needs its existing measurement. No extra pass, automatic makeup gain,
+    hard clipping, voice-specific boost or speed/pitch change is introduced.
+    """
+    peak_target = max(-9.0, settings.true_peak_db - 2.0)
+    return (
+        "acompressor=threshold=0.06309573:ratio=2:attack=5:release=100:makeup=1,"
+        f"loudnorm=I={settings.target_lufs}:TP={peak_target}:LRA=11:offset=0.5"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +273,7 @@ class KokoroAudioRenderer:
     def render(self, script: EpisodeScript, output: Path) -> AudioResult:
         ffmpeg = _require_binary(self.settings.ffmpeg)
         ffprobe = _require_binary(self.settings.ffprobe)
+        encoding_filter = _speech_encoding_filter(self.settings)
         output.parent.mkdir(parents=True, exist_ok=True)
         pipelines = {}
 
@@ -359,7 +379,7 @@ class KokoroAudioRenderer:
                 "-b:a",
                 self.settings.bitrate,
                 "-af",
-                (f"loudnorm=I={self.settings.target_lufs}:TP={self.settings.true_peak_db}:LRA=11"),
+                encoding_filter,
                 "-y",
                 str(output),
             ]
@@ -417,10 +437,7 @@ class KokoroAudioRenderer:
                     "-b:a",
                     self.settings.bitrate,
                     "-af",
-                    (
-                        f"loudnorm=I={self.settings.target_lufs}:"
-                        f"TP={self.settings.true_peak_db}:LRA=11"
-                    ),
+                    encoding_filter,
                     "-y",
                     str(output),
                 ]
@@ -481,10 +498,13 @@ class KokoroAudioRenderer:
             raise AudioGenerationError(
                 f"Episode duration {duration:.1f}s is below the safety minimum"
             )
-        quality = measure_encoded_audio(
-            ffmpeg, output,
-            target_lufs=self.settings.target_lufs,
-            true_peak_db=self.settings.true_peak_db,
+        quality = replace(
+            measure_encoded_audio(
+                ffmpeg, output,
+                target_lufs=self.settings.target_lufs,
+                true_peak_db=self.settings.true_peak_db,
+            ),
+            encoding_profile=BALANCED_ENCODING_PROFILE,
         )
         if quality.integrated_lufs is not None:
             print(

@@ -92,3 +92,10 @@ class EncodedAudioQualityTests(TestCase):
             {"status": "unavailable", "reason": "not_measured"}, AudioQuality().to_dict()
         )
         self.assertNotIn("integrated_lufs", AudioQuality(integrated_lufs=float("nan")).to_dict())
+
+    def test_processing_profile_is_fixed_and_not_untrusted_diagnostic_text(self):
+        quality = AudioQuality(encoding_profile="balanced_speech_v1").to_dict()
+        self.assertEqual("balanced_speech_v1", quality["encoding_profile"])
+        self.assertNotIn(
+            "encoding_profile", AudioQuality(encoding_profile="arbitrary decoder text").to_dict()
+        )
