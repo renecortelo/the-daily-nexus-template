@@ -23,7 +23,7 @@ from audiodigest.execution_budget import check_budget, operation_timeout
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
 from audiodigest.progress import counts, timed_operation
-from audiodigest.speech import boundary_pause_ms, prepare_speech
+from audiodigest.speech import boundary_pause_ms, ends_with_spoken_question, prepare_speech
 
 
 class AudioGenerationError(RuntimeError):
@@ -259,7 +259,7 @@ class KokoroAudioRenderer:
             next_is_heading=following.is_heading,
             phase_changed=block.phase != following.phase,
             host_changed=block.turn.host.casefold() != following.turn.host.casefold(),
-            ends_with_question=block.turn.text.rstrip().endswith(("?", '?"', "?'", "?\u201d")),
+            ends_with_question=ends_with_spoken_question(block.turn.text),
         )
 
     @staticmethod

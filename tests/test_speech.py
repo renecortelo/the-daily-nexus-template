@@ -8,6 +8,7 @@ from audiodigest.audio import _wav_edge_silence_ms
 from audiodigest.speech import (
     _NEWS_NAME_PRONUNCIATIONS,
     boundary_pause_ms,
+    ends_with_spoken_question,
     prepare_speech,
     validate_pronunciations,
 )
@@ -86,6 +87,32 @@ class SpeechPreparationTests(TestCase):
     def test_existing_phoneme_annotations_are_not_nested(self):
         prepared = prepare_speech("IT uses an API.")
         self.assertEqual(prepared, prepare_speech(prepared))
+
+    def test_annotations_protect_version_labels_and_surrounding_text_still_prepares(self):
+        annotated = "[Python 3.12](/pˈaIθən/)"
+        text = f"{annotated}, GPT-5.6 and [API](/ˈAp/)."
+        expected = f"{annotated}, [GPT](/ʤˌipˌitˈi/) 5 point 6 and [API](/ˈAp/)."
+        self.assertEqual(expected, prepare_speech(text))
+        self.assertEqual(expected, prepare_speech(expected))
+
+    def test_multiple_annotations_and_local_name_override_remain_exact(self):
+        text = "[version 1.2](/nAm/) then Sánchez and [GPT-5.6](/tɛst/)."
+        prepared = prepare_speech(text, pronunciations={"Sánchez": "sˈɑnʧɛθ"})
+        self.assertEqual(
+            "[version 1.2](/nAm/) then [Sánchez](/sˈɑnʧɛθ/) and [GPT-5.6](/tɛst/).",
+            prepared,
+        )
+        self.assertEqual(prepared, prepare_speech(prepared))
+
+    def test_terminal_questions_allow_closing_quotes_but_not_following_statements(self):
+        for text in (
+            "Ready?", 'She asked, “Ready?”', "‘Ready?’", "(Ready?)", "«Ready?»", "Ready?') \n",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(ends_with_spoken_question(text))
+        for text in ("", "Ready.", "Ready? Not yet.", "The label is '?' in this example."):
+            with self.subTest(text=text):
+                self.assertFalse(ends_with_spoken_question(text))
 
     def test_tih_heading_is_speakable_but_body_text_is_unchanged(self):
         text = "TIH: Today in History"

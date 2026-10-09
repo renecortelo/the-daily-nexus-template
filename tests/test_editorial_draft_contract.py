@@ -62,6 +62,35 @@ class EditorialDraftContractTests(TestCase):
             self.assertEqual({"Nox"}, {t["host"] for t in example[key]})
         self.assertIsNone(payload["output_contract"]["maximum_words_per_turn"])
 
+    def test_listening_guide_preserves_facts_names_and_delivery_modes_without_extra_calls(self):
+        for count, style in ((1, "broadcast"), (2, "broadcast"), (2, "conversation")):
+            with self.subTest(count=count, style=style):
+                instruction, _payload = self.script_request(self.engine(count=count, style=style))
+                self.assertIn("subject and action before a cluster of figures", instruction)
+                self.assertIn("each exact figure", instruction)
+                self.assertIn("not echo the", instruction)
+                self.assertIn("without simulated exchanges", instruction)
+                self.assertIn("original spelling", instruction)
+                self.assertIn(
+                    "Do not modernize or paraphrase the approved closing quotation", instruction,
+                )
+                self.assertIn("hard\ndelivery ceiling of 30 minutes", instruction)
+
+    def test_listening_review_is_advisory_and_keeps_original_evidence_gate(self):
+        engine = self.engine()
+        engine.antigravity.invoke.return_value = (Mock(issues=[]), Mock())
+        script = Mock()
+        script.sections = []
+        script.show_notes = []
+        script.to_dict.return_value = {"title": "Fictional example"}
+        engine.verify([], script, ClosingQuote("Learn.", "An Author", "https://example.com/quote"))
+        self.assertEqual(1, engine.antigravity.invoke.call_count)
+        instruction = engine.antigravity.invoke.call_args.args[0]
+        self.assertIn("listening advice, not grounds to reject", instruction)
+        self.assertIn("original source_evidence.passages", instruction)
+        self.assertIn("Set factual_approved explicitly", instruction)
+        self.assertIn("Do not demand phonetic respellings", instruction)
+
     def test_contract_orders_only_nonempty_sections_and_maps_exact_coverage(self):
         stories = [story("first"), story("second"), story("third", "DATA")]
         contract = _script_output_contract(
