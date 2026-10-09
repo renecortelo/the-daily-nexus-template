@@ -159,6 +159,21 @@ reviewed privately; generation dominated setup, so dependency changes were not
 made merely to claim a performance gain. Evaluate the next normal runs before
 making a separately tested optimization.
 
+Draft-error prevention increment implemented on 2026-10-09: script JSON examples
+now use JSON-escaped disclosure text and actual configured hosts, including both
+introductions for a two-host edition. A deterministic request-local section plan
+maps required story IDs to nonempty ordered sections and exposes the existing
+conversation turn limit. Newspaper examples show three distinct executive labels
+and one concrete visual kind instead of literal strings of alternatives. Existing
+takeaway/label limits are stated before drafting; small evidence sets are not
+given the broad-edition prose target. Validators, original-source review, repair
+caps, duration ceilings and paid-service guards are unchanged. No extra review
+call or publication is introduced. The added plan increases prompt text slightly;
+fewer retries and faster cloud runs are hypotheses to evaluate on normal future
+runs, not demonstrated savings. A short offline synthesis candidate was tested
+and rejected because it did not show a credible speed gain; production synthesis
+was not changed.
+
 ## 5. Podcast and newspaper quality
 
 Give lead developments depth and supporting briefs brevity. Use short A/B audio
