@@ -37,6 +37,46 @@ NEWSPAPER_TARGET_TOTAL_WORDS = 1_300
 NEWSPAPER_MAX_PROSE_WORDS = 1_200
 NEWSPAPER_MAX_TOTAL_WORDS = 1_500
 CLOSING_COMMENT_MAX_WORDS = 25
+CONVERSATION_TURN_MAX_WORDS = 115
+
+
+def _script_output_contract(
+    stories: list[Story],
+    section_order: tuple[str, ...],
+    required_story_ids: list[str],
+    host_names: list[str],
+    dialogue_style: str,
+) -> dict[str, Any]:
+    """Expose existing deterministic constraints before drafting, not another review.
+
+    No source excerpts, mailbox identities or extra model call enter this plan.
+    The existing structural and independent factual validators remain authoritative.
+    """
+    required = set(required_story_ids)
+    conversation = len(host_names) == 2 and dialogue_style == "conversation"
+    sections = []
+    for name in section_order:
+        ids = [story.story_id for story in stories if story.section.value == name]
+        if not ids:
+            continue
+        sections.append({
+            "name": name,
+            "available_story_ids": ids,
+            "required_story_ids": [story_id for story_id in ids if story_id in required],
+            "both_hosts_required_if_two_or_more_stories_cited": conversation,
+        })
+    return {
+        "exact_hosts_in_order": host_names,
+        "introduction": {
+            "introduce_each_active_host": True,
+            "editor_credit_occurrences": 1,
+            "editor_is_not_a_host": True,
+        },
+        "sections": sections,
+        "maximum_words_per_turn": CONVERSATION_TURN_MAX_WORDS if conversation else None,
+        "section_headings_spoken_by_renderer": True,
+        "closing_comment_maximum_words": CLOSING_COMMENT_MAX_WORDS,
+    }
 
 
 def _bound_closing_comment(script: EpisodeScript, quote: ClosingQuote) -> None:
@@ -863,6 +903,13 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
             for host in active_hosts
         )
         dialogue_style = getattr(self.settings.hosts, "dialogue_style", "broadcast")
+        output_contract = _script_output_contract(
+            stories, section_order, required_story_ids, host_names, dialogue_style,
+        )
+        introduction_shape = [
+            {"host": host_name, "text": "spoken opening and first-person introduction"}
+            for host_name in host_names
+        ]
         if len(host_names) == 1:
             conversation_rule = (
                 "This is a single-host program. Do not invent or address an absent co-host."
@@ -880,6 +927,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                 "must answer it or explain a distinct supported consequence, not repeat the "
                 "question's premise. Vary handoffs instead of addressing the other host by "
                 "name every turn. Do not force equal-length turns or alternating sentences."
+                f" No dialogue turn may exceed {CONVERSATION_TURN_MAX_WORDS} words."
             )
         else:
             conversation_rule = (
@@ -985,23 +1033,28 @@ attribution. Include its source URL in show notes:
 {closing_quote.source_url}
 
 The disclosure must be exactly: {AI_DISCLOSURE!r}
+Before returning, check payload.output_contract against your draft in this same response.
+Use the exact host names and ordered nonempty sections; preserve all required story coverage.
+Check JSON syntax, host participation, editor credit, turn length and the closing observation.
+Do not output this checklist or treat it as a substitute for the independent factual review.
 {repair}
 
 Return JSON only:
 {{
   "title": "The Daily Nexus - Month D, YYYY",
   "hosts": {json.dumps(host_names)},
-  "introduction": [{{"host": "exact active host", "text": "spoken opening"}}],
+  "introduction": {json.dumps(introduction_shape, ensure_ascii=False)},
   "sections": [{{
     "name": "exact section name",
-    "dialogue": [{{"host": "exact active host", "text": "spoken narration"}}],
+    "dialogue": [{{"host": {json.dumps(host_names[0])}, "text": "spoken narration"}}],
     "story_ids": ["cited story ID"]
   }}],
-  "conclusion": [{{"host": "exact active host", "text": "short closing"}}],
-  "sign_off": [{{"host": "exact active host", "text": "exact quotation and attribution"}},
-               {{"host": "exact active host", "text": "12-20-word original witty observation"}}],
+  "conclusion": [{{"host": {json.dumps(host_names[0])}, "text": "short closing"}}],
+  "sign_off": [{{"host": {json.dumps(host_names[0])}, "text": "exact quotation and attribution"}},
+               {{"host": {json.dumps(host_names[-1])},
+                 "text": "12-20-word original witty observation"}}],
   "show_notes": ["Headline - Publication - https://public-url"],
-  "disclosure": {AI_DISCLOSURE!r}
+  "disclosure": {json.dumps(AI_DISCLOSURE)}
 }}
 """.strip()
         payload = {
@@ -1014,6 +1067,7 @@ Return JSON only:
             "dialogue_style": dialogue_style,
             "required_story_ids": required_story_ids,
             "episode_budget": budget.to_dict(),
+            "output_contract": output_contract,
             "previous_script": previous_script.to_dict() if previous_script else None,
         }
         if repair_issues and stories and all(story.evidence for story in stories):
@@ -1052,7 +1106,10 @@ Return JSON only:
                                 "both hosts must participate in every multi-story "
                                 "conversation section"
                             )
-                    if any(len(turn.text.split()) > 115 for turn in script.dialogue_turns):
+                    if any(
+                        len(turn.text.split()) > CONVERSATION_TURN_MAX_WORDS
+                        for turn in script.dialogue_turns
+                    ):
                         raise ValueError("conversation turns must stay concise and responsive")
             if closing_quote.text not in script.sign_off_text:
                 raise ValueError("the sign-off must reproduce the selected quotation")
@@ -1126,6 +1183,12 @@ Return JSON only:
             len(article_priority_story_ids),
         )
         edition_priority_story_ids = [story.story_id for story in ranked_stories[:18]]
+        prose_guide = (
+            "Aim for 760-980 words across article standfirsts, bodies, bullets and briefs."
+            if len(article_priority_story_ids) >= 5 else
+            "This is a small evidence set: use proportionately shorter article and brief prose; "
+            "do not force the 760-980 word guide intended for broad editions."
+        )
         repair = ""
         if repair_issues:
             repair = (
@@ -1152,8 +1215,8 @@ Synthesize all substantive story
 clusters into a coherent executive morning edition, combining related records when space
 requires it. Every ID in article_priority_story_ids must be represented by at least one
 article's story_ids. Every ID in edition_priority_story_ids must be represented either in an
-article or a structured brief. Write 760-980 words across the article standfirsts, article
-bodies, bullet points, and 4-8 briefs. Keep the complete structured response, including the
+article or a structured brief. {prose_guide}
+Keep the complete structured response, including the
 headline, lead, executive summary, and visual copy, under 1,300 words. Allocate space by
 decision value and consequence rather than newsletter order or source popularity.
 
@@ -1167,7 +1230,8 @@ not a prediction. Use a strong editorial hierarchy:
   supporting story IDs and contain a specific finding, not a generic theme. SHIFT names the
   actor and material change; IMPACT states a concrete operating, financial, competitive, or
   regulatory consequence supported by the records; WATCH names a dated milestone, measurable
-  threshold, dependency, or precisely framed open question. Make every detail 10-22 words;
+  threshold, dependency, or precisely framed open question. Use 2-12 words for each label
+  and 10-22 words for every detail;
 - descriptive article desk labels such as AI and Compute, Markets, Security, Policy, or World;
   never use the generic label "Briefing" repeatedly. Use standfirsts, short paragraphs, and
   selective bullet points. Each article must list every supporting story ID it abstracts and
@@ -1177,7 +1241,8 @@ not a prediction. Use a strong editorial hierarchy:
 - 4-8 one-sentence structured briefs for secondary developments not already repeated in the
   executive summary. Each brief must list its supporting story IDs and source URLs;
 - one concise pull quote that is an original editorial takeaway, not a quotation attributed
-  to a person. It must state a specific cross-story consequence, tension, or decision and
+  to a person. Use 12-32 words. It must state a specific cross-story consequence, tension,
+  or decision and
   must not describe the edition, evidence set, production process, or editorial method;
 - exactly one primary visual direction selected from bar_chart, stat_grid, timeline,
   comparison, process, and news_grid. The separate executive_summary becomes the second
@@ -1234,6 +1299,12 @@ Every sentence must be complete and self-contained. Never crop a sentence to mee
 target. Do not repeat the same sentence or fact in several components; the executive summary
 must synthesize rather than copy article wording. Always use the % symbol and never the word
 "percent". Highlights must be exact phrases of 1-10 words from their article.
+Before returning, check the exact article count, three distinct executive labels, required
+story IDs, TIH isolation, total word budget and visual display limits in this same response.
+The JSON below illustrates field shape, not permission to copy placeholders or invent facts.
+For executive_summary, return three separate objects with values SHIFT, IMPACT and WATCH,
+not the literal string of alternatives. Choose one supported visual kind; news_grid below
+is an example, not a mandatory choice. Do not output your checklist. Factual review follows.
 {repair}
 
 Return JSON only:
@@ -1243,13 +1314,12 @@ Return JSON only:
   "deck": "one-sentence summary",
   "lead": "concise lead paragraph",
   "pull_quote": "short original editorial takeaway",
-  "executive_summary": [{{
-    "value": "SHIFT | IMPACT | WATCH",
-    "label": "concise executive finding",
-    "detail": "one short evidence-grounded explanation",
-    "magnitude": null,
-    "story_ids": ["supporting story ID"]
-  }}],
+  "executive_summary": {json.dumps([
+      {"value": value, "label": "concise executive finding",
+       "detail": "one short evidence-grounded explanation", "magnitude": None,
+       "story_ids": ["supporting story ID"]}
+      for value in ("SHIFT", "IMPACT", "WATCH")
+  ])},
   "briefs": [{{
     "text": "one-sentence secondary development from the verified reporting",
     "story_ids": ["supporting story ID"],
@@ -1267,7 +1337,7 @@ Return JSON only:
   }}],
   "data_points": ["short evidence-backed fact retained for compatibility"],
   "visuals": [{{
-    "kind": "bar_chart | stat_grid | timeline | comparison | process | news_grid",
+    "kind": "news_grid",
     "title": "reader-facing visual headline",
     "caption": "what the visual helps explain",
     "items": [{{

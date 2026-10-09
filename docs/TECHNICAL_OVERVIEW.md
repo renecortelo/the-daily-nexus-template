@@ -250,6 +250,23 @@ queue selection and terminal-failure policy remain unchanged.
 Sources for these boundaries: [GitHub billing API retirement](https://github.blog/changelog/2025-09-26-product-specific-billing-apis-are-closing-down/)
 and [Firebase Hosting usage](https://firebase.google.com/docs/hosting/usage-quotas-pricing).
 
+### Preventing avoidable drafting retries
+
+The existing script request includes an exact host/section output contract derived
+from the selected story records. It groups available and required story IDs by
+ordered nonempty section, names active hosts and exposes the conversation-only
+turn limit. Examples are valid JSON with actual configured speaker names, not
+ambiguous speaker placeholders. Newspaper examples enumerate SHIFT, IMPACT and
+WATCH separately and state the existing short-copy limits before drafting.
+Small evidence sets receive a shorter prose guide, not a full-edition filler target.
+
+The model checks these constraints within its existing response; this is not an
+additional model call or independent factual verification. Structural validators,
+coverage checks and original-source factual approval remain authoritative. Only
+draft instructions change: no automatic evidence deletion, quota increase or
+verification bypass. Prompt text grows slightly; runtime/retry improvements must
+be measured in ordinary runs and are not guaranteed by passing local tests.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets
