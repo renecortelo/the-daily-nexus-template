@@ -221,6 +221,35 @@ reviewed inventory. No paid fallback, polling scheduler or timeout increase is a
   code does not persist that ID token. It does not receive Gmail labels,
   newsletter text, episode settings, model credentials, or feed media.
 
+## Owner-only resource measurements
+
+GEN's **RUN TIME AND RESOURCES** panel shows terminal stage and operation times,
+manual/scheduled start delay (including job setup), observed setup and job time,
+and scheduled ready-by outcomes. The ready-by date comes from the schedule's
+local occurrence, not the previous-day episode date. Operations are already
+included in stage totals and must not be added again. Job observation ends before
+the final workflow cleanup; it is not a provider billing measurement.
+
+`runner/lastProfile` keeps at most 20 allowlisted task samples, including failures,
+without task names, mailbox IDs, URLs, raw exception text or credentials. Its
+existing write gains one owner-only history read per terminal task. The browser
+uses one extra document subscription and an explicit-refresh read, not a polling
+workflow. It clears measurements on logout and rejects stale-session snapshots.
+The seven-day schedule reference uses the recent completed-task content mix;
+it excludes setup, failed attempts, manual runs and other workflows. It cannot
+prove that the monthly allowance covers those runs.
+
+Publisher metrics separate new MP3, PDF and preview bytes from declared/measured
+retained feed audio and locally staged files. Remote newspaper sizes, older
+Hosting releases, actual data transfer, provider-wide Actions usage and free-tier
+headroom are not measured. Unknown is distinct from zero. Provider usage-console
+links do not send tokens or private feed links. No additional account-billing
+credential is requested. Runtime/retention limits, cost guards, generation calls,
+queue selection and terminal-failure policy remain unchanged.
+
+Sources for these boundaries: [GitHub billing API retirement](https://github.blog/changelog/2025-09-26-product-specific-billing-apis-are-closing-down/)
+and [Firebase Hosting usage](https://firebase.google.com/docs/hosting/usage-quotas-pricing).
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets

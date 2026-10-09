@@ -6,7 +6,7 @@ import secrets
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -419,6 +419,36 @@ class PublishResult:
     hosted_bytes: int
     remote_verified: bool = True
     retained_guids: tuple[str, ...] = ()
+    asset_metrics: dict[str, int] = field(default_factory=dict)
+
+
+def _publication_asset_metrics(
+    episodes: list[dict], current: dict, staged_bytes: int, retention: int,
+) -> dict[str, int]:
+    """Size observation cannot change a verified publication into a failure."""
+    result = {"staged_bytes": staged_bytes, "retained_audio_count": len(episodes),
+              "retention_episodes": retention}
+    try:
+        result["retained_audio_bytes"] = sum(
+            int(episode["audio_bytes"]) if episode.get("remote_only")
+            else Path(episode["audio_path"]).stat().st_size for episode in episodes
+        )
+        result["new_audio_bytes"] = Path(current["audio_path"]).stat().st_size
+    except (OSError, KeyError, TypeError, ValueError):
+        pass
+    try:
+        paper = current.get("newspaper_path")
+        if not paper:
+            result.update(new_paper_bytes=0, new_preview_bytes=0)
+        else:
+            paper_path = Path(paper)
+            result["new_paper_bytes"] = paper_path.stat().st_size
+            result["new_preview_bytes"] = sum(
+                path.stat().st_size for path in paper_path.parent.glob("edition-[1-3].png")
+            )
+    except (OSError, TypeError, ValueError):
+        pass
+    return result
 
 
 class FirebasePublisher:
@@ -644,9 +674,14 @@ class FirebasePublisher:
             expected_guids=tuple(str(episode["guid"]) for episode in episodes),
         )
         self.database.mark_published(episode_date)
+        # Only measured/declarative sizes: remote PDFs, older Hosting releases,
+        # actual downloads and account storage are deliberately not inferred.
         return PublishResult(
             feed_url=feed_url,
             episode_count=remote_episode_count,
             hosted_bytes=hosted_bytes,
             retained_guids=tuple(str(episode["guid"]) for episode in episodes),
+            asset_metrics=_publication_asset_metrics(
+                episodes, expected_episode, hosted_bytes, self.settings.app.retention_episodes,
+            ),
         )
