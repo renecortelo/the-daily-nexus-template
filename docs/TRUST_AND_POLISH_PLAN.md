@@ -308,9 +308,32 @@ real future editions and accessibility/mobile UX remain to be evaluated.
 
 ## 6. Mobile accessibility, UX and maintainability
 
-Status: interaction/accessibility, semantic reading and shared parameter-form
-increments implemented on 2026-10-10; remaining module consolidation and real Safari/PWA,
+Status: interaction/accessibility, semantic reading, shared parameter-form and
+incremental monitor increments implemented on 2026-10-10; remaining module consolidation and real Safari/PWA,
 VoiceOver and software-keyboard testing remain open.
+
+Incremental monitor implemented on 2026-10-10: rows are reconciled by immutable
+Firestore document ID. Identical snapshots keep the same text nodes, cards and
+action buttons; only changed copy, action kinds and list membership/order are
+updated. The existing local second timer updates queued/running clocks only;
+it does not recreate rows, sort requests or read the cloud. Clock rendering
+pauses in hidden tabs; session-expiry checking remains active. Sorting preserves
+button focus; removed actions return focus to the retained row, or the list if
+the row disappears. Filters and scroll behavior keep their existing semantics.
+Manual refresh records its client refresh time before rendering the runner,
+without changing the runner's distinct cloud-check timestamp.
+
+The row map contains only visible requests from the existing latest-100 window,
+is pruned when rows disappear, and is cleared with private filters at logout.
+Late unauthorized snapshots cannot refill it. DOM text remains inert; no HTML
+insertion, persistent storage, new subscription, provider, model pass, schedule
+change or generation is introduced. Six focused regressions bring browser
+coverage to 54 tests. Synthetic Chromium at 320/390/768/1280 verifies 100 rows,
+20 identical snapshots with zero list DOM mutations, text-only clock ticks,
+selection/focus, filters, status transitions, logout and bounded controls.
+This is a local interaction result, not a measured improvement in generation
+runtime. The shell advances to 4.1.13 / cache v4-43. Further module consolidation
+and real iOS/PWA/assistive-technology testing remain open.
 
 Shared parameter increment implemented on 2026-10-10: GEN, SCHED and favorites
 use one explicit field allowlist, serializer, hydration/preflight and control
@@ -327,7 +350,7 @@ Initialization is idempotent. No saved records are migrated or silently updated;
 there is no layout redesign, additional storage, cloud read, model call, schedule
 change, provider or runtime-limit change. Six focused browser regressions bring
 the suite to 48. The shell advances to 4.1.12 / cache v4-42. Incremental monitor
-rendering and further module consolidation remain open.
+rendering was completed in the following increment; further module consolidation remains open.
 
 Reading increment implemented on 2026-10-10: newly published ready newspapers
 include a bounded, allowlisted reading projection in the existing owner archive

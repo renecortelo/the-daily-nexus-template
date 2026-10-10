@@ -60,6 +60,7 @@ const appState = {
   installPrompt: null,
   firebaseHosts: new Set(),
   runRequests: [],
+  runRequestRows: new Map(),
   runner: null,
   monitorRefreshedAt: null,
   activeEpisode: null,
@@ -161,10 +162,13 @@ function clearPrivateInterface() {
   byId("schedule-count").textContent = "0";
   byId("queue-count").textContent = "0 QUEUED";
   byId("monitor-scope").textContent = "LATEST 100 REQUEST WINDOW";
+  for (const id of ["monitor-date-filter", "monitor-status-filter", "monitor-query-filter"]) byId(id).value = "";
+  byId("monitor-sort-filter").value = "newest";
   byId("runner-status").textContent = "RUNNER STATUS UNKNOWN";
   byId("runner-status").parentElement.classList.remove("running", "error");
   byId("runner-detail").textContent = "Awaiting the private cloud runner status.";
   appState.runRequests = [];
+  appState.runRequestRows = new Map();
   appState.wakeStates = new Map();
   appState.wakePromise = null;
   appState.generationSubmitting = false;
@@ -1602,26 +1606,116 @@ function renderResourceSummary() {
 }
 
 function renderRunRequests(snapshot) {
+  if (!appState.authorized) return;
   appState.runRequests = snapshot.docs.map((item) => ({
-    id: item.id,
     ...item.data(),
+    id: item.id,
   }));
   renderRunRequestList();
 }
 
+function updateMonitorText(node, text) {
+  if (node.textContent !== text) node.textContent = text;
+}
+
+function runRequestTimeline(data, now) {
+  const status = String(data.status || "unknown").toUpperCase();
+  const requested = dateValue(data.requestedAt), started = dateValue(data.startedAt), finished = dateValue(data.finishedAt);
+  return [
+    `QUEUED ${timestampText(data.requestedAt)}`,
+    data.startedAt ? `STARTED ${timestampText(data.startedAt)}` : "",
+    data.finishedAt ? `${status} ${timestampText(data.finishedAt)}` : "",
+    !data.finishedAt && data.updatedAt ? `UPDATED ${timestampText(data.updatedAt)}` : "",
+    requested && started && started >= requested ? `WAIT ${durationText(started - requested)}` : "",
+    requested && !started && data.status === "queued" ? `WAIT SO FAR ${durationText(now - requested)}` : "",
+    started && finished && finished >= started ? `DURATION ${durationText(finished - started)}` : "",
+  ].filter(Boolean).join(" // ");
+}
+
+function runRequestDetail(data, now) {
+  if (data.status === "running") {
+    const started = dateValue(data.startedAt);
+    return `RUNNING ${durationText(started ? now - started.getTime() : 0)} // ONE-HOUR JOB LIMIT`;
+  }
+  if (data.status === "queued") {
+    const wakeState = appState.wakeStates?.get(data.id);
+    return cloudClockEndpoint()
+      ? `REQUEST SAVED // ${wakeState === "requesting" ? "REQUESTING WAKE" : wakeState === "confirmed" ? "WAKE ACCEPTED; WAITING FOR RUNNER" : "WAKE NOT CONFIRMED IN THIS SESSION"}. WAKE RUNNER RETRIES DISPATCH ONLY.`
+      : "QUEUED // CLOUD CLOCK SETUP REQUIRED";
+  }
+  if (data.status === "published") return "PUBLISHED // AVAILABLE IN THE PRIVATE FEED";
+  return data.detail ? String(data.detail) : "";
+}
+
+function createRunRequestRow(id) {
+  const card = element("article", "request-item");
+  card.dataset.requestId = id;
+  card.tabIndex = -1;
+  const header = element("div", "request-header");
+  const title = element("p", "item-meta");
+  const timeline = element("p", "request-timeline");
+  const detail = element("p", "request-detail");
+  header.append(title);
+  card.append(header, timeline, detail);
+  return { card, header, title, timeline, detail, actionKind: null, actions: null, wake: null, data: null };
+}
+
+function updateRunRequestRow(row, data, now) {
+  row.data = data;
+  const status = String(data.status || "unknown").toUpperCase();
+  updateMonitorText(row.title, `${status} // ${data.requestedDate || "NO DATE"} // ${data.parameters?.runName || "UNNAMED RUN"} // ${data.parameters?.gmailLabel || "NO LABEL"}`);
+  updateMonitorText(row.timeline, runRequestTimeline(data, now));
+  const detail = runRequestDetail(data, now);
+  updateMonitorText(row.detail, detail);
+  if (row.detail.hidden !== !detail) row.detail.hidden = !detail;
+  const kind = ["expired", "failed"].includes(data.status) ? "terminal" : data.status === "queued" ? "queued" : "none";
+  if (row.actionKind !== kind) {
+    row.actions?.remove();
+    row.actions = null;
+    row.wake = null;
+    row.actionKind = kind;
+    // Handlers retain only the immutable document ID, never a stale status or label.
+    const id = data.id;
+    if (kind === "terminal") {
+      row.actions = element("div", "request-actions");
+      const retry = element("button", "ghost-button requeue-button", "REQUEUE");
+      retry.type = "button";
+      retry.addEventListener("click", () => requeueRequest(id));
+      const remove = element("button", "danger-button requeue-button", "DELETE");
+      remove.type = "button";
+      remove.addEventListener("click", () => deleteRunRequest(id));
+      row.actions.append(retry, remove);
+    } else if (kind === "queued") {
+      row.wake = element("button", "ghost-button requeue-button", "WAKE RUNNER");
+      row.wake.type = "button";
+      row.wake.addEventListener("click", () => requestRunnerWake(id));
+      row.actions = row.wake;
+    }
+    if (row.actions) row.header.append(row.actions);
+  }
+  if (row.wake) {
+    const disabled = appState.wakeStates?.get(data.id) === "requesting";
+    if (row.wake.disabled !== disabled) row.wake.disabled = disabled;
+  }
+}
+
+function updateRunRequestTimes(now = Date.now()) {
+  if (!appState.authorized) return;
+  // The existing local second timer changes clock text only; no reads or sorting.
+  for (const row of appState.runRequestRows?.values() || []) {
+    if (!["queued", "running"].includes(row.data.status)) continue;
+    updateMonitorText(row.timeline, runRequestTimeline(row.data, now));
+    if (row.data.status === "running") updateMonitorText(row.detail, runRequestDetail(row.data, now));
+  }
+}
+
 function renderRunRequestList() {
+  if (!appState.authorized) return;
   const container = byId("run-request-list");
-  container.replaceChildren();
+  appState.runRequestRows ||= new Map();
   const queued = appState.runRequests.filter((item) => item.status === "queued").length;
   const running = appState.runRequests.filter((item) => item.status === "running").length;
-  byId("queue-count").textContent = running ? `${running} RUNNING // ${queued} QUEUED` : `${queued} QUEUED`;
-  if (!appState.runRequests.length) {
-    byId("monitor-scope").textContent = "0 RECENT REQUESTS LOADED";
-    container.className = "terminal-list empty-state";
-    container.textContent = "No queued tasks.";
-    return;
-  }
-  container.className = "terminal-list";
+  updateMonitorText(byId("queue-count"), running ? `${running} RUNNING // ${queued} QUEUED` : `${queued} QUEUED`);
   const dateFilter = byId("monitor-date-filter")?.value || "";
   const statusFilter = byId("monitor-status-filter")?.value || "";
   const queryFilter = (byId("monitor-query-filter")?.value || "").trim().toLocaleLowerCase();
@@ -1633,7 +1727,9 @@ function renderRunRequestList() {
     return !queryFilter || searchable.includes(queryFilter);
   });
   const scope = byId("monitor-scope");
-  if (scope) scope.textContent = `${visible.length} SHOWN // ${appState.runRequests.length} RECENT REQUESTS LOADED // LATEST ${ARCHIVE_PAGE_SIZE} REQUEST WINDOW`;
+  if (scope) updateMonitorText(scope, appState.runRequests.length
+    ? `${visible.length} SHOWN // ${appState.runRequests.length} RECENT REQUESTS LOADED // LATEST ${ARCHIVE_PAGE_SIZE} REQUEST WINDOW`
+    : "0 RECENT REQUESTS LOADED");
   visible.sort((left, right) => {
     if (sortMode === "status") return String(left.status || "").localeCompare(String(right.status || ""));
     if (sortMode === "name") return String(left.parameters?.runName || "").localeCompare(String(right.parameters?.runName || ""));
@@ -1641,81 +1737,38 @@ function renderRunRequestList() {
     const rightTime = dateValue(right.updatedAt) || dateValue(right.requestedAt) || new Date(0);
     return sortMode === "oldest" ? leftTime - rightTime : rightTime - leftTime;
   });
-  if (!visible.length) {
-    container.className = "terminal-list empty-state";
-    container.textContent = "No requests match these filters.";
-    return;
+  const focused = document.activeElement;
+  const hadFocus = focused && container.contains(focused);
+  const focusedRow = hadFocus ? focused.closest(".request-item") : null;
+  const scrollTop = container.scrollTop;
+  const visibleIds = new Set(visible.map(data => data.id));
+  for (const [id, row] of appState.runRequestRows) {
+    if (visibleIds.has(id)) continue;
+    row.card.remove();
+    appState.runRequestRows.delete(id);
   }
+  const now = Date.now();
+  if (visible.length && !container.children.length) updateMonitorText(container, "");
+  let index = 0;
   for (const data of visible) {
-    const card = element("article", "request-item");
-    const status = String(data.status || "unknown").toUpperCase();
-    const header = element("div", "request-header");
-    header.append(
-      element(
-        "p",
-        "item-meta",
-        `${status} // ` +
-          `${data.requestedDate || "NO DATE"} // ` +
-          `${data.parameters?.runName || "UNNAMED RUN"} // ` +
-          `${data.parameters?.gmailLabel || "NO LABEL"}`,
-      ),
-    );
-    if (["expired", "failed"].includes(data.status)) {
-      const actions = element("div", "request-actions");
-      const retry = element("button", "ghost-button requeue-button", "REQUEUE");
-      retry.type = "button";
-      retry.addEventListener("click", () => requeueRequest(data.id));
-      const remove = element("button", "danger-button requeue-button", "DELETE");
-      remove.type = "button";
-      remove.addEventListener("click", () => deleteRunRequest(data.id));
-      actions.append(retry, remove);
-      header.append(actions);
-    } else if (data.status === "queued") {
-      const wake = element("button", "ghost-button requeue-button", "WAKE RUNNER");
-      wake.type = "button";
-      wake.disabled = appState.wakeStates?.get(data.id) === "requesting";
-      wake.addEventListener("click", () => requestRunnerWake(data.id));
-      header.append(wake);
+    let row = appState.runRequestRows.get(data.id);
+    if (!row) {
+      row = createRunRequestRow(data.id);
+      appState.runRequestRows.set(data.id, row);
     }
-    card.append(header);
-    const requested = dateValue(data.requestedAt), started = dateValue(data.startedAt), finished = dateValue(data.finishedAt);
-    const timeline = [
-      `QUEUED ${timestampText(data.requestedAt)}`,
-      data.startedAt ? `STARTED ${timestampText(data.startedAt)}` : "",
-      data.finishedAt ? `${status} ${timestampText(data.finishedAt)}` : "",
-      !data.finishedAt && data.updatedAt ? `UPDATED ${timestampText(data.updatedAt)}` : "",
-      requested && started && started >= requested ? `WAIT ${durationText(started - requested)}` : "",
-      requested && !started && data.status === "queued" ? `WAIT SO FAR ${durationText(Date.now() - requested)}` : "",
-      started && finished && finished >= started ? `DURATION ${durationText(finished - started)}` : "",
-    ].filter(Boolean).join(" // ");
-    card.append(element("p", "request-timeline", timeline));
-    if (data.status === "running") {
-      const startedAt = dateValue(data.startedAt);
-      const elapsed = startedAt ? Date.now() - startedAt.getTime() : 0;
-      card.append(
-        element(
-          "p",
-          "request-detail",
-          `RUNNING ${durationText(elapsed)} // ONE-HOUR JOB LIMIT`,
-        ),
-      );
-    } else if (data.status === "queued") {
-      const wakeState = appState.wakeStates?.get(data.id);
-      card.append(
-        element(
-          "p",
-          "request-detail",
-          cloudClockEndpoint()
-            ? `REQUEST SAVED // ${wakeState === "requesting" ? "REQUESTING WAKE" : wakeState === "confirmed" ? "WAKE ACCEPTED; WAITING FOR RUNNER" : "WAKE NOT CONFIRMED IN THIS SESSION"}. WAKE RUNNER RETRIES DISPATCH ONLY.`
-            : "QUEUED // CLOUD CLOCK SETUP REQUIRED",
-        ),
-      );
-    } else if (data.status === "published") {
-      card.append(element("p", "request-detail", "PUBLISHED // AVAILABLE IN THE PRIVATE FEED"));
-    } else if (data.detail) {
-      card.append(element("p", "request-detail", String(data.detail)));
-    }
-    container.append(card);
+    updateRunRequestRow(row, data, now);
+    if (container.children[index] !== row.card) container.insertBefore(row.card, container.children[index] || null);
+    index++;
+  }
+  const className = visible.length ? "terminal-list" : "terminal-list empty-state";
+  if (container.className !== className) container.className = className;
+  if (!visible.length) updateMonitorText(container, appState.runRequests.length ? "No requests match these filters." : "No queued tasks.");
+  if (container.scrollTop !== scrollTop) container.scrollTop = scrollTop;
+  // A reorder may blur a moved button; a removed action returns focus to its row.
+  if (hadFocus && document.activeElement !== focused) {
+    const target = focused.isConnected ? focused : focusedRow?.isConnected ? focusedRow : container;
+    if (target === container) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
   }
 }
 
@@ -2142,11 +2195,11 @@ async function refreshMonitor() {
       getDocFromServer(doc(appState.db, "users", uid, "runner", "lastProfile")).catch(() => null),
     ]);
     if (!appState.authorized || appState.user?.uid !== uid || epoch !== appState.authEpoch) return;
+    appState.monitorRefreshedAt = new Date();
     renderRunner(runner);
     if (profile) renderResourceProfile(profile);
     else { appState.resourceReadUnavailable = true; renderResourceSummary(); }
     renderRunRequests(requests);
-    appState.monitorRefreshedAt = new Date();
     showAlert("Private runner status refreshed.");
   } catch (error) {
     showAlert(firebaseErrorMessage(error), true);
@@ -2913,10 +2966,9 @@ function setupActivityTracking() {
   });
   window.setInterval(checkIdleTimer, 1000);
   window.setInterval(() => {
-    if (appState.authorized && appState.runner?.state === "running") {
-      updateRunnerDetail();
-      renderRunRequestList();
-    }
+    if (!appState.authorized || document.visibilityState === "hidden") return;
+    if (appState.runner?.state === "running") updateRunnerDetail();
+    updateRunRequestTimes();
   }, 1000);
 }
 
