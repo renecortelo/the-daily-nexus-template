@@ -22,6 +22,7 @@ from audiodigest.episode_budget import EpisodeBudget, plan_episode
 from audiodigest.evidence import SourceEvidenceIndex, review_evidence
 from audiodigest.models import (
     AntigravityMetadata,
+    DataValidationError,
     DialogueTurn,
     EpisodeScript,
     NewspaperIssue,
@@ -77,6 +78,8 @@ def _script_output_contract(
         "maximum_words_per_turn": CONVERSATION_TURN_MAX_WORDS if conversation else None,
         "section_headings_spoken_by_renderer": True,
         "closing_comment_maximum_words": CLOSING_COMMENT_MAX_WORDS,
+        "closing_quote_and_source_inserted_by_application": True,
+        "closing_comment": {"maximum_turns": 1, "optional": True},
     }
 
 
@@ -94,6 +97,9 @@ def _bound_closing_comment(script: EpisodeScript, quote: ClosingQuote) -> None:
     )
     comment_host = script.sign_off[-1].host
     script.sign_off = [DialogueTurn(quote_host, f"{quote.text} — {quote.author}.")]
+    if quote.text in comment:
+        # A repeated approved quote is not an original observation.
+        comment = ""
     if len(comment.split()) > CLOSING_COMMENT_MAX_WORDS:
         first_sentence = re.split(r"(?<=[.!?])\s+", comment, maxsplit=1)[0]
         comment = first_sentence if len(first_sentence.split()) <= CLOSING_COMMENT_MAX_WORDS else ""
@@ -102,6 +108,57 @@ def _bound_closing_comment(script: EpisodeScript, quote: ClosingQuote) -> None:
         )
     if comment:
         script.sign_off.append(DialogueTurn(comment_host, comment))
+
+
+def _normalize_script_closing(
+    data: dict[str, Any], quote: ClosingQuote, host_names: list[str],
+) -> dict[str, Any]:
+    """Assemble trusted attribution locally; the model writes only the observation.
+
+    Saved scripts retain their sign_off schema. Legacy drafts can contribute an
+    unambiguous separate observation, but an unidentified quotation is discarded,
+    never presented as a new original comment. Source/host validation still follows.
+    """
+    result = dict(data)
+    comments: list[dict[str, str]] = []
+    if "closing_comment" in data:
+        raw = data["closing_comment"]
+        if not isinstance(raw, list) or len(raw) > 1 or any(
+            not isinstance(turn, dict) for turn in raw
+        ):
+            raise ValueError("closing_comment must be a list containing at most one dialogue turn")
+        try:
+            comments = [DialogueTurn.from_dict(turn).to_dict() for turn in raw]
+        except DataValidationError as exc:
+            raise ValueError("closing_comment requires a nonempty host and text") from exc
+    else:
+        legacy = data.get("sign_off", [])
+        if isinstance(legacy, str):
+            legacy = [{"host": host_names[0], "text": legacy}]
+        if isinstance(legacy, list) and legacy and all(
+            isinstance(turn, dict) and isinstance(turn.get("text"), str) for turn in legacy
+        ):
+            # Old output used quotation first, optional observation second.
+            if len(legacy) > 1:
+                comments = legacy[1:]
+            elif quote.text in legacy[0]["text"]:
+                tail = legacy[0]["text"].split(quote.text, 1)[1]
+                if quote.author in tail:
+                    comment = tail.split(quote.author, 1)[1].lstrip(" \n\"'“”‘’—–-:;.").strip()
+                    if comment:
+                        comments = [{"host": legacy[0].get("host", host_names[0]),
+                                     "text": comment}]
+    result["sign_off"] = [
+        {"host": host_names[0], "text": f"{quote.text} — {quote.author}."}, *comments,
+    ]
+    notes = data.get("show_notes", [])
+    if isinstance(notes, list) and all(isinstance(note, str) for note in notes):
+        notes = list(notes)
+        if not any(quote.source_url in note for note in notes):
+            notes.append(f"Closing quotation — {quote.author} — {quote.source_url}")
+        result["show_notes"] = notes
+    return result
+
 
 _NEWSPAPER_ARTICLE_LIMITS = {
     "focused": (2, 4),
@@ -1017,21 +1074,22 @@ announce a section number, or restate a section title inside that section's dial
 naturally between stories with a short editorial bridge only when it adds context; never recap
 the same fact merely to fill time.
 
-After the conclusion, add a separate sign_off. It must reproduce this closing quotation
-verbatim and name its author:
+After the conclusion, the application inserts this approved quotation and its author
+verbatim, and adds its source to show notes. Do not write a quotation or attribution:
 {closing_quote.text!r} - {closing_quote.author}
-After the quotation, add one short, clearly original observation connected to ONE specific
+Write only one short, clearly original observation connected to ONE specific
 non-TIH news story actually discussed in this episode. Identify the concrete development
 so the connection is intelligible, without repeating its summary or adding unsupported facts.
-Write this observation in a SEPARATE sign_off turn: aim for 12-20 words, never more than
+Write this observation in a SEPARATE closing_comment turn: aim for 12-20 words, never more than
 25 words, excluding the quotation and attribution. One compact punchline, not another news
 summary or an explanation of the quotation. Prefer dry wit, a playful contrast or gentle
 satire tied to the concrete story. Choose a non-sensitive story for the joke when one is
 available; never joke about victims, tragedy, illness or vulnerable groups. When no safe
 humorous story is available, use a brief thoughtful observation instead.
 Use the quotation as a lens, not a claim that its author commented on today's news. Avoid
-generic technology jokes and stock closing lines. Never alter the quotation or its
-attribution. Include its source URL in show notes:
+generic technology jokes and stock closing lines. Do not repeat the quotation or its
+attribution in closing_comment. Use an empty closing_comment list if no useful comment
+is available. The application inserts this approved source URL:
 {closing_quote.source_url}
 
 The disclosure must be exactly: {AI_DISCLOSURE!r}
@@ -1052,9 +1110,8 @@ Return JSON only:
     "story_ids": ["cited story ID"]
   }}],
   "conclusion": [{{"host": {json.dumps(host_names[0])}, "text": "short closing"}}],
-  "sign_off": [{{"host": {json.dumps(host_names[0])}, "text": "exact quotation and attribution"}},
-               {{"host": {json.dumps(host_names[-1])},
-                 "text": "12-20-word original witty observation"}}],
+  "closing_comment": [{{"host": {json.dumps(host_names[-1])},
+                       "text": "12-20-word original witty observation"}}],
   "show_notes": ["Headline - Publication - https://public-url"],
   "disclosure": {json.dumps(AI_DISCLOSURE)}
 }}
@@ -1079,6 +1136,7 @@ Return JSON only:
 
         def validate_script(data: dict[str, Any]) -> EpisodeScript:
             data = _normalize_script_section_order(data, section_order)
+            data = _normalize_script_closing(data, closing_quote, host_names)
             script = EpisodeScript.from_dict(
                 data,
                 section_order=section_order,
@@ -1093,6 +1151,7 @@ Return JSON only:
                 raise ValueError(
                     "the introduction must credit editor and producer Dario Novelli exactly once"
                 )
+            _bound_closing_comment(script, closing_quote)
             if len(host_names) == 2:
                 speakers = {turn.host.casefold() for turn in script.dialogue_turns}
                 if any(host.casefold() not in speakers for host in host_names):
@@ -1126,7 +1185,6 @@ Return JSON only:
                     *(normalize_url(url) for story in stories for url in story.source_urls),
                 },
             )
-            _bound_closing_comment(script, closing_quote)
             has_tih = any(story.section == Section.TODAY_IN_HISTORY for story in stories)
             if has_tih and (
                 not script.sections or script.sections[0].name != Section.TODAY_IN_HISTORY

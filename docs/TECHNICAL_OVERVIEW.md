@@ -83,6 +83,14 @@ the encoded MP3 must both remain within 30 minutes; neither is silently cut.
 
 Non-formal speech prompts prefer contractions, plain wording and genuinely
 responsive host dialogue; these are style preferences, not new failure quotas.
+The application inserts the approved catalog quote, attribution and source URL
+locally, rather than asking the model to copy them. The draft supplies only an
+optional `closing_comment` turn; saved scripts keep the existing `sign_off` schema.
+Legacy drafts retain a separately identifiable observation, not an ambiguous or
+paraphrased quotation. Malformed comments, unknown speakers and unsupported
+references still fail validation; the independent source review still checks the
+retained observation. Fixed diagnostic codes distinguish attribution, source,
+editor-credit and comment errors without exposing text or account information.
 The closing quote and attribution stay verbatim. Its separate original comment
 targets 12–20 words (25 maximum); a deterministic guard keeps only complete short
 copy or the quotation alone, without another model call or whole-script retry.

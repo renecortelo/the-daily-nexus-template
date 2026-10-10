@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import TestCase
 
 from audiodigest.progress import (
+    FAILURE_CODES,
     PREFIX,
     ProgressReporter,
     counts,
@@ -18,6 +19,16 @@ from audiodigest.progress import (
 
 
 class ProgressTests(TestCase):
+    def test_detailed_closing_codes_survive_without_exception_content(self):
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        for code in ("script_editor_credit", "script_quote_text", "script_quote_author",
+                     "script_quote_source", "script_closing_comment"):
+            self.assertIn(code, FAILURE_CODES)
+            event = reporter.snapshot()
+            event.update(failure_code=code, exception="private detail")
+            self.assertEqual(code, safe_event(event)["failure_code"])
+            self.assertNotIn("exception", safe_event(event))
+
     def test_only_fixed_diagnostic_codes_survive_the_privacy_filter(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         reporter.start()

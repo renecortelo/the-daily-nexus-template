@@ -143,7 +143,7 @@ class EditorialPreferenceTests(TestCase):
         self.assertIn("ONE specific", writing)
         self.assertIn("aim for 12-20 words", writing)
         self.assertIn("never more than\n25 words", writing)
-        self.assertIn("SEPARATE sign_off turn", writing)
+        self.assertIn("SEPARATE closing_comment turn", writing)
         self.assertIn("natural contractions as the default", writing)
         self.assertIn("Write for listening", writing)
         self.assertIn("Do not modernize or paraphrase the approved closing quotation", writing)
