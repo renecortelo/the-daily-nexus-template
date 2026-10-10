@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -452,13 +453,22 @@ class NewspaperVisualItem:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> NewspaperVisualItem:
         magnitude = data.get("magnitude")
-        if magnitude is not None and not isinstance(magnitude, (int, float)):
+        if magnitude is not None and (
+            isinstance(magnitude, bool)
+            or not isinstance(magnitude, (int, float))
+        ):
             raise DataValidationError("visual item magnitude must be numeric or null")
+        try:
+            magnitude = float(magnitude) if magnitude is not None else None
+        except OverflowError as exc:
+            raise DataValidationError("visual item magnitude must be finite") from exc
+        if magnitude is not None and not math.isfinite(magnitude):
+            raise DataValidationError("visual item magnitude must be finite")
         return cls(
             label=_required_str(data, "label"),
             value=_required_str(data, "value"),
             detail=str(data.get("detail") or "").strip(),
-            magnitude=float(magnitude) if magnitude is not None else None,
+            magnitude=magnitude,
             story_ids=_string_list(data, "story_ids"),
         )
 

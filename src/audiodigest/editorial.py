@@ -30,6 +30,7 @@ from audiodigest.models import (
     VerificationResult,
     source_prompt_dicts,
 )
+from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
 
 NEWSPAPER_TARGET_PROSE_WORDS = 1_050
@@ -530,10 +531,9 @@ def _rebuild_newspaper_citations(
 
 
 def _bullet_repeats_article(bullet: str, article_text: str) -> bool:
-    bullet_tokens = set(re.findall(r"[a-z0-9%]+", bullet.casefold()))
-    article_tokens = set(re.findall(r"[a-z0-9%]+", article_text.casefold()))
-    return (
-        len(bullet_tokens) >= 5 and len(bullet_tokens & article_tokens) / len(bullet_tokens) >= 0.85
+    return any(
+        _reader_copy_key(bullet) == _reader_copy_key(sentence)
+        for sentence in _complete_sentences(article_text)
     )
 
 
@@ -642,34 +642,22 @@ def _deduplicate_newspaper_articles(
         issue.articles,
         key=lambda article: bool(set(article.story_ids) & tih_story_ids),
     )
-    prior_sentence_terms: list[set[str]] = []
+    prior_sentences: set[str] = set()
     retained_articles = []
     for article in ordered_articles:
-        retained_for_article: list[set[str]] = []
         for field_name in ("standfirst", "body"):
             original = getattr(article, field_name)
             retained_sentences: list[str] = []
-            for sentence in _split_editorial_sentences(original):
-                terms = _deduplication_terms(sentence)
-                duplicate = any(
-                    _term_sets_overlap(
-                        terms,
-                        previous,
-                        minimum_shared=5,
-                        containment=0.7,
-                    )
-                    for previous in prior_sentence_terms
-                )
-                if duplicate:
+            for sentence in _complete_sentences(original):
+                key = _reader_copy_key(sentence)
+                if key in prior_sentences:
                     continue
                 retained_sentences.append(sentence)
-                if terms:
-                    retained_for_article.append(terms)
+                prior_sentences.add(key)
             replacement = " ".join(retained_sentences)
             setattr(article, field_name, replacement)
         if article.standfirst or article.body:
             retained_articles.append(article)
-            prior_sentence_terms.extend(retained_for_article)
     # If an article offers no sentence beyond earlier coverage, drop it rather
     # than restoring the repeated body simply to fill a card.
     issue.articles = retained_articles

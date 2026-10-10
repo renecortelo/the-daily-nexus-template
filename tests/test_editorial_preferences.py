@@ -323,7 +323,7 @@ class EditorialPreferenceTests(TestCase):
             standfirst="Historical milestones share the date with current developments.",
             body=(
                 "Andy Burnham succeeded Keir Starmer as UK Prime Minister "
-                "following a party leadership election. "
+                "after the governing party vote. "
                 "Apollo 11 landed on the Moon on July 20, 1969."
             ),
             story_ids=["tih-world-snapshot", "tih-apollo"],
@@ -364,7 +364,9 @@ class EditorialPreferenceTests(TestCase):
 
         for article in articles:
             article_text = f"{article.standfirst} {article.body}".casefold()
-            self.assertEqual([], article.bullet_points)
+            # A similar sentence missing the original qualifier is not an exact
+            # duplicate. Semantic repetition remains the model reviewer's job.
+            self.assertEqual(1, len(article.bullet_points))
             self.assertGreaterEqual(len(article.highlights), 2)
             self.assertTrue(
                 all(highlight.casefold() in article_text for highlight in article.highlights)

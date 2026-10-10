@@ -107,6 +107,23 @@ fictional pronunciation previews remain local and are not published or committed
 English voices still approximate Spanish/Catalan names; native pronunciation or
 less robotic delivery cannot be promised without listening feedback.
 
+Newspaper rendering measures complete visual copy before allocating the panel
+and article space. All six schema-accepted items are retained, with wrapped
+labels/details and larger type, rather than fixed one-line ellipses. Bar charts
+use a common zero for signed values; zero is never represented by a minimum
+filled bar. Boolean/nonfinite/overflowing magnitudes are rejected. Units and
+comparability still depend on the original-source factual review, not the layout.
+Exact sentence deduplication preserves changed quantities, qualifiers and actor
+order; semantic paraphrases remain the existing reviewer’s responsibility.
+The renderer no longer manufactures secondary briefs from article copy or repeats
+body excerpts in teasers. Measured free first-page space can hold complete extra
+articles in priority order. Body type is at least 8.1 pt for features and 7.7 pt
+for compact columns; a third page handles readable article overflow, never a fourth.
+Unfittable visual/brief/executive/takeaway panels raise an explicit render error
+instead of dropping or clipping content. A verified podcast may still publish
+without the optional paper; no automatic new review, generation or repair loop
+is introduced. Synthetic PDF proofs are local ignored outputs, not deployments.
+
 Audio quality observation measures the final decoded MP3 locally with FFmpeg's
 `ebur128` filter (integrated loudness, true peak and loudness range), rather than
 assuming the pre-encoding `loudnorm` target was achieved. Numeric values and fixed

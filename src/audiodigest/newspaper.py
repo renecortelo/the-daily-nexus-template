@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import math
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -58,11 +59,15 @@ def _bullet_adds_distinct_information(
     bullet: str,
     article_text: str,
 ) -> bool:
-    bullet_tokens = set(re.findall(r"[a-z0-9%]+", bullet.casefold()))
-    article_tokens = set(re.findall(r"[a-z0-9%]+", article_text.casefold()))
-    if len(bullet_tokens) < 5:
-        return True
-    return len(bullet_tokens & article_tokens) / len(bullet_tokens) < 0.65
+    key = _reader_copy_key(bullet)
+    return not any(
+        key == _reader_copy_key(sentence) for sentence in _complete_sentences(article_text)
+    )
+
+
+def _reader_copy_key(text: str) -> str:
+    """Exact normalized copy only; overlap is not proof of redundant meaning."""
+    return _percent_symbols(" ".join(text.split())).casefold().rstrip(".!? ")
 
 
 def _source_domains(issue: NewspaperIssue) -> list[str]:
@@ -431,27 +436,19 @@ class NewspaperRenderer:
     def _topic_visual(issue: NewspaperIssue) -> NewspaperVisual:
         items = []
         for index, article in enumerate(issue.articles[:5], start=1):
-            headline, detail = _news_visual_copy(article)
+            headline = article.title
             items.append(
                 NewspaperVisualItem(
                     value=(article.section_label or f"Story {index}"),
                     label=headline,
-                    detail=detail,
+                    detail="",
                     story_ids=list(article.story_ids),
-                )
-            )
-        if len(items) == 1:
-            items.append(
-                NewspaperVisualItem(
-                    value="Context",
-                    label="Why it matters",
-                    detail=_limited_words(issue.deck, 11),
                 )
             )
         return NewspaperVisual(
             kind="news_grid",
-            title="The developments to know today",
-            caption="A quick map of the verified news and the concrete detail behind it.",
+            title="Inside this edition",
+            caption="Read the complete developments in the articles below.",
             items=items,
             source_urls=[],
         )
@@ -697,12 +694,11 @@ class NewspaperRenderer:
                     "body_height": body_height,
                     "bullet_height": bullet_height,
                     "height": (
-                        17
+                        41
                         + title_height
                         + (standfirst_height + 5 if standfirst else 0)
                         + body_height
-                        + (bullet_height + 6 if bullets else 0)
-                        + 16
+                        + (bullet_height + 7 if bullets else 0)
                     ),
                 }
             )
@@ -716,7 +712,7 @@ class NewspaperRenderer:
         available_height: float,
         feature: bool,
     ) -> list[dict]:
-        for body_size in (9.3, 9.0, 8.7, 8.4, 8.1, 7.8, 7.5, 7.2):
+        for body_size in (9.3, 9.0, 8.7, 8.4, 8.1):
             blocks = self._article_blocks(
                 articles,
                 width=width,
@@ -749,12 +745,10 @@ class NewspaperRenderer:
             8.3,
             8.0,
             7.7,
-            7.4,
-            7.1,
         ):
             blocks = self._article_blocks(
                 articles,
-                width=width - 14,
+                width=width - 16,
                 body_size=body_size,
                 feature=False,
             )
@@ -787,6 +781,8 @@ class NewspaperRenderer:
     def _fit_page_two_articles(
         self,
         articles: list[NewspaperArticle],
+        *,
+        visual: NewspaperVisual | None = None,
     ) -> list[list[dict]]:
         from reportlab.lib.pagesizes import A4
 
@@ -799,6 +795,10 @@ class NewspaperRenderer:
             visual_height = 194
         else:
             visual_height = 184
+        if visual is not None:
+            visual_height = max(
+                visual_height, self._visual_plan(visual, width - 2 * margin)["height"],
+            )
         stories_top = visual_top - visual_height - 13
         source_top = 60
         gap = 12
@@ -830,9 +830,11 @@ class NewspaperRenderer:
     def _plan_article_pages(
         self,
         articles: list[NewspaperArticle],
+        *,
+        visual: NewspaperVisual | None = None,
     ) -> tuple[list[NewspaperArticle], list[NewspaperArticle]]:
         try:
-            self._fit_page_two_articles(articles)
+            self._fit_page_two_articles(articles, visual=visual)
             return articles, []
         except NewspaperRenderError:
             pass
@@ -844,7 +846,7 @@ class NewspaperRenderer:
             page_two = articles[:split_at]
             page_three = articles[split_at:]
             try:
-                self._fit_page_two_articles(page_two)
+                self._fit_page_two_articles(page_two, visual=visual)
                 self._fit_page_three_articles(page_three)
             except NewspaperRenderError:
                 continue
@@ -853,6 +855,49 @@ class NewspaperRenderer:
         raise NewspaperRenderError(
             "The newsletter stories cannot fit legibly within the three-page maximum."
         )
+
+    def _plan_first_page_articles(self, issue, first, remaining):
+        """Use free feature space for complete reporting, not repeated teasers."""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle
+
+        width = A4[0] - 60
+        headline = self._paragraph(_limited_words(issue.headline, 18), ParagraphStyle(
+            "MeasureHeadline", fontName="Helvetica-Bold", fontSize=24, leading=25.2,
+        ))
+        deck = self._paragraph(_limited_words(issue.deck, 30), ParagraphStyle(
+            "MeasureDeck", fontName="Helvetica", fontSize=10.3, leading=13,
+        ))
+        lead = self._paragraph(" ".join(issue.lead.split())[1:].lstrip(), ParagraphStyle(
+            "MeasureLead", fontName="Times-Bold", fontSize=10.5, leading=13.5,
+        ))
+        available = (A4[1] - 106 - 22 - headline.wrap(width, 2000)[1] - 7
+                     - deck.wrap(width, 2000)[1] - 9 - 12
+                     - max(34, lead.wrap(337 - 31, 2000)[1]) - 10 - 39)
+        briefs = self._reader_briefs(issue)
+        reserve = 0
+        if briefs:
+            style = ParagraphStyle("MeasureBrief", fontName="Helvetica", fontSize=8,
+                                   leading=8 * 1.28)
+            reserve = max(144, 44 + sum(
+                self._paragraph(f"{index:02d} / {text}", style).wrap(337 - 18, 2000)[1] + 5
+                for index, text in enumerate(briefs, start=1)
+            ))
+        history_card = any(
+            "today in history" in f"{article.section_label} {article.title}".casefold()
+            for article in first
+        )
+        chosen, rest = list(first), list(remaining)
+        while len(rest) > 1 and len(chosen) < 3:
+            try:
+                self._fit_single_column(
+                    [*chosen, rest[0]], width=337 - (16 if history_card else 0),
+                    available_height=available - reserve, feature=True,
+                )
+            except NewspaperRenderError:
+                break
+            chosen.append(rest.pop(0))
+        return chosen, rest
 
     def _draw_article_blocks(
         self,
@@ -954,433 +999,140 @@ class NewspaperRenderer:
             cursor -= 12
         return cursor
 
-    def _draw_visual(
-        self,
-        drawing,
-        visual: NewspaperVisual,
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
+    def _visual_plan(self, visual: NewspaperVisual, width: float, *, dark: bool = True) -> dict:
+        """Measure complete visual copy before allocating page space."""
         from reportlab.lib.colors import HexColor
-        from reportlab.lib.enums import TA_LEFT
         from reportlab.lib.styles import ParagraphStyle
 
-        background = self.INK if dark else self.PAPER
-        foreground = self.PAPER if dark else self.INK
+        if not 1 <= len(visual.items) <= 6:
+            raise NewspaperRenderError("A visual must contain one to six complete items")
+        content_width = width - 20
+        columns = 1 if visual.kind in {"bar_chart", "timeline", "process"} else 2
+        cell_width = (content_width - 8 * (columns - 1)) / columns
+        foreground = HexColor(self.PAPER if dark else self.INK)
+        secondary = HexColor(self.GOLD if dark else self.DARK_AMBER)
+        styles = [
+            ParagraphStyle("VisualValue", fontName="Courier-Bold", fontSize=9.0, leading=11,
+                           textColor=secondary),
+            ParagraphStyle("VisualLabel", fontName="Helvetica-Bold", fontSize=8.0, leading=10,
+                           textColor=foreground),
+            ParagraphStyle("VisualDetail", fontName="Helvetica", fontSize=7.4, leading=9.4,
+                           textColor=foreground),
+        ]
+        title = self._paragraph(
+            visual.title, ParagraphStyle("VisualTitle", fontName="Helvetica-Bold",
+                                        fontSize=12.5, leading=14.5, textColor=foreground),
+        )
+        caption = self._paragraph(
+            visual.caption, ParagraphStyle("VisualCaption", fontName="Helvetica",
+                                          fontSize=7.5, leading=9.5, textColor=secondary),
+        )
+        title_height = title.wrap(content_width, 2000)[1]
+        caption_height = caption.wrap(content_width, 2000)[1]
+        header_height = 49 + title_height + caption_height
+        rows = []
+        for start in range(0, len(visual.items), columns):
+            cells = []
+            for item in visual.items[start:start + columns]:
+                text_width = cell_width - 16
+                if visual.kind == "bar_chart":
+                    if item.magnitude is None or not math.isfinite(item.magnitude):
+                        raise NewspaperRenderError("Chart magnitudes must be finite numbers")
+                    text_width = min(160, content_width * 0.36) - 8
+                parts = [
+                    self._paragraph(text, style)
+                    for text, style in zip(
+                        (item.value, item.label, item.detail), styles, strict=True,
+                    )
+                    if text.strip()
+                ]
+                heights = [part.wrap(text_width, 2000)[1] for part in parts]
+                if visual.kind == "bar_chart":
+                    # Value at right, label/detail at left, signed bar in between.
+                    heights[0] = parts[0].wrap(min(82, content_width * 0.18), 2000)[1]
+                    required = max(sum(heights[1:]) + 12, heights[0] + 17)
+                else:
+                    required = sum(heights) + 4 * (len(parts) - 1) + 16
+                cells.append(dict(item=item, parts=parts, heights=heights, required=required))
+            rows.append(dict(cells=cells, height=max(cell["required"] for cell in cells)))
+        return dict(title=title, caption=caption, title_height=title_height,
+                    caption_height=caption_height, header_height=header_height,
+                    columns=columns, cell_width=cell_width, rows=rows,
+                    height=header_height + sum(row["height"] for row in rows)
+                    + 7 * max(0, len(rows) - 1) + 10)
+
+    def _draw_visual(
+        self, drawing, visual: NewspaperVisual, *,
+        x: float, top: float, width: float, height: float, dark: bool,
+    ) -> None:
+        from reportlab.lib.colors import HexColor
+
+        plan = self._visual_plan(visual, width, dark=dark)
+        if plan["height"] > height + 0.1:
+            raise NewspaperRenderError("Complete visual copy exceeds its measured panel")
         secondary = self.GOLD if dark else self.DARK_AMBER
-        drawing.setFillColor(HexColor(background))
+        drawing.setFillColor(HexColor(self.INK if dark else self.PAPER))
         drawing.roundRect(x, top - height, width, height, 7, fill=1, stroke=0)
         drawing.setStrokeColor(HexColor(self.AMBER))
         drawing.setLineWidth(1.2)
         drawing.line(x + 10, top - 28, x + width - 10, top - 28)
         drawing.setFillColor(HexColor(secondary))
         drawing.setFont("Courier-Bold", 6.2)
-        visual_kind_label = (
-            "news grid"
-            if visual.kind in {"signal_map", "decision_matrix"}
-            else visual.kind.replace("_", " ")
+        kind = "news grid" if visual.kind in {"signal_map", "decision_matrix"} else (
+            visual.kind.replace("_", " ")
         )
-        drawing.drawString(
-            x + 10,
-            top - 17,
-            f"VISUAL BRIEF  /  {visual_kind_label.upper()}",
-        )
-        title_style = ParagraphStyle(
-            f"VisualTitle-{dark}-{width}",
-            fontName="Helvetica-Bold",
-            fontSize=10.2 if width < 210 else 12.5,
-            leading=12.2 if width < 210 else 14.5,
-            textColor=foreground,
-            alignment=TA_LEFT,
-        )
-        caption_style = ParagraphStyle(
-            f"VisualCaption-{dark}-{width}",
-            fontName="Helvetica",
-            fontSize=6.5 if width < 210 else 7.2,
-            leading=8.2 if width < 210 else 9.1,
-            textColor=secondary,
-            alignment=TA_LEFT,
-        )
-        visual_title = visual.title
-        if (
-            visual.kind in {"signal_map", "decision_matrix"}
-            and visual.title.strip().casefold() == "signal topology"
-        ):
-            visual_title = "The developments to know today"
-        title = self._paragraph(_limited_words(visual_title, 10), title_style)
-        _, title_height = title.wrap(width - 20, 45)
-        title.drawOn(drawing, x + 10, top - 37 - title_height)
-        caption = self._paragraph(_limited_words(visual.caption, 20), caption_style)
-        _, caption_height = caption.wrap(width - 20, 35)
-        caption.drawOn(drawing, x + 10, top - 41 - title_height - caption_height)
-        content_top = top - 51 - title_height - caption_height
-        content_bottom = top - height + 10
-        content_height = max(38, content_top - content_bottom)
-
-        if visual.kind == "stat_grid":
-            self._draw_stat_grid(
-                drawing,
-                visual.items,
-                x=x + 10,
-                top=content_top,
-                width=width - 20,
-                height=content_height,
-                dark=dark,
-            )
-        elif visual.kind == "bar_chart":
-            self._draw_bar_chart(
-                drawing,
-                visual.items,
-                x=x + 10,
-                top=content_top,
-                width=width - 20,
-                height=content_height,
-                dark=dark,
-            )
-        elif visual.kind == "comparison":
-            self._draw_comparison(
-                drawing,
-                visual.items,
-                x=x + 10,
-                top=content_top,
-                width=width - 20,
-                height=content_height,
-                dark=dark,
-            )
-        elif visual.kind in {"timeline", "process"}:
-            self._draw_sequence(
-                drawing,
-                visual.items,
-                x=x + 10,
-                top=content_top,
-                width=width - 20,
-                height=content_height,
-                dark=dark,
-            )
-        else:
-            self._draw_news_grid(
-                drawing,
-                visual.items,
-                x=x + 10,
-                top=content_top,
-                width=width - 20,
-                height=content_height,
-                dark=dark,
-            )
-
-    def _draw_stat_grid(
-        self,
-        drawing,
-        items: list[NewspaperVisualItem],
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
-        from reportlab.lib.colors import HexColor
-
-        foreground = self.PAPER if dark else self.INK
-        cells = items[:4]
-        columns = 2 if width >= 240 else 1
-        rows = (len(cells) + columns - 1) // columns
-        gap = 6
-        cell_width = (width - (gap * (columns - 1))) / columns
-        cell_height = (height - (gap * (rows - 1))) / max(1, rows)
-        for index, item in enumerate(cells):
-            column = index % columns
-            row = index // columns
-            cell_x = x + column * (cell_width + gap)
-            cell_top = top - row * (cell_height + gap)
-            drawing.setFillColor(HexColor(self.DARK_AMBER if dark else self.PALE))
-            drawing.roundRect(
-                cell_x,
-                cell_top - cell_height,
-                cell_width,
-                cell_height,
-                4,
-                fill=1,
-                stroke=0,
-            )
-            drawing.setFillColor(HexColor(self.GOLD if dark else self.AMBER))
-            drawing.setFont("Helvetica-Bold", 15 if columns == 2 else 12)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 18,
-                _short_visual_text(item.value, words=3, characters=18),
-            )
-            drawing.setFillColor(HexColor(foreground))
-            drawing.setFont("Helvetica-Bold", 6.5)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 30,
-                _short_visual_text(item.label, words=5, characters=30),
-            )
-            drawing.setFont("Helvetica", 5.8)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 41,
-                _short_visual_text(item.detail, words=7, characters=34),
-            )
-
-    def _draw_bar_chart(
-        self,
-        drawing,
-        items: list[NewspaperVisualItem],
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
-        from reportlab.lib.colors import HexColor
-
-        foreground = self.PAPER if dark else self.INK
-        items = [item for item in items[:5] if item.magnitude is not None]
-        maximum = max((abs(item.magnitude or 0) for item in items), default=1)
-        row_height = height / max(1, len(items))
-        label_width = min(145, width * 0.34)
-        value_width = min(54, width * 0.15)
-        bar_width = max(20, width - label_width - value_width - 15)
-        for index, item in enumerate(items):
-            row_top = top - index * row_height
-            y = row_top - row_height * 0.62
-            drawing.setFillColor(HexColor(foreground))
-            drawing.setFont("Helvetica-Bold", 6.4)
-            drawing.drawString(
-                x,
-                y + 7,
-                _short_visual_text(item.label, words=6, characters=38),
-            )
-            drawing.setFillColor(HexColor(self.DARK_AMBER if dark else self.PALE))
-            drawing.roundRect(
-                x + label_width,
-                y,
-                bar_width,
-                9,
-                3,
-                fill=1,
-                stroke=0,
-            )
-            magnitude = abs(item.magnitude or 0)
-            filled = max(4, bar_width * (magnitude / maximum))
-            drawing.setFillColor(HexColor(self.AMBER))
-            drawing.roundRect(
-                x + label_width,
-                y,
-                filled,
-                9,
-                3,
-                fill=1,
-                stroke=0,
-            )
-            drawing.setFillColor(HexColor(self.GOLD if dark else self.DARK_AMBER))
-            drawing.setFont("Courier-Bold", 6.2)
-            drawing.drawRightString(
-                x + width,
-                y + 2,
-                _short_visual_text(item.value, words=3, characters=18),
-            )
-
-    def _draw_sequence(
-        self,
-        drawing,
-        items: list[NewspaperVisualItem],
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
-        from reportlab.lib.colors import HexColor
-
-        foreground = self.PAPER if dark else self.INK
-        line_color = self.DARK_AMBER if dark else self.GOLD
-        items = items[:5]
-        step = height / max(1, len(items))
-        rail_x = x + 9
-        drawing.setStrokeColor(HexColor(line_color))
-        drawing.setLineWidth(1.2)
-        drawing.line(rail_x, top - 7, rail_x, top - height + 7)
-        for index, item in enumerate(items):
-            y = top - (index + 0.5) * step
-            drawing.setFillColor(HexColor(self.AMBER))
-            drawing.circle(rail_x, y + 3, 3.7, fill=1, stroke=0)
-            drawing.setFillColor(HexColor(self.GOLD if dark else self.DARK_AMBER))
-            drawing.setFont("Courier-Bold", 6.1)
-            drawing.drawString(
-                rail_x + 10,
-                y + 8,
-                _short_visual_text(item.value, words=3, characters=22).upper(),
-            )
-            drawing.setFillColor(HexColor(foreground))
-            drawing.setFont("Helvetica-Bold", 6.7)
-            drawing.drawString(
-                rail_x + 10,
-                y - 1,
-                _short_visual_text(item.label, words=6, characters=42),
-            )
-            drawing.setFont("Helvetica", 5.7)
-            drawing.drawString(
-                rail_x + 10,
-                y - 10,
-                _short_visual_text(item.detail, words=8, characters=48),
-            )
-
-    def _draw_comparison(
-        self,
-        drawing,
-        items: list[NewspaperVisualItem],
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
-        from reportlab.lib.colors import HexColor
-
-        foreground = self.PAPER if dark else self.INK
-        cells = items[:4]
-        columns = 2
-        gap = 7
-        cell_width = (width - gap) / columns
-        cell_height = height / max(1, (len(cells) + 1) // 2)
-        for index, item in enumerate(cells):
-            column = index % columns
-            row = index // columns
-            cell_x = x + column * (cell_width + gap)
-            cell_top = top - row * cell_height
-            drawing.setStrokeColor(HexColor(self.AMBER))
-            drawing.setLineWidth(2)
-            drawing.line(cell_x, cell_top - 3, cell_x, cell_top - cell_height + 5)
-            drawing.setFillColor(HexColor(self.GOLD if dark else self.DARK_AMBER))
-            drawing.setFont("Courier-Bold", 6.3)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 12,
-                _short_visual_text(item.value, words=3, characters=20).upper(),
-            )
-            drawing.setFillColor(HexColor(foreground))
-            drawing.setFont("Helvetica-Bold", 7)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 25,
-                _short_visual_text(item.label, words=6, characters=27),
-            )
-            drawing.setFont("Helvetica", 5.9)
-            drawing.drawString(
-                cell_x + 7,
-                cell_top - 37,
-                _short_visual_text(item.detail, words=9, characters=34),
-            )
-
-    def _draw_news_grid(
-        self,
-        drawing,
-        items: list[NewspaperVisualItem],
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-        dark: bool,
-    ) -> None:
-        from reportlab.lib.colors import HexColor
-        from reportlab.lib.enums import TA_LEFT
-        from reportlab.lib.styles import ParagraphStyle
-
-        foreground = self.PAPER if dark else self.INK
-        items = items[:5]
-        header_height = 14
-        drawing.setFillColor(HexColor(self.GOLD if dark else self.DARK_AMBER))
-        drawing.setFont("Courier-Bold", 5.4)
-        drawing.drawString(x + 5, top - 8, "FIVE DEVELOPMENTS // NEWS AT A GLANCE")
-        row_top = top - header_height
-        columns = 2
-        rows = max(1, (len(items) + columns - 1) // columns)
-        column_gap = 6
-        row_gap = 5
-        cell_width = (width - column_gap) / columns
-        row_height = (height - header_height - row_gap * max(0, rows - 1)) / rows
-        label_style = ParagraphStyle(
-            f"DecisionLabel-{dark}",
-            fontName="Helvetica-Bold",
-            fontSize=6.1,
-            leading=7.0,
-            textColor=foreground,
-            alignment=TA_LEFT,
-        )
-        detail_style = ParagraphStyle(
-            f"DecisionDetail-{dark}",
-            fontName="Helvetica",
-            fontSize=5.5,
-            leading=6.4,
-            textColor=self.GOLD if dark else self.MUTED,
-            alignment=TA_LEFT,
-        )
-        for index, item in enumerate(items):
-            column = index % columns
-            row = index // columns
-            cell_x = x + column * (cell_width + column_gap)
-            current_top = row_top - row * (row_height + row_gap)
-            drawing.setFillColor(
-                HexColor(
-                    self.DARK_AMBER
-                    if dark and index % 2 == 0
-                    else (self.INK if dark else self.PAPER)
-                )
-            )
-            drawing.roundRect(
-                cell_x,
-                current_top - row_height,
-                cell_width,
-                row_height,
-                4,
-                fill=1,
-                stroke=0,
-            )
-            drawing.setFillColor(HexColor(self.AMBER))
-            drawing.roundRect(
-                cell_x + 5,
-                current_top - 15,
-                min(72, cell_width * 0.3),
-                11,
-                3,
-                fill=1,
-                stroke=0,
-            )
-            drawing.setFillColor(HexColor(self.PAPER))
-            drawing.setFont("Courier-Bold", 5.4)
-            drawing.drawString(
-                cell_x + 9,
-                current_top - 11.5,
-                _short_visual_text(item.value, words=3, characters=18).upper(),
-            )
-            label = self._paragraph(_limited_words(item.label, 12), label_style)
-            text_x = cell_x + min(82, cell_width * 0.34)
-            text_width = cell_x + cell_width - text_x - 6
-            _, label_height = label.wrap(text_width, row_height - 6)
-            label.drawOn(
-                drawing,
-                text_x,
-                current_top - 5 - label_height,
-            )
-            detail_text = item.detail or "See the related development in this edition."
-            detail = self._paragraph(_limited_words(detail_text, 18), detail_style)
-            _, detail_height = detail.wrap(cell_width - 12, row_height - 23)
-            detail.drawOn(
-                drawing,
-                cell_x + 6,
-                current_top - 21 - detail_height,
-            )
+        drawing.drawString(x + 10, top - 17, f"VISUAL BRIEF  /  {kind.upper()}")
+        cursor = top - 37
+        plan["title"].drawOn(drawing, x + 10, cursor - plan["title_height"])
+        cursor -= plan["title_height"] + 4
+        plan["caption"].drawOn(drawing, x + 10, cursor - plan["caption_height"])
+        cursor = top - plan["header_height"]
+        magnitudes = [item.magnitude for item in visual.items if item.magnitude is not None]
+        maximum = max((abs(value) for value in magnitudes), default=0) or 1
+        signed = any(value < 0 for value in magnitudes)
+        for row in plan["rows"]:
+            for column, cell in enumerate(row["cells"]):
+                cell_x = x + 10 + column * (plan["cell_width"] + 8)
+                item = cell["item"]
+                if visual.kind == "bar_chart":
+                    label_width = min(160, (width - 20) * 0.36)
+                    value_width = min(82, (width - 20) * 0.18)
+                    text_y = cursor - 5
+                    for part, part_height in zip(
+                        cell["parts"][1:], cell["heights"][1:], strict=True,
+                    ):
+                        part.drawOn(drawing, cell_x, text_y - part_height)
+                        text_y -= part_height
+                    value = cell["parts"][0]
+                    value.drawOn(drawing, x + width - 10 - value_width,
+                                 cursor - 5 - cell["heights"][0])
+                    bar_x = cell_x + label_width + 8
+                    bar_width = width - 20 - label_width - value_width - 24
+                    bar_y = cursor - row["height"] / 2 - 4
+                    drawing.setFillColor(HexColor(self.DARK_AMBER if dark else self.PALE))
+                    drawing.rect(bar_x, bar_y, bar_width, 8, fill=1, stroke=0)
+                    origin = bar_x + (bar_width / 2 if signed else 0)
+                    extent = (bar_width / (2 if signed else 1)) * abs(item.magnitude) / maximum
+                    if extent:
+                        drawing.setFillColor(HexColor(self.AMBER))
+                        drawing.rect(origin - extent if item.magnitude < 0 else origin,
+                                     bar_y, extent, 8, fill=1, stroke=0)
+                    if signed:
+                        drawing.setStrokeColor(HexColor(secondary))
+                        drawing.setLineWidth(0.7)
+                        drawing.line(origin, bar_y - 2, origin, bar_y + 10)
+                else:
+                    drawing.setFillColor(HexColor(self.DARK_AMBER if dark else self.PALE))
+                    drawing.roundRect(cell_x, cursor - row["height"], plan["cell_width"],
+                                      row["height"], 4, fill=1, stroke=0)
+                    text_y = cursor - 8
+                    for part, part_height in zip(cell["parts"], cell["heights"], strict=True):
+                        part.drawOn(drawing, cell_x + 8, text_y - part_height)
+                        text_y -= part_height + 4
+                    if visual.kind in {"timeline", "process"}:
+                        drawing.setFillColor(HexColor(self.AMBER))
+                        drawing.circle(cell_x - 3, cursor - 12, 2.5, fill=1, stroke=0)
+            cursor -= row["height"] + 7
 
     @staticmethod
     def _executive_items(issue: NewspaperIssue) -> list[NewspaperVisualItem]:
@@ -1496,16 +1248,16 @@ class NewspaperRenderer:
         label_style = ParagraphStyle(
             "ExecutiveLensLabel",
             fontName="Helvetica-Bold",
-            fontSize=6.8,
-            leading=8.1,
+            fontSize=8.2,
+            leading=10,
             textColor=self.PAPER,
             alignment=TA_LEFT,
         )
         detail_style = ParagraphStyle(
             "ExecutiveLensDetail",
             fontName="Helvetica",
-            fontSize=5.7,
-            leading=7.0,
+            fontSize=7.4,
+            leading=9.4,
             textColor=self.GOLD,
             alignment=TA_LEFT,
         )
@@ -1536,6 +1288,8 @@ class NewspaperRenderer:
             label.drawOn(drawing, x + 59, row_top - label_height)
             detail = self._paragraph(item.detail, detail_style)
             _, detail_height = detail.wrap(width - 20, 25)
+            if max(15, label_height) + 5 + detail_height > row_height - 8 + 0.1:
+                raise NewspaperRenderError("Complete executive signal exceeds its panel")
             detail.drawOn(
                 drawing,
                 x + 10,
@@ -1551,71 +1305,61 @@ class NewspaperRenderer:
                     row_top - row_height + 4,
                 )
 
+    @staticmethod
+    def _reader_briefs(issue: NewspaperIssue) -> list[str]:
+        tih_ids = {
+            identifier for article in issue.articles
+            if "today in history" in f"{article.section_label} {article.title}".casefold()
+            for identifier in article.story_ids
+        }
+        existing = {
+            _reader_copy_key(sentence)
+            for article in issue.articles
+            for sentence in _complete_sentences(f"{article.standfirst} {article.body}")
+        }
+        seen = set(existing)
+        result = []
+        texts = ([brief.text for brief in issue.briefs if not set(brief.story_ids) & tih_ids]
+                 if issue.briefs else issue.data_points)
+        for text in texts:
+            key = _reader_copy_key(text)
+            if key and key not in seen:
+                result.append(text)
+                seen.add(key)
+        return result
+
     def _draw_briefs(
-        self,
-        drawing,
-        issue: NewspaperIssue,
-        *,
-        x: float,
-        top: float,
-        width: float,
-        height: float,
-    ) -> None:
+        self, drawing, issue: NewspaperIssue, *,
+        x: float, top: float, width: float, height: float,
+    ) -> float:
         from reportlab.lib.colors import HexColor
-        from reportlab.lib.enums import TA_LEFT
         from reportlab.lib.styles import ParagraphStyle
 
+        briefs = self._reader_briefs(issue)
+        if not briefs:
+            return 0
+        blocks = None
+        for size in (8.0, 7.6, 7.2, 6.8):
+            style = ParagraphStyle("Briefs", fontName="Helvetica", fontSize=size,
+                                   leading=size * 1.28, textColor=self.INK)
+            candidate = [self._paragraph(f"{index:02d} / {text}", style)
+                         for index, text in enumerate(briefs, start=1)]
+            heights = [paragraph.wrap(width - 18, 2000)[1] for paragraph in candidate]
+            if sum(heights) + 5 * len(heights) <= height - 38:
+                blocks = list(zip(candidate, heights, strict=True))
+                break
+        if blocks is None:
+            raise NewspaperRenderError("Complete secondary briefs exceed their panel")
+        height = min(height, 38 + sum(block[1] + 5 for block in blocks))
         drawing.setFillColor(HexColor(self.PAPER))
         drawing.roundRect(x, top - height, width, height, 6, fill=1, stroke=0)
-        self._draw_tab(
-            drawing,
-            "Rapid scan // secondary signals",
-            x + 9,
-            top - 9,
-            max_width=width - 18,
-        )
-        tih_story_ids = {
-            story_id
-            for article in issue.articles
-            if "today in history" in f"{article.section_label} {article.title}".casefold()
-            for story_id in article.story_ids
-        }
-        briefs = [
-            brief.text for brief in issue.briefs[:8] if not set(brief.story_ids) & tih_story_ids
-        ] or issue.data_points[:8]
-        if not briefs:
-            briefs = [
-                _limited_words(article.standfirst or article.body, 18)
-                for article in (
-                    [
-                        candidate
-                        for candidate in issue.articles
-                        if not set(candidate.story_ids) & tih_story_ids
-                    ][-4:]
-                )
-            ]
-        brief_style = ParagraphStyle(
-            "Briefs",
-            fontName="Helvetica",
-            fontSize=6.7,
-            leading=8.5,
-            textColor=self.INK,
-            alignment=TA_LEFT,
-            leftIndent=11,
-            firstLineIndent=-11,
-            spaceAfter=4,
-        )
+        self._draw_tab(drawing, "Secondary developments", x + 9, top - 9,
+                       max_width=width - 18)
         cursor = top - 30
-        for index, brief in enumerate(briefs, start=1):
-            paragraph = self._paragraph(
-                f"{index:02d}  /  {_limited_words(brief, 22)}",
-                brief_style,
-            )
-            _, paragraph_height = paragraph.wrap(width - 18, 45)
+        for paragraph, paragraph_height in blocks:
             paragraph.drawOn(drawing, x + 9, cursor - paragraph_height)
             cursor -= paragraph_height + 5
-            if cursor < top - height + 8:
-                break
+        return height
 
     def _draw_pull_quote(
         self,
@@ -1649,6 +1393,8 @@ class NewspaperRenderer:
         )
         quote = self._paragraph(quote_text, quote_style)
         _, quote_height = quote.wrap(width - 24, height - 30)
+        if quote_height > height - 55:
+            raise NewspaperRenderError("Complete editorial takeaway exceeds its panel")
         quote.drawOn(drawing, x + 13, top - 33 - quote_height)
         drawing.setFont("Courier-Bold", 5.8)
         drawing.drawString(x + 13, top - height + 10, "EDITORIAL TAKEAWAY")
@@ -1687,15 +1433,13 @@ class NewspaperRenderer:
             textColor=self.INK,
             alignment=TA_LEFT,
         )
-        body_style = ParagraphStyle(
-            "TeaserBody",
-            fontName="Helvetica",
-            fontSize=6.9,
-            leading=8.8,
-            textColor=self.MUTED,
-            alignment=TA_LEFT,
-        )
         for index, article in enumerate(articles[:card_count]):
+            title = self._paragraph(article.title, title_style)
+            _, title_height = title.wrap(card_width - 16, 2_000)
+            if title_height > card_height - 40:
+                # This is optional navigation; the complete article is printed
+                # on a later page. Never crop its heading to fill a small card.
+                continue
             column = index % 2
             row = index // 2
             card_x = x + column * (card_width + gap)
@@ -1717,32 +1461,7 @@ class NewspaperRenderer:
                 card_top - 13,
                 _short_visual_text(article.section_label, words=3, characters=22).upper(),
             )
-            title = self._paragraph(_limited_words(article.title, 11), title_style)
-            _, title_height = title.wrap(card_width - 16, 52)
             title.drawOn(drawing, card_x + 8, card_top - 22 - title_height)
-            snippet_candidates = [
-                article.standfirst,
-                *_complete_sentences(article.body),
-            ]
-            snippet_limit = 28 if rows == 2 else 42
-            snippet = next(
-                (
-                    candidate
-                    for candidate in snippet_candidates
-                    if candidate.strip() and len(candidate.split()) <= snippet_limit
-                ),
-                "",
-            )
-            if snippet:
-                body = self._paragraph(snippet, body_style)
-                body_available = max(12, card_height - title_height - 49)
-                _, body_height = body.wrap(card_width - 16, body_available)
-                if body_height <= body_available:
-                    body.drawOn(
-                        drawing,
-                        card_x + 8,
-                        card_top - 29 - title_height - body_height,
-                    )
             # Keep the small-card marker consistent with the rising sun used
             # throughout the edition instead of leaving an unexplained dot.
             glyph_x = card_x + card_width - 12
@@ -1833,9 +1552,13 @@ class NewspaperRenderer:
             width=left_width,
         )
         bottom = 39
+        history_card = bool(
+            articles and "today in history"
+            in f"{articles[0].section_label} {articles[0].title}".casefold()
+        )
         blocks = self._fit_single_column(
             articles,
-            width=left_width,
+            width=left_width - (16 if history_card else 0),
             available_height=left_top - bottom,
             feature=True,
         )
@@ -1845,14 +1568,16 @@ class NewspaperRenderer:
             x=margin,
             top=left_top,
             width=left_width,
-            cards=bool(
-                articles
-                and "today in history"
-                in f"{articles[0].section_label} {articles[0].title}".casefold()
-            ),
+            cards=history_card,
         )
         teaser_space = article_bottom - bottom
-        if teaser_space >= 125:
+        left_briefs = bool(self._reader_briefs(issue)) and teaser_space >= 140
+        if left_briefs:
+            self._draw_briefs(
+                drawing, issue, x=margin, top=article_bottom + 2,
+                width=left_width, height=teaser_space - 4,
+            )
+        elif teaser_space >= 125:
             self._draw_teasers(
                 drawing,
                 issue.articles[len(articles) : len(articles) + 4],
@@ -1863,8 +1588,20 @@ class NewspaperRenderer:
             )
 
         sidebar_height = y - bottom
-        executive_height = min(230, sidebar_height * 0.39)
+        executive_rows = []
+        for item in self._executive_items(issue):
+            label = self._paragraph(item.label, ParagraphStyle(
+                "ExecutiveMeasureLabel", fontName="Helvetica-Bold", fontSize=8.2, leading=10,
+            ))
+            detail = self._paragraph(item.detail, ParagraphStyle(
+                "ExecutiveMeasureDetail", fontName="Helvetica", fontSize=7.4, leading=9.4,
+            ))
+            executive_rows.append(max(15, label.wrap(right_width - 65, 2000)[1])
+                                  + 5 + detail.wrap(right_width - 20, 2000)[1] + 8)
+        executive_height = 50 + len(executive_rows) * max(executive_rows, default=0)
         quote_height = min(128, sidebar_height * 0.23)
+        if executive_height + quote_height + 14 > sidebar_height:
+            raise NewspaperRenderError("Complete sidebar copy exceeds the first page")
         briefs_height = sidebar_height - executive_height - quote_height - 14
         self._draw_executive_lens(
             drawing,
@@ -1875,19 +1612,17 @@ class NewspaperRenderer:
             height=executive_height,
         )
         briefs_top = y - executive_height - 7
-        self._draw_briefs(
-            drawing,
-            issue,
-            x=right_x,
-            top=briefs_top,
-            width=right_width,
-            height=briefs_height,
-        )
+        right_briefs_height = 0
+        if not left_briefs:
+            right_briefs_height = self._draw_briefs(
+                drawing, issue, x=right_x, top=briefs_top,
+                width=right_width, height=briefs_height,
+            )
         self._draw_pull_quote(
             drawing,
             issue,
             x=right_x,
-            top=briefs_top - briefs_height - 7,
+            top=briefs_top - right_briefs_height - 7,
             width=right_width,
             height=quote_height,
         )
@@ -1929,6 +1664,7 @@ class NewspaperRenderer:
             visual_height = 194
         else:
             visual_height = 184
+        visual_height = max(visual_height, self._visual_plan(visual, width - 2 * margin)["height"])
         self._draw_visual(
             drawing,
             visual,
@@ -1942,7 +1678,7 @@ class NewspaperRenderer:
         stories_top = visual_top - visual_height - 13
         gap = 12
         column_width = (width - (2 * margin) - gap) / 2
-        columns = self._fit_page_two_articles(articles)
+        columns = self._fit_page_two_articles(articles, visual=visual)
         for index, blocks in enumerate(columns):
             self._draw_article_blocks(
                 drawing,
@@ -2077,7 +1813,13 @@ class NewspaperRenderer:
         pdf_path.parent.mkdir(parents=True, exist_ok=True)
         preview_path.parent.mkdir(parents=True, exist_ok=True)
         page_one_articles, page_two_articles = self._split_articles(issue.articles)
-        page_two_articles, page_three_articles = self._plan_article_pages(page_two_articles)
+        page_one_articles, page_two_articles = self._plan_first_page_articles(
+            issue, page_one_articles, page_two_articles,
+        )
+        visual = issue.visuals[0] if issue.visuals else self._topic_visual(issue)
+        page_two_articles, page_three_articles = self._plan_article_pages(
+            page_two_articles, visual=visual,
+        )
         page_count = 3 if page_three_articles else 2
 
         drawing = canvas.Canvas(str(pdf_path), pagesize=A4)
