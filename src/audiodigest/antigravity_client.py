@@ -30,6 +30,11 @@ def _validation_code(exc: Exception) -> str:
         return "json_invalid"
     text = str(exc).casefold()
     for terms, code in (
+        (("credit editor",), "script_editor_credit"),
+        (("reproduce the selected quotation",), "script_quote_text"),
+        (("name the quotation author",), "script_quote_author"),
+        (("include the closing quotation source",), "script_quote_source"),
+        (("closing_comment",), "script_closing_comment"),
         (("partial", "truncated", "timed-out"), "model_incomplete"),
         (("unsupported story",), "script_unsupported_reference"),
         (("omits required",), "script_coverage"),

@@ -250,6 +250,20 @@ The existing cached pronunciation comparisons can be auditioned locally. There
 is no claim of measured improvement in accent, emotion or perceived naturalness;
 subjective listening feedback and newspaper-design work remain open.
 
+Closing reliability increment implemented on 2026-10-10: the application inserts
+the reserved catalog quotation, author and public reference deterministically;
+the model supplies only an optional original closing_comment turn. Saved scripts
+retain sign_off for desktop, cloud, audio and transcript compatibility. Legacy
+drafts may keep a clearly separate observation; an ambiguous paraphrased quote is
+discarded rather than misattributed or presented as original copy. The existing
+complete-sentence 25-word guard also drops a repeated approved quotation.
+Host configuration, editor credit, coverage, duration ceilings, unsupported-URL
+rejection and original-source factual review remain enforced. No extra model
+call, provider, generation retry loop or runtime-budget change is introduced.
+Fixed allowlisted diagnostics distinguish quote text, author, source, editor
+credit and comment shape without preserving rejected text or private identifiers.
+Production adoption and any retry/time savings remain unmeasured.
+
 Newspaper rendering increment implemented on 2026-10-10: visual panels measure
 and wrap complete values, labels, details, titles and captions before allocating
 page space. All six accepted visual items survive; negative bars extend left of

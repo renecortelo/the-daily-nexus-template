@@ -72,6 +72,11 @@ FAILURE_CODES = {
     "script_unsupported_reference",
     "script_hosts",
     "script_closing",
+    "script_editor_credit",
+    "script_quote_text",
+    "script_quote_author",
+    "script_quote_source",
+    "script_closing_comment",
     "script_length",
     "model_structure",
 }

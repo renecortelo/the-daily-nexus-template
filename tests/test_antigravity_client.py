@@ -41,6 +41,18 @@ class AntigravityParsingTests(TestCase):
             )
         self.assertNotIn("private detail", str(error.exception))
 
+    def test_closing_diagnostics_distinguish_fixed_conditions_without_private_text(self):
+        for message, code in (
+            ("the introduction must credit editor and producer Dario Novelli exactly once",
+             "script_editor_credit"),
+            ("the sign-off must reproduce the selected quotation", "script_quote_text"),
+            ("the sign-off must name the quotation author", "script_quote_author"),
+            ("show notes must include the closing quotation source", "script_quote_source"),
+            ("closing_comment requires a nonempty host and text", "script_closing_comment"),
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(code, _validation_code(ValueError(message + " private detail")))
+
     def test_failed_status_never_accepts_partial_response(self):
         with self.assertRaises(AntigravityCLIError):
             _response_from_cli_output(
