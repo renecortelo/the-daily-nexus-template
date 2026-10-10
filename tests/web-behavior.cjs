@@ -46,6 +46,151 @@ function storageFixture() {
     setItem:(key,value)=>data.set(key,value), removeItem:key=>data.delete(key)};
 }
 
+function playerHarness(extra=[]) {
+  const h=harness(['playbackSelection','isPlaybackSelectionCurrent','playEpisodeAudio','pauseEpisodeAudio',
+    'toggleEpisodeAudio','stopEpisodeAudio','seekEpisodeAudio','syncPlaybackLevels','setPlaybackLevel',
+    'playbackPointerRatio','setupPlaybackProgress','setupWebPlayer','syncPlayer','formatPlaybackTime',
+    'setRangeProgress','selectRelativeEpisode',...extra]);
+  const {context}=h, originalById=context.byId,originalElement=context.element;
+  function decorate(node){
+    if(node.dataset)return node;
+    node.dataset={};node.listeners={};node.flags=new Map();node.captured=new Set();
+    node.classList={toggle(name,value){const next=value===undefined?!node.flags.get(name):value;node.flags.set(name,next);return next;}};
+    node.addEventListener=(name,callback)=>(node.listeners[name]||=[]).push(callback);
+    node.dispatch=(name,event={})=>Promise.all((node.listeners[name]||[]).map(callback=>callback({target:node,currentTarget:node,...event})));
+    node.getBoundingClientRect=()=>({left:10,width:100});
+    node.setPointerCapture=id=>node.captured.add(id);node.hasPointerCapture=id=>node.captured.has(id);
+    node.releasePointerCapture=id=>node.captured.delete(id);
+    return node;
+  }
+  context.byId=id=>decorate(originalById(id));context.element=(...args)=>decorate(originalElement(...args));
+  const audio=context.byId('episode-audio');Object.assign(audio,{src:'https://example.com/audio.mp3',duration:120,
+    currentTime:0,paused:true,ended:false,volume:1,playbackRate:1});
+  const calls={play:0,pause:0,saved:[],relative:[],alerts:[]};
+  audio.play=async()=>{calls.play++;audio.paused=false;await audio.dispatch('play');};
+  audio.pause=()=>{calls.pause++;audio.paused=true;audio.dispatch('pause');};
+  context.appState.activeEpisode={id:'first',title:'Synthetic',audioURL:audio.src,transcript:[],references:[]};
+  context.appState.episodes=[{id:'first'},{id:'second'}];
+  context.savePlaybackPosition=force=>calls.saved.push(force);
+  context.showAlert=(...args)=>calls.alerts.push(args);
+  context.openArchivedEpisode=(episode,autoplay)=>calls.relative.push([episode.id,autoplay]);
+  context.loadOlderArchive=()=>{};context.restorePlaybackPosition=()=>{};
+  context.renderPlayerDetails=()=>{};context.setEditionMode=()=>{};context.adjustEditionZoom=()=>{};
+  context.byId('player-volume').value='85';context.byId('player-speed').value='100';
+  return {...h,audio,calls};
+}
+
+test('player setup is idempotent and displayed defaults match actual audio and both level controls', () => {
+  const {context,audio}=playerHarness();context.setupWebPlayer();context.setupWebPlayer();
+  assert.equal(audio.volume,0.85);assert.equal(audio.playbackRate,1);assert.equal(audio.preservesPitch,true);
+  for(const prefix of ['player','mini']) {
+    assert.equal(context.byId(`${prefix}-volume`).value,'85');
+    assert.equal(context.byId(`${prefix}-speed-value`).textContent,'1.0x');
+    for(const action of ['play','pause','stop','next','previous'])assert.equal(context.byId(`${prefix}-${action}-button`).listeners.click.length,1);
+  }
+  for(const id of ['episode-progress','mini-player-progress'])assert.equal(context.byId(id).listeners.pointerdown.length,1);
+  for(const event of ['play','pause','timeupdate','ratechange','volumechange'])assert.equal(audio.listeners[event].length,1);
+});
+
+test('main and compact transport buttons share play, pause, stop and relative episode behavior', async () => {
+  const {context,audio,calls}=playerHarness();context.setupWebPlayer();
+  for(const prefix of ['player','mini']) {
+    await context.byId(`${prefix}-play-button`).dispatch('click');assert.equal(audio.paused,false);
+    await context.byId(`${prefix}-pause-button`).dispatch('click');assert.equal(audio.paused,true);
+    await context.byId(`${prefix}-pause-button`).dispatch('click');assert.equal(audio.paused,false);
+    audio.currentTime=30;await context.byId(`${prefix}-stop-button`).dispatch('click');
+    assert.equal(audio.currentTime,0);assert.equal(audio.paused,true);assert.equal(context.byId('mini-player').hidden,true);
+    await context.byId(`${prefix}-next-button`).dispatch('click');
+    await context.byId(`${prefix}-previous-button`).dispatch('click');
+  }
+  assert.deepEqual(calls.relative,[['second',false],['second',false],['second',false],['second',false]]);
+  const playCalls=calls.play;context.appState.authorized=false;
+  await context.byId('mini-play-button').dispatch('click');assert.equal(calls.play,playCalls);
+});
+
+test('level updates stay synchronized, preserve pitch and reject invalid values and signed-out changes', async () => {
+  const {context,audio}=playerHarness();context.setupWebPlayer();
+  for(const prefix of ['player','mini']){
+    const volume=context.byId(`${prefix}-volume`);volume.value='35';await volume.dispatch('input');assert.equal(audio.volume,0.35);
+    const speed=context.byId(`${prefix}-speed`);speed.value='200';audio.preservesPitch=false;await speed.dispatch('input');
+    assert.equal(audio.playbackRate,2);assert.equal(audio.preservesPitch,true);
+    for(const other of ['player','mini'])assert.equal(context.byId(`${other}-speed`).attributes['aria-valuetext'],'2.0x');
+  }
+  assert.equal(context.setPlaybackLevel('speed',0),true);assert.equal(audio.playbackRate,0.75);
+  context.setPlaybackLevel('volume',200);assert.equal(audio.volume,1);
+  for(const value of [NaN,Infinity,'bad','',null,{}])assert.equal(context.setPlaybackLevel('speed',value),false);
+  audio.volume=0.22;audio.playbackRate=1.5;await audio.dispatch('volumechange');await audio.dispatch('ratechange');
+  assert.equal(context.byId('mini-volume-value').textContent,'22%');assert.equal(context.byId('player-speed-value').textContent,'1.5x');
+  context.appState.activeEpisode=null;assert.equal(context.setPlaybackLevel('volume',50),true); // Choose levels before selecting an edition.
+  context.appState.authorized=false;assert.equal(context.setPlaybackLevel('volume',90),false);assert.equal(audio.volume,0.5);
+});
+
+test('shared seeking clamps keyboard, chapter and transcript positions and rejects unready or invalid durations', async () => {
+  const {context,audio,calls,images}=playerHarness(['renderPlayerDetails']);
+  // Load the production transcript renderer after the fixture's harmless setup stub.
+  vm.runInContext(extract('renderPlayerDetails'),context);context.setupWebPlayer();
+  assert.equal(context.seekEpisodeAudio(999,true),true);assert.equal(audio.currentTime,120);
+  assert.equal(context.seekEpisodeAudio(-10),true);assert.equal(audio.currentTime,0);
+  context.byId('episode-progress').value='25';await context.byId('episode-progress').dispatch('input');assert.equal(audio.currentTime,30);
+  assert.equal(context.byId('mini-player-progress').value,'25');
+  context.byId('player-chapters').value='60';await context.byId('player-chapters').dispatch('change');assert.equal(audio.currentTime,60);
+  context.appState.activeEpisode.transcript=[{host:'Dalia',text:'Synthetic paragraph',startMs:45000}];
+  context.renderPlayerDetails('transcript');await images.at(-1).dispatch('click');assert.equal(audio.currentTime,45);
+  assert(calls.saved.includes(true));
+  for(const duration of [NaN,Infinity,0,-1]){audio.duration=duration;assert.equal(context.seekEpisodeAudio(60,true),false);}
+  audio.duration=120;for(const seconds of [NaN,Infinity,'60'])assert.equal(context.seekEpisodeAudio(seconds),false);
+  context.appState.authorized=false;assert.equal(context.seekEpisodeAudio(60),false);assert.equal(audio.currentTime,45);
+});
+
+test('both timelines handle touch capture, hover, bounds, cancellation and wrong pointer IDs', async () => {
+  const {context,audio}=playerHarness();context.setupWebPlayer();
+  for(const id of ['episode-progress','mini-player-progress']){
+    const control=context.byId(id);
+    await control.dispatch('pointerdown',{pointerId:1,clientX:35,button:0});assert.equal(audio.currentTime,30);
+    assert.equal(control.captured.has(1),true);
+    await control.dispatch('pointermove',{pointerId:2,clientX:90});assert.equal(audio.currentTime,30);
+    await control.dispatch('pointermove',{pointerId:1,clientX:60});assert.equal(audio.currentTime,60);assert.equal(control.title,'Seek to 01:00');
+    await control.dispatch('pointercancel',{pointerId:1});assert.equal(control.captured.has(1),false);
+    await control.dispatch('pointermove',{pointerId:1,clientX:100});assert.equal(audio.currentTime,60);
+    await control.dispatch('pointerdown',{pointerId:3,clientX:999,button:0});assert.equal(audio.currentTime,120);
+    await control.dispatch('lostpointercapture',{pointerId:3});await control.dispatch('pointermove',{pointerId:3,clientX:35});assert.equal(audio.currentTime,120);
+    await control.dispatch('pointerdown',{pointerId:4,clientX:35,button:2});assert.equal(audio.currentTime,120);
+    control.getBoundingClientRect=()=>({left:0,width:0});await control.dispatch('pointerdown',{pointerId:5,clientX:35,button:0});assert.equal(audio.currentTime,120);
+  }
+});
+
+test('a drag cannot seek another episode or survive logout and a newer sign-in', async () => {
+  const {context,audio}=playerHarness();context.setupWebPlayer();const control=context.byId('episode-progress');
+  await control.dispatch('pointerdown',{pointerId:1,clientX:35,button:0});
+  context.appState.activeEpisode={id:'second'};audio.src='https://example.com/second.mp3';audio.currentTime=0;
+  await control.dispatch('pointermove',{pointerId:1,clientX:60});control.value='75';await control.dispatch('input');assert.equal(audio.currentTime,0);
+  await control.dispatch('pointerup',{pointerId:1});assert.equal(control.captured.size,0);
+  await control.dispatch('pointerdown',{pointerId:2,clientX:35,button:0});audio.currentTime=0;
+  context.appState.authorized=false;await control.dispatch('pointermove',{pointerId:2,clientX:90});assert.equal(audio.currentTime,0);
+  context.appState.authorized=true;context.appState.authEpoch++;
+  await control.dispatch('pointermove',{pointerId:2,clientX:90});assert.equal(audio.currentTime,0);
+});
+
+test('play errors are caught but old selections and logged-out promises cannot show stale notices', async () => {
+  const {context,audio,calls}=playerHarness();
+  let reject;audio.play=()=>new Promise((_,failure)=>{reject=failure;});
+  const same=context.playEpisodeAudio();reject(Error('Synthetic failure'));await same;assert.equal(calls.alerts.length,1);
+  calls.alerts=[];const old=context.playEpisodeAudio();context.appState.activeEpisode={id:'second'};
+  reject(Error('Synthetic failure'));await old;assert.equal(calls.alerts.length,0);
+  const retired=context.playEpisodeAudio();context.appState.authorized=false;reject(Error('Synthetic failure'));
+  await retired;assert.equal(calls.alerts.length,0);
+});
+
+test('Media Session uses the same guarded finite seek and transport actions as both in-app surfaces', async () => {
+  const {context,audio}=playerHarness();context.navigator={mediaSession:{}};context.setupWebPlayer();
+  const actions=context.appState.mediaActions;
+  actions.seekto({seekTime:70});assert.equal(audio.currentTime,70);
+  actions.seekbackward({seekOffset:20});assert.equal(audio.currentTime,50);
+  actions.seekforward({seekOffset:999});assert.equal(audio.currentTime,120);
+  audio.duration=Infinity;actions.seekto({seekTime:70});assert.equal(audio.currentTime,120);
+  audio.duration=120;context.appState.authorized=false;actions.seekto({seekTime:0});await actions.play();assert.equal(audio.currentTime,120);
+});
+
 test('resource visibility distinguishes measurements, forecasts and unknown account balances', () => {
   const {context,nodes}=harness(['metricNumber','renderResourceSummary']);
   context.timestampText=()=> 'A TIME'; context.durationText=value=>`${value/1000}s`;

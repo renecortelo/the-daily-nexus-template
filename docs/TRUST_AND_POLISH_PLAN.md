@@ -308,9 +308,36 @@ real future editions and accessibility/mobile UX remain to be evaluated.
 
 ## 6. Mobile accessibility, UX and maintainability
 
-Status: interaction/accessibility, semantic reading, shared parameter-form and
-incremental monitor increments implemented on 2026-10-10; remaining module consolidation and real Safari/PWA,
+Status: interaction/accessibility, semantic reading, shared parameter-form,
+incremental monitor and shared playback increments implemented on 2026-10-10;
+remaining module consolidation and real Safari/PWA,
 VoiceOver and software-keyboard testing remain open.
+
+Shared playback increment implemented on 2026-10-10: the main and compact
+players use one surface mapping and transport, seeking and level controller.
+Chapters, transcript links and supported OS Media Session actions use the same
+authorized, finite-duration, bounded seek path. Both views synchronize times,
+progress, Pause/Resume descriptions, playing state, volume and speed. Native
+volume/rate events also update both views. The displayed initial 85% volume is
+now applied to the audio element instead of leaving its native 100% default;
+speed remains 0.75–2.0x with the browser pitch-preservation flags enabled.
+
+Setup is idempotent. Pointer capture loss/cancellation ends a drag safely;
+selection/source/session guards prevent an old gesture from seeking a different
+episode or a later sign-in. Rejected play promises are caught, and late errors
+cannot show a stale notice after a selection change or logout. Existing archive
+availability checks, bounded session bookmarks and logout clearing remain.
+There is no new persistence, asset/module dependency, provider/model/cloud
+operation, generation, schedule or runtime-limit change; CSS/design is unchanged.
+
+Eight focused regressions bring the browser suite to 62. Local synthetic Chromium
+checks at 320, 390, 768 and 1280 pixels exercise main/compact transport, levels,
+pitch flags, keyboard/pointer seeking, transcript highlighting, stale gestures,
+logout guards and bounds across all five views, with provider requests blocked.
+These checks do not certify actual media decoding, sound quality, real Safari,
+iOS volume support, PWA or assistive technologies. The shell advances to 4.1.14 /
+cache v4-44. Logic is consolidated within the existing app file; further module
+extraction and the deferred desktop identity activation remain open.
 
 Incremental monitor implemented on 2026-10-10: rows are reconciled by immutable
 Firestore document ID. Identical snapshots keep the same text nodes, cards and
