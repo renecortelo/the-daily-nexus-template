@@ -70,6 +70,10 @@ stay in history but cannot be selected for playback/reading. Local archives are
 not deleted. A queued item's **WAKE RUNNER** retries dispatch without creating
 another generation; **REQUEUE** creates an intentional fresh failed/expired retry.
 
+Browser/automation authorization can be separated through the explicit
+[runner identity migration](docs/RUNNER_IDENTITY.md). Complete its activation to
+enforce browser session expiry on the server without breaking scheduled runs.
+
 ## Read this first
 
 This repository is a **public source template**. It contains no real account or

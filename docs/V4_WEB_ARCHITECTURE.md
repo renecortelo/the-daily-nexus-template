@@ -38,6 +38,14 @@ The cloud runner uses four independent revocable grants:
 - a Firebase owner refresh token for owner-scoped Firestore;
 - a Firebase CLI refresh token for static Hosting and rule deployment.
 
+The owner refresh token is legacy pairing. The explicit
+[runner identity migration](RUNNER_IDENTITY.md) replaces it with a dedicated
+Firebase Anonymous identity bound to one owner's data. It cannot edit schedules,
+owner records or clock projections. When its grant is active/revoked, browser
+access is rejected server-side one hour after original authentication, without
+limiting unattended token age. Prepared/absent grants retain compatibility until
+activation. Idle lock/logout are not immediate server-side revocation.
+
 They persist as encrypted GitHub Actions secrets until the operator rotates or
 deletes them. A workflow step writes temporary owner-only copies. Later steps
 receive file paths, not secret environment variables. Cleanup removes the

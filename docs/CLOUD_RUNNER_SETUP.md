@@ -89,6 +89,12 @@ the incremental private release process in
 [CLOUD_CLOCK_SETUP.md](CLOUD_CLOCK_SETUP.md), so an existing private media
 archive and the exact cloud-clock Content Security Policy are preserved.
 
+Before considering the browser session gate complete, follow
+[RUNNER_IDENTITY.md](RUNNER_IDENTITY.md) to separate automation from Google browser
+authorization. Deploying the rules alone retains legacy compatibility. The
+explicit migration replaces only `TDN_FIREBASE_REFRESH_TOKEN`, and does not
+change Gmail, Antigravity, publishing grants, schedules or existing media.
+
 ## Private proof run
 
 1. Push the V4 branch.
