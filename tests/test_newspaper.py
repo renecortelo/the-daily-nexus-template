@@ -28,7 +28,7 @@ class NewspaperTests(TestCase):
         article = "The source documented a full codebase rewrite into Rust in 11 days."
         self.assertFalse(
             _bullet_adds_distinct_information(
-                "A full codebase rewrite into Rust took 11 days.",
+                "The source documented a full codebase rewrite into Rust in 11 days.",
                 article,
             )
         )

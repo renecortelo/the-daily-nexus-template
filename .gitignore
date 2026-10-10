@@ -68,3 +68,4 @@ cloud-clock/.wrangler/
 cloud-clock/.dev.vars
 cloud-clock/.dev.vars.*
 !cloud-clock/.dev.vars.example
+output/

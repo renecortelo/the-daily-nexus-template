@@ -232,6 +232,30 @@ The existing cached pronunciation comparisons can be auditioned locally. There
 is no claim of measured improvement in accent, emotion or perceived naturalness;
 subjective listening feedback and newspaper-design work remain open.
 
+Newspaper rendering increment implemented on 2026-10-10: visual panels measure
+and wrap complete values, labels, details, titles and captions before allocating
+page space. All six accepted visual items survive; negative bars extend left of
+a shared zero and zero has no filled extent. Invalid/nonfinite numeric magnitudes
+fail validation. The renderer no longer generates repeated article excerpts as
+secondary briefs or teaser text. Optional navigation repeats titles only.
+First-page spare space can carry complete additional articles, preserving order
+and leaving reporting on page two. Article/card padding and text widths now match
+their drawing measurements. Article body floors rise to 8.1 pt for features and
+7.7 pt for compact columns; executive copy and visual detail are larger too.
+Three pages remain the maximum; oversized complete panels fail explicitly rather
+than silently clipping copy or skipping briefs. The optional-paper fallback still
+allows a verified podcast to publish; no new model call or rendering repair loop.
+
+Automatic prose/bullet deduplication now removes only exact normalized sentence
+copies, including within an article. Similar word sets can describe different
+numbers, conditions or reversed actors; they are preserved for the existing
+original-source/semantic reviewer. This is not a guarantee of zero semantic
+repetition. Factual gates, newspaper generation settings, two-page target,
+runner deadline and cost controls remain. A fictional two-page proof was rendered
+and visually reviewed locally; no mail, production edition or feed was accessed.
+Generated proof files stay excluded from both repositories. Semantic quality on
+real future editions and accessibility/mobile UX remain to be evaluated.
+
 ## 6. Mobile accessibility, UX and maintainability
 
 Retain the retrofuturist identity; improve invisible touch targets, non-drag
