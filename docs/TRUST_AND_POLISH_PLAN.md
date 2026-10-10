@@ -308,9 +308,26 @@ real future editions and accessibility/mobile UX remain to be evaluated.
 
 ## 6. Mobile accessibility, UX and maintainability
 
-Status: interaction/accessibility and semantic reading increments implemented
-on 2026-10-10; maintainability consolidation and real Safari/PWA,
+Status: interaction/accessibility, semantic reading and shared parameter-form
+increments implemented on 2026-10-10; remaining module consolidation and real Safari/PWA,
 VoiceOver and software-keyboard testing remain open.
+
+Shared parameter increment implemented on 2026-10-10: GEN, SCHED and favorites
+use one explicit field allowlist, serializer, hydration/preflight and control
+synchronizer. Temporarily disabled voice, tone, dialogue and newspaper-scale
+preferences remain configured instead of being lost through FormData omission.
+Host gender restrictions, distinct duo voices and automatic web publication remain.
+Missing legacy fields reset to markup/default values, not a previously selected
+record's mailbox or editorial preferences. Missing mailbox/run-name values remain
+empty until entered (schedule run-name retains its existing schedule-name fallback).
+Malformed sections/select values report persistent errors before replacing edits.
+Dates, timing, weekdays, enabled state and record identity are separate from the
+parameter allowlist; editing a schedule retains its existing explicit handling.
+Initialization is idempotent. No saved records are migrated or silently updated;
+there is no layout redesign, additional storage, cloud read, model call, schedule
+change, provider or runtime-limit change. Six focused browser regressions bring
+the suite to 48. The shell advances to 4.1.12 / cache v4-42. Incremental monitor
+rendering and further module consolidation remain open.
 
 Reading increment implemented on 2026-10-10: newly published ready newspapers
 include a bounded, allowlisted reading projection in the existing owner archive

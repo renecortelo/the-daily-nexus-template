@@ -28,13 +28,15 @@ function harness(names) {
     element(_tag,_class,text){const image=node(); if(text!==undefined) image.textContent=text; images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearEditionControls(){},
+    syncParameterControls(form){context.syncHostControls?.(form);context.syncNewspaperControls?.(form);},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
     window: {clearTimeout(){}, matchMedia(){return {matches:false};}},
     showAlert(){}, dismissAlert(){}, firebaseErrorMessage(){return 'safe error';},
   };
   vm.createContext(context);
-  vm.runInContext(names.map(extract).join('\n'),context);
+  const parameterConstants=source.slice(source.indexOf('const GENERATION_PARAMETER_DEFAULTS'),source.indexOf('const appState'));
+  vm.runInContext(parameterConstants+'\n'+names.map(extract).join('\n'),context);
   return {context,nodes,images};
 }
 
@@ -250,7 +252,7 @@ test('legacy device favorites remain visible and are not silently erased on logo
 });
 
 test('newspaper option preserves edition scale when disabled and defaults on for old favorites', () => {
-  const {context}=harness(['parameterData','syncNewspaperControls','applyParametersToForm']);
+  const {context}=harness(['parameterData','syncNewspaperControls','applyParametersToForm','parseSections']);
   const values=new Map([['runName','Example'],['gmailLabel','Example/News'],['hostCount','1'],['includeNewspaper','on']]);
   context.FormData=class {get(key){return values.get(key);}};
   context.sectionValues=()=>['Data'];
@@ -268,7 +270,146 @@ test('newspaper option preserves edition scale when disabled and defaults on for
   assert.equal(form.elements.editionScale.disabled,false);
   context.applyParametersToForm(form,{includeNewspaper:false,sections:['Data']});
   assert.equal(form.elements.includeNewspaper.checked,false);
-  assert.deepEqual(form.sections,['Data']);
+  assert.deepEqual(Array.from(form.sections),['Data']);
+});
+
+function parameterFormFixture(scheduled=false) {
+  const choices={hostCount:['1','2'],soloName:['Dalia','Nox'],dialogueStyle:['broadcast','conversation'],
+    primaryVoice:['af_heart','bf_emma','af_bella','am_michael','am_eric','am_puck'],
+    secondaryVoice:['af_heart','bf_emma','af_bella','am_michael','am_eric','am_puck'],
+    primaryTone:['warm','neutral','dry_wit','fun','formal'],secondaryTone:['dry_wit','neutral','warm','fun','formal'],
+    editionScale:['standard','focused','comprehensive'],evidenceMode:['newsletter_first','newsletter_only']};
+  if(scheduled) choices.dateMode=['previous_day','today'];
+  const controls={};
+  for(const [name,values] of Object.entries(choices)) {
+    controls[name]={value:values[0],disabled:false,options:values.map(value=>({value,defaultSelected:false,
+      dataset:{gender:value.startsWith('am_')?'Male':'Female'}})),listeners:[],
+      addEventListener(event,callback){this.listeners.push({event,callback});}};
+    Object.defineProperty(controls[name],'selectedOptions',{get(){return this.options.filter(option=>option.value===this.value);}});
+  }
+  for(const name of ['runName','gmailLabel','requestedDate','scheduleId','name','startTime','readyBy','timezone']) controls[name]={value:''};
+  for(const name of ['includeTih','includeNewspaper','enabled']) controls[name]={checked:true,listeners:[],
+    addEventListener(event,callback){this.listeners.push({event,callback});}};
+  controls.namedItem=name=>controls[name];
+  const label=name=>({querySelector(){return controls[name];},classList:{toggle(){}}});
+  const labels={'[data-solo-control]':label('soloName'),'[data-duo-control]':label('dialogueStyle')};
+  const weekdays=Array.from({length:7},(_,value)=>({value:String(value),checked:false}));
+  return {elements:controls,dataset:{},sections:[],weekdays,
+    querySelector(selector){return labels[selector];},querySelectorAll(selector){
+      return selector==='[data-secondary-control]'?[label('secondaryVoice'),label('secondaryTone')]:weekdays;
+    },scrollIntoView(){this.scrolled=true;}};
+}
+
+function parameterHarness(extra=[]) {
+  const result=harness(['parameterData','applyParametersToForm','parseSections','syncParameterControls',
+    'syncHostControls','syncNewspaperControls',...extra]);
+  result.context.sectionValues=form=>form.sections;
+  result.context.setSections=(form,sections)=>{form.sections=Array.from(sections);};
+  return result;
+}
+
+test('shared forms retain inactive preferences and always publish without serializing timing or identity', () => {
+  const {context}=parameterHarness();
+  const parameters={runName:' Synthetic run ',gmailLabel:'Example/News',hostCount:1,soloName:'Nox',
+    dialogueStyle:'conversation',primaryVoice:'am_eric',primaryTone:'formal',secondaryVoice:'am_puck',secondaryTone:'fun',
+    includeNewspaper:false,includeTih:false,editionScale:'focused',evidenceMode:'newsletter_only',sections:['Data Engineering'],publish:false};
+  for(const scheduled of [false,true]) {
+    const form=parameterFormFixture(scheduled);
+    context.applyParametersToForm(form,parameters);
+    assert.equal(form.elements.hostCount.disabled,false);
+    assert.equal(form.elements.secondaryVoice.disabled,true); assert.equal(form.elements.secondaryTone.disabled,true);
+    assert.equal(form.elements.dialogueStyle.disabled,true); assert.equal(form.elements.editionScale.disabled,true);
+    const read=context.parameterData(form);
+    assert.equal(read.secondaryVoice,'am_puck'); assert.equal(read.secondaryTone,'fun');
+    assert.equal(read.dialogueStyle,'conversation'); assert.equal(read.editionScale,'focused');
+    assert.equal(read.publish,true); assert.equal(read.runName,'Synthetic run');
+    assert.equal(read.dateMode,scheduled?'previous_day':'today');
+    assert(!('timezone' in read)); assert(!('scheduleId' in read)); assert(!('requestedDate' in read));
+    form.elements.hostCount.value='2'; context.syncParameterControls(form);
+    assert.equal(form.elements.soloName.disabled,true); assert.equal(form.elements.dialogueStyle.disabled,false);
+    assert.equal(form.elements.secondaryVoice.disabled,false); assert.equal(form.elements.primaryVoice.value,'af_heart');
+    assert.equal(form.elements.secondaryVoice.value,'am_puck');
+  }
+});
+
+test('partial legacy records reset omitted fields instead of inheriting a previous mailbox or host', () => {
+  const {context}=parameterHarness();
+  const form=parameterFormFixture(true); form.elements.requestedDate.value='2026-10-08';
+  form.elements.startTime.value='05:30';
+  context.applyParametersToForm(form,{runName:'Earlier run',gmailLabel:'Example/Old',hostCount:2,
+    primaryVoice:'af_bella',primaryTone:'formal',secondaryVoice:'am_eric',secondaryTone:'formal',dateMode:'today',
+    includeTih:false,includeNewspaper:false,editionScale:'comprehensive',sections:['Old']});
+  context.applyParametersToForm(form,{sections:['New'],timezone:'Asia/Tokyo',requestedDate:'2026-01-01',startTime:'01:00'});
+  const read=context.parameterData(form);
+  assert.equal(read.runName,''); assert.equal(read.gmailLabel,''); assert.equal(read.hostCount,1);
+  assert.equal(read.primaryTone,'warm'); assert.equal(read.secondaryTone,'dry_wit');
+  assert.equal(read.primaryVoice,'af_heart'); assert.equal(read.secondaryVoice,'am_michael');
+  assert.equal(read.dateMode,'previous_day'); assert.equal(read.includeTih,true); assert.equal(read.includeNewspaper,true);
+  assert.equal(read.editionScale,'standard'); assert.deepEqual(form.sections,['New']);
+  assert.equal(form.elements.requestedDate.value,'2026-10-08'); assert.equal(form.elements.startTime.value,'05:30');
+  form.elements.primaryTone.options[1].defaultSelected=true;
+  context.applyParametersToForm(form,{}); assert.equal(form.elements.primaryTone.value,'neutral');
+});
+
+test('invalid saved parameters fail preflight without partially replacing current edits', () => {
+  const {context}=parameterHarness(); const form=parameterFormFixture();
+  context.applyParametersToForm(form,{runName:'Keep this',gmailLabel:'Example/Keep',sections:['Keep']});
+  const before=JSON.stringify(context.parameterData(form));
+  for(const invalid of [null,[],{runName:'Replace',primaryTone:'unavailable'},{runName:'Replace',includeTih:'false'},
+    {runName:'Replace',sections:'Not a list'},{runName:'Replace',sections:[7]},
+    {runName:'Replace',sections:['AI','ai']},{runName:'Replace',sections:['Cloud/Software']},
+    {runName:'Replace',sections:Array.from({length:11},(_,i)=>`Section ${i}`)}]) {
+    assert.throws(()=>context.applyParametersToForm(form,invalid));
+    assert.equal(JSON.stringify(context.parameterData(form)),before);
+  }
+});
+
+test('schedule edit shares hydration but keeps schedule timing and days separate', () => {
+  const {context}=parameterHarness(['editSchedule','fillSelect']); const form=parameterFormFixture(true);
+  context.scheduleForm=form; context.appState.schedules=new Map([
+    ['first',{name:'First',startTime:'05:15',readyBy:'06:30',timezone:'UTC',weekdays:[1,3],enabled:false,
+      parameters:{gmailLabel:'Example/First',hostCount:2,secondaryTone:'formal',sections:['AI']}}],
+    ['second',{name:'Second',parameters:{gmailLabel:'Example/Second'}}],
+    ['invalid',{name:'Do not load',parameters:{primaryTone:'unavailable'}}],
+  ]);
+  const alerts=[]; context.showAlert=(...args)=>alerts.push(args);
+  context.editSchedule('first'); assert.equal(form.elements.runName.value,'First');
+  assert.equal(form.elements.scheduleId.value,'first'); assert.equal(form.elements.startTime.value,'05:15');
+  assert.equal(form.elements.readyBy.value,'06:30');
+  assert.deepEqual(form.weekdays.filter(day=>day.checked).map(day=>Number(day.value)),[1,3]);
+  assert.equal(form.elements.enabled.checked,false);
+  context.editSchedule('second'); assert.equal(form.elements.runName.value,'Second');
+  assert.equal(form.elements.gmailLabel.value,'Example/Second'); assert.equal(form.elements.secondaryTone.value,'dry_wit');
+  assert.equal(form.elements.hostCount.value,'1'); assert.deepEqual(form.sections,[]);
+  const before=JSON.stringify(context.parameterData(form));
+  context.editSchedule('invalid'); assert.equal(JSON.stringify(context.parameterData(form)),before);
+  assert.equal(form.elements.scheduleId.value,'second'); assert.equal(alerts.at(-1)[1],true);
+});
+
+test('shared initialization is idempotent and host controls stay switchable on both screens', () => {
+  const {context}=parameterHarness(['setupParameterForm']); let setups=0;
+  context.setupSectionEditor=()=>{setups++;};
+  for(const scheduled of [false,true]) {
+    const form=parameterFormFixture(scheduled);
+    context.setupParameterForm(form); context.setupParameterForm(form);
+    for(const name of ['hostCount','soloName','includeNewspaper']) assert.equal(form.elements[name].listeners.length,1);
+    form.elements.hostCount.value='2';form.elements.hostCount.listeners[0].callback();
+    assert.equal(form.elements.hostCount.disabled,false); assert.equal(form.elements.soloName.disabled,true);
+    assert.equal(form.elements.secondaryTone.disabled,false);
+    form.elements.hostCount.value='1';form.elements.soloName.value='Nox';form.elements.soloName.listeners[0].callback();
+    assert.equal(form.elements.soloName.disabled,false);assert.equal(form.elements.secondaryTone.disabled,true);
+    assert.equal(form.elements.primaryVoice.value,'am_michael');
+  }
+  assert.equal(setups,2);
+});
+
+test('invalid favorite reports a persistent error without replacing the current favorite name', () => {
+  const {context}=parameterHarness(['loadFavoriteProfile']);context.generationForm=parameterFormFixture();
+  context.byId('profile-name').value='Keep this';context.byId('profile-picker').value='Invalid example';
+  context.savedProfiles=()=>[{name:'Invalid example',parameters:{primaryTone:'unavailable'}}];
+  const alerts=[];context.showAlert=(...args)=>alerts.push(args);
+  context.loadFavoriteProfile();assert.equal(context.byId('profile-name').value,'Keep this');
+  assert.equal(alerts.length,1);assert.equal(alerts[0][1],true);
 });
 test('late reader responses cannot change the selected PDF or content', () => {
   const {context,images,nodes}=harness(['selectEdition','renderEditionView','renderEditionPages']);

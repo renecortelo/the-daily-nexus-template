@@ -33,6 +33,13 @@ const SESSION_MAX_MS = 60 * 60 * 1000;
 const CONSOLE_SESSION_KEY = "tdn-console-session-v1";
 const ARCHIVE_PAGE_SIZE = 100;
 const EDITION_ZOOM_STEPS = Object.freeze([0.75, 1, 1.25, 1.5, 1.75]);
+// One allowlist for GEN, SCHED and favorites; timing and identity are not parameters.
+const GENERATION_PARAMETER_DEFAULTS = Object.freeze({
+  runName: "", gmailLabel: "", hostCount: 1, soloName: "Dalia",
+  dialogueStyle: "broadcast", primaryVoice: "af_heart", primaryTone: "warm",
+  secondaryVoice: "am_michael", secondaryTone: "dry_wit", dateMode: "today",
+  includeTih: true, includeNewspaper: true, editionScale: "standard", evidenceMode: "newsletter_first",
+});
 const LOCAL_VOICE_GENDERS = Object.freeze({
   af_heart: "Female",
   bf_emma: "Female",
@@ -189,8 +196,7 @@ function clearPrivateForms() {
   for (const form of [generationForm, scheduleForm]) {
     form.reset();
     setSections(form, []);
-    syncHostControls(form);
-    syncNewspaperControls(form);
+    syncParameterControls(form);
   }
   generationForm.elements.requestedDate.value = generationForm.elements.requestedDate.max;
   byId("profile-name").value = "";
@@ -626,27 +632,16 @@ function syncHostControls(form) {
 }
 
 function parameterData(form) {
-  const values = new FormData(form);
-  return {
-    runName: String(values.get("runName") || "").trim(),
-    gmailLabel: String(values.get("gmailLabel") || "").trim(),
-    sections: sectionValues(form),
-    hostCount: Number(values.get("hostCount")),
-    soloName: String(values.get("soloName") || "Dalia"),
-    dialogueStyle: String(values.get("dialogueStyle") || "broadcast"),
-    primaryVoice: String(values.get("primaryVoice") || "af_heart"),
-    primaryTone: String(values.get("primaryTone") || "warm"),
-    secondaryVoice: String(values.get("secondaryVoice") || "am_michael"),
-    secondaryTone: String(values.get("secondaryTone") || "dry_wit"),
-    // The web archive only exists once a verified cloud run is published.
-    // Local-only staging remains available through the desktop/CLI workflow.
-    publish: true,
-    dateMode: String(values.get("dateMode") || "today"),
-    includeTih: values.get("includeTih") === "on",
-    includeNewspaper: values.get("includeNewspaper") === "on",
-    editionScale: String(form.elements.editionScale.value || "standard"),
-    evidenceMode: String(values.get("evidenceMode") || "newsletter_first"),
-  };
+  // Read configured values, including temporarily inactive host/paper controls.
+  // FormData omits disabled controls and would erase their saved preferences.
+  const parameters = { sections: sectionValues(form), publish: true };
+  for (const [name, fallback] of Object.entries(GENERATION_PARAMETER_DEFAULTS)) {
+    const control = form.elements.namedItem(name);
+    parameters[name] = typeof fallback === "boolean" ? (control ? control.checked : fallback)
+      : typeof fallback === "number" ? Number(control?.value || fallback)
+        : String(control?.value ?? fallback).trim();
+  }
+  return parameters;
 }
 
 function validateParameters(parameters) {
@@ -783,24 +778,54 @@ function syncNewspaperControls(form) {
   form.elements.editionScale.disabled = !form.elements.includeNewspaper.checked;
 }
 
-function applyParametersToForm(form, parameters) {
-  for (const name of [
-    "runName", "gmailLabel", "hostCount", "soloName", "dialogueStyle",
-    "primaryVoice", "primaryTone", "secondaryVoice", "secondaryTone", "dateMode", "editionScale", "evidenceMode",
-  ]) {
-    if (parameters[name] !== undefined && form.elements.namedItem(name)) {
-      form.elements.namedItem(name).value = parameters[name];
-    }
-  }
-  const publish = form.elements.namedItem("publish");
-  if (publish instanceof HTMLInputElement) {
-    publish.checked = Boolean(parameters.publish);
-  }
-  form.elements.includeTih.checked = parameters.includeTih !== false;
-  form.elements.includeNewspaper.checked = parameters.includeNewspaper !== false;
-  syncNewspaperControls(form);
-  setSections(form, parameters.sections || []);
+function syncParameterControls(form) {
   syncHostControls(form);
+  syncNewspaperControls(form);
+}
+
+function setupParameterForm(form) {
+  if (form.dataset.parameterFormReady === "true") return;
+  setupSectionEditor(form);
+  for (const name of ["hostCount", "soloName", "includeNewspaper"]) {
+    form.elements.namedItem(name).addEventListener("change", () => syncParameterControls(form));
+  }
+  syncParameterControls(form);
+  form.dataset.parameterFormReady = "true";
+}
+
+function applyParametersToForm(form, parameters) {
+  if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) {
+    throw new Error("Saved preferences are not a valid parameter record.");
+  }
+  if (parameters.sections !== undefined && !Array.isArray(parameters.sections)) {
+    throw new Error("Saved podcast sections must be a list.");
+  }
+  if ((parameters.sections || []).some(section => typeof section !== "string")) {
+    throw new Error("Saved podcast sections must contain text names.");
+  }
+  const sections = parseSections((parameters.sections || []).join("\n"));
+  const prepared = [];
+  for (const [name, fallback] of Object.entries(GENERATION_PARAMETER_DEFAULTS)) {
+    const control = form.elements.namedItem(name);
+    if (!control) continue;
+    const defaultOption = control.options
+      ? [...control.options].find(option => option.defaultSelected) || control.options[0] : null;
+    const value = parameters[name] ?? defaultOption?.value ?? fallback;
+    const type = typeof fallback;
+    if ((type === "boolean" && typeof value !== "boolean")
+        || (type !== "boolean" && typeof value !== "string" && typeof value !== "number")
+        || (control.options && ![...control.options].some(option => option.value === String(value)))) {
+      throw new Error(`Saved preferences contain an unavailable value for ${name}.`);
+    }
+    prepared.push({ control, value, type });
+  }
+  // Preflight the complete record before replacing any currently edited values.
+  for (const { control, value, type } of prepared) {
+    if (type === "boolean") control.checked = value;
+    else control.value = String(value);
+  }
+  setSections(form, sections);
+  syncParameterControls(form);
 }
 
 function saveFavoriteProfile() {
@@ -828,7 +853,8 @@ function loadFavoriteProfile() {
   const name = byId("profile-picker").value;
   const profile = savedProfiles().find((item) => item.name === name);
   if (profile?.parameters) {
-    applyParametersToForm(generationForm, profile.parameters);
+    try { applyParametersToForm(generationForm, profile.parameters); }
+    catch (error) { showAlert(error.message || "Favorite could not be loaded.", true); return; }
     byId("profile-name").value = profile.name;
     syncFavoriteActions();
     showAlert(`Loaded favorite: ${name}.`);
@@ -1189,6 +1215,17 @@ function editSchedule(scheduleId) {
   if (!data) {
     return;
   }
+  const parameters = data.parameters || {};
+  try {
+    if (typeof parameters !== "object" || Array.isArray(parameters)) {
+      throw new Error("Schedule preferences are not a valid parameter record.");
+    }
+    applyParametersToForm(scheduleForm, { ...parameters,
+      runName: parameters.runName || data.name || "Morning Nexus", gmailLabel: parameters.gmailLabel || "" });
+  } catch (error) {
+    showAlert(error.message || "Schedule preferences could not be loaded.", true);
+    return;
+  }
   scheduleForm.elements.scheduleId.value = scheduleId;
   scheduleForm.elements.name.value = data.name || "";
   scheduleForm.elements.startTime.value = data.startTime || "04:45";
@@ -1198,29 +1235,7 @@ function editSchedule(scheduleId) {
   for (const checkbox of scheduleForm.querySelectorAll('input[name="weekday"]')) {
     checkbox.checked = selectedDays.has(Number(checkbox.value));
   }
-  const parameters = data.parameters || {};
-  scheduleForm.elements.runName.value = parameters.runName || data.name || "Morning Nexus";
-  scheduleForm.elements.gmailLabel.value = parameters.gmailLabel || "";
-  setSections(scheduleForm, parameters.sections || []);
-  for (const name of [
-    "hostCount",
-    "soloName",
-    "dialogueStyle",
-    "primaryVoice",
-    "primaryTone",
-    "secondaryVoice",
-    "secondaryTone",
-    "dateMode",
-    "editionScale",
-    "evidenceMode",
-  ]) {
-    fillSelect(scheduleForm, name, parameters[name]);
-  }
   scheduleForm.elements.enabled.checked = Boolean(data.enabled);
-  scheduleForm.elements.includeTih.checked = parameters.includeTih !== false;
-  scheduleForm.elements.includeNewspaper.checked = parameters.includeNewspaper !== false;
-  syncNewspaperControls(scheduleForm);
-  syncHostControls(scheduleForm);
   byId("cancel-edit-button").hidden = false;
   scheduleForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1235,8 +1250,7 @@ function resetScheduleForm() {
   }
   byId("cancel-edit-button").hidden = true;
   setSections(scheduleForm, []);
-  syncNewspaperControls(scheduleForm);
-  syncHostControls(scheduleForm);
+  syncParameterControls(scheduleForm);
 }
 
 async function saveSchedule(event) {
@@ -2933,12 +2947,7 @@ async function initialize() {
   byId("remember-favorites").addEventListener("change", changeFavoriteStorage);
   byId("profile-picker").addEventListener("change", loadFavoriteProfile);
   for (const form of [generationForm, scheduleForm]) {
-    setupSectionEditor(form);
-    form.elements.hostCount.addEventListener("change", () => syncHostControls(form));
-    form.elements.soloName.addEventListener("change", () => syncHostControls(form));
-    form.elements.includeNewspaper.addEventListener("change", () => syncNewspaperControls(form));
-    syncNewspaperControls(form);
-    syncHostControls(form);
+    setupParameterForm(form);
   }
   const localToday = new Date();
   localToday.setMinutes(localToday.getMinutes() - localToday.getTimezoneOffset());
