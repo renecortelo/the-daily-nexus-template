@@ -25,6 +25,23 @@ def temporary_test_directory():
 
 
 class WebAppSecurityTests(TestCase):
+    def test_accessible_section_controls_share_labels_and_updated_static_shell(self):
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        worker = Path("web/service-worker.js").read_text(encoding="utf-8")
+        self.assertEqual(2, page.count('class="section-order-status visually-hidden"'))
+        for prefix in ("gen", "schedule"):
+            self.assertIn(f'for="{prefix}-section-input"', page)
+            self.assertIn(f'id="{prefix}-section-input"', page)
+            self.assertIn(f'aria-describedby="{prefix}-section-help"', page)
+        self.assertIn('id="dismiss-alert-button"', page)
+        self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
+        self.assertIn('.weekday-picker input:focus-visible + span', styles)
+        self.assertIn('--mini-player-height', styles)
+        self.assertIn('/app.js?v=4.1.10', page)
+        self.assertIn('/styles.css?v=4.1.10', page)
+        self.assertIn('tdn-shell-v4-40', worker)
+
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
         self.assertIn(r"\d{3,}$/i.test(title)", source)

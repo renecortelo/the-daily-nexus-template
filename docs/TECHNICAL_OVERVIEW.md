@@ -295,6 +295,25 @@ reviewed inventory. No paid fallback, polling scheduler or timeout increase is a
   code does not persist that ID token. It does not receive Gmail labels,
   newsletter text, episode settings, model credentials, or feed media.
 
+## Console interaction accessibility
+
+The 4.1.10 static console offers earlier/later buttons and keyboard shortcuts
+alongside section dragging in both GEN and SCHED. Reordering preserves focus,
+announces positions and rejects foreign drop text; logout clears announcements.
+Mobile/coarse-pointer buttons have 44-pixel minimum targets at default text size,
+and timeline hit areas remain distinct from thin painted tracks. Shared focus
+outlines, sticky-height scroll insets, synchronized Pause/Resume labels and
+timeline time descriptions improve keyboard navigation. Narrow-screen picker
+text is 16 pixels; navigation honors reduced motion. Error messages persist until
+dismissed or replaced, with stale-timer protection and sign-out cleanup.
+
+Synthetic local Chromium checks at 320, 390, 768 and 1280 pixels exercise all five
+views without provider requests. They do not establish real Safari/PWA, VoiceOver,
+software-keyboard or full archive accessibility. Semantic mobile newspaper
+reading and component consolidation remain open. No cloud polling, private
+offline caching, authorization change or generation call is added. Hosting
+deployment must retain the existing clock configuration and unlisted media.
+
 ## Owner-only resource measurements
 
 GEN's **RUN TIME AND RESOURCES** panel shows terminal stage and operation times,
