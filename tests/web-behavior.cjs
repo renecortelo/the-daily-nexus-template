@@ -479,15 +479,155 @@ test('late owner newspaper selection cannot repopulate a logged out reader', asy
 test('logout unloads audio and clears private reader/player state', () => {
   const {context,nodes}=harness(['clearPrivateInterface']);
   const audio=context.byId('episode-audio'); audio.src='https://example.com/private.mp3'; audio.paused=false;
+  context.appState.runRequestRows=new Map([['synthetic',{data:{gmailLabel:'Example/Private'}}]]);
+  context.byId('monitor-query-filter').value='Example/Private';context.byId('monitor-date-filter').value='2026-10-08';
   context.clearPrivateInterface();
   assert.equal(audio.paused,true); assert.equal(audio.src,undefined);
   assert.equal(context.appState.readerToken,null); assert.equal(context.appState.authorized,false);
+  assert.equal(context.appState.runRequestRows.size,0);
+  assert.equal(context.byId('monitor-query-filter').value,'');assert.equal(context.byId('monitor-date-filter').value,'');
   assert.equal(nodes.get('mini-player').hidden,true);
+});
+
+function monitorHarness(extra=[]) {
+  const result=harness(['updateMonitorText','runRequestTimeline','runRequestDetail','createRunRequestRow',
+    'updateRunRequestRow','updateRunRequestTimes','renderRunRequestList','renderRunRequests',
+    'dateValue','durationText','timestampText',...extra]);
+  const {context}=result; const roots=new Map();const clock={now:Date.parse('2026-10-10T06:00:00Z')};
+  context.Date=class extends Date {static now(){return clock.now;}};
+  context.document={activeElement:null,visibilityState:'visible'};
+  const body={isConnected:true};context.document.activeElement=body;
+  const metrics={inserts:0,removes:0,textWrites:0,created:0};
+  class MonitorNode {
+    constructor(tag='div',className='',text=''){
+      this.tag=tag;this.className=className;this._text=text;this.children=[];this.dataset={};
+      this.listeners={};this.parentNode=null;this.hidden=false;this.disabled=false;this.scrollTop=0;this.textWrites=0;
+      metrics.created++;
+    }
+    get textContent(){return this.children.length?this.children.map(child=>child.textContent).join(''):this._text;}
+    set textContent(value){this.textWrites++;metrics.textWrites++;this.children.forEach(child=>{child.parentNode=null;});this.children=[];this._text=value;}
+    get isConnected(){return this.root||Boolean(this.parentNode?.isConnected);}
+    contains(node){return node===this||this.children.some(child=>child.contains(node));}
+    closest(selector){return selector==='.request-item'&&this.className==='request-item'?this:this.parentNode?.closest(selector);}
+    append(...children){for(const child of children)this.insertBefore(child,null);}
+    insertBefore(child,before){child.remove();const index=before?this.children.indexOf(before):this.children.length;
+      assert(index>=0);this.children.splice(index,0,child);child.parentNode=this;metrics.inserts++;}
+    remove(){if(!this.parentNode)return;if(this.contains(context.document.activeElement))context.document.activeElement=body;
+      this.parentNode.children.splice(this.parentNode.children.indexOf(this),1);this.parentNode=null;metrics.removes++;}
+    addEventListener(name,callback){(this.listeners[name]||=[]).push(callback);}
+    click(){if(!this.disabled)for(const callback of this.listeners.click||[])callback();}
+    focus(options){this.focusOptions=options;context.document.activeElement=this;}
+  }
+  context.element=(tag,className,text)=>new MonitorNode(tag,className,text);
+  context.byId=id=>{if(!roots.has(id)){const node=new MonitorNode();node.root=true;roots.set(id,node);}return roots.get(id);};
+  context.cloudClockEndpoint=()=> 'https://synthetic.example';
+  context.appState.runRequests=[];context.appState.runRequestRows=new Map();context.appState.wakeStates=new Map();
+  const calls=[];
+  for(const action of ['requestRunnerWake','requeueRequest','deleteRunRequest'])context[action]=id=>calls.push([action,id]);
+  return {...result,roots,clock,metrics,calls,body};
+}
+
+function monitorRequest(id,status='failed',extra={}) {
+  return {id,status,requestedDate:'2026-10-09',parameters:{runName:'Synthetic edition',gmailLabel:'Example/News'},
+    requestedAt:'2026-10-10T05:45:00Z',updatedAt:'2026-10-10T05:50:00Z',...extra};
+}
+
+test('unchanged monitor snapshots retain rows, buttons, focus, scroll and text nodes', () => {
+  const {context,metrics}=monitorHarness();context.appState.runRequests=[monitorRequest('first'),monitorRequest('second','queued')];
+  context.renderRunRequestList();const rows=context.appState.runRequestRows;
+  const card=rows.get('first').card;const retry=rows.get('first').actions.children[0];retry.focus();
+  const list=context.byId('run-request-list');list.scrollTop=120;
+  const before={...metrics};
+  for(let i=0;i<20;i++)context.renderRunRequests({docs:context.appState.runRequests.map(data=>({id:data.id,data:()=>({...data})}))});
+  assert.equal(rows.get('first').card,card);assert.equal(rows.get('first').actions.children[0],retry);
+  assert.equal(context.document.activeElement,retry);assert.equal(list.scrollTop,120);
+  assert.deepEqual(metrics,before);assert.equal(retry.listeners.click.length,1);
+});
+
+test('local monitor ticks change only queued/running clocks without sorting or rebuilding terminal rows', () => {
+  const {context,metrics,clock}=monitorHarness();context.appState.runRequests=[
+    monitorRequest('queue','queued'),monitorRequest('run','running',{startedAt:'2026-10-10T05:55:00Z'}),
+    monitorRequest('done','published',{finishedAt:'2026-10-10T05:59:00Z'})];
+  context.renderRunRequestList();const before={...metrics},rows=context.appState.runRequestRows;
+  const terminalWrites=rows.get('done').timeline.textWrites;
+  clock.now+=1000;context.updateRunRequestTimes();
+  assert.equal(metrics.created,before.created);assert.equal(metrics.inserts,before.inserts);assert.equal(metrics.removes,before.removes);
+  assert.equal(metrics.textWrites-before.textWrites,2);assert.equal(rows.get('done').timeline.textWrites,terminalWrites);
+  assert.match(rows.get('queue').timeline.textContent,/WAIT SO FAR 00:15:01/);
+  assert.match(rows.get('run').detail.textContent,/RUNNING 00:05:01/);
+  const unchanged={...metrics};context.updateRunRequestTimes();assert.deepEqual(metrics,unchanged);
+  context.appState.authorized=false;clock.now+=1000;context.updateRunRequestTimes();context.renderRunRequestList();
+  assert.deepEqual(metrics,unchanged);
+});
+
+test('monitor status and wake changes patch existing rows and retain correct single action handlers', () => {
+  const {context,calls}=monitorHarness();context.appState.runRequests=[monitorRequest('one','queued')];
+  context.renderRunRequestList();const row=context.appState.runRequestRows.get('one');const wake=row.wake;wake.focus();
+  context.appState.wakeStates.set('one','requesting');context.renderRunRequestList();
+  assert.equal(row.wake,wake);assert.equal(wake.disabled,true);assert.match(row.detail.textContent,/REQUESTING WAKE/);
+  context.appState.wakeStates.set('one','confirmed');context.renderRunRequestList();wake.click();
+  assert.deepEqual(calls,[['requestRunnerWake','one']]);assert.equal(wake.listeners.click.length,1);
+  context.appState.runRequests=[monitorRequest('one','failed',{detail:'Synthetic failure',finishedAt:'2026-10-10T05:58:00Z'})];
+  context.renderRunRequestList();assert.equal(context.appState.runRequestRows.get('one'),row);
+  assert.equal(wake.isConnected,false);assert.equal(context.document.activeElement,row.card);
+  assert.equal(row.detail.textContent,'Synthetic failure');assert.match(row.timeline.textContent,/FAILED/);
+  row.actions.children[0].click();row.actions.children[1].click();
+  assert.deepEqual(calls.slice(1),[['requeueRequest','one'],['deleteRunRequest','one']]);
+  const retry=row.actions.children[0];context.appState.runRequests[0].status='expired';context.renderRunRequestList();
+  assert.equal(row.actions.children[0],retry);
+  context.appState.runRequests[0].status='published';context.renderRunRequestList();
+  assert.equal(row.actions,null);assert.equal(row.detail.textContent,'PUBLISHED // AVAILABLE IN THE PRIVATE FEED');
+});
+
+test('monitor filters and sorting preserve retained identities and remove cached private rows', () => {
+  const {context}=monitorHarness();const first=monitorRequest('first','queued',{updatedAt:'2026-10-10T05:51:00Z'});
+  const second=monitorRequest('second','failed',{requestedDate:'2026-10-08'});
+  context.appState.runRequests=[first,second];context.renderRunRequestList();
+  const list=context.byId('run-request-list'),row=context.appState.runRequestRows.get('first');row.wake.focus();
+  context.byId('monitor-sort-filter').value='oldest';context.renderRunRequestList();
+  assert.equal(list.children[1],row.card);assert.equal(context.document.activeElement,row.wake);
+  context.byId('monitor-sort-filter').value='newest';context.renderRunRequestList();
+  assert.equal(list.children[0],row.card);assert.equal(context.document.activeElement,row.wake);
+  assert.equal(row.wake.focusOptions.preventScroll,true);
+  context.byId('monitor-date-filter').value='2026-10-09';context.renderRunRequestList();
+  assert.equal(list.children.length,1);assert.equal(list.children[0],row.card);assert.equal(context.appState.runRequestRows.size,1);
+  context.byId('monitor-date-filter').value='';context.byId('monitor-status-filter').value='failed';context.renderRunRequestList();
+  assert.equal(row.card.isConnected,false);assert.equal(context.appState.runRequestRows.has('first'),false);
+  context.byId('monitor-query-filter').value='does not match';context.renderRunRequestList();
+  assert.equal(context.appState.runRequestRows.size,0);assert.match(list.textContent,/No requests match/);
+  context.byId('monitor-query-filter').value='Example/News';context.renderRunRequestList();assert.equal(list.children.length,1);
+  context.appState.runRequests=[];context.renderRunRequestList();assert.equal(context.appState.runRequestRows.size,0);
+  assert.equal(list.textContent,'No queued tasks.');assert.equal(context.byId('monitor-scope').textContent,'0 RECENT REQUESTS LOADED');
+});
+
+test('request snapshots use immutable document IDs and cannot refill the monitor after logout', () => {
+  const {context,metrics}=monitorHarness();context.renderRunRequests({docs:[
+    {id:'first',data:()=>monitorRequest('spoofed')},{id:'second',data:()=>monitorRequest('spoofed')} ]});
+  assert.deepEqual(Array.from(context.appState.runRequestRows.keys()).sort(),['first','second']);
+  assert.deepEqual(Array.from(context.appState.runRequests,item=>item.id),['first','second']);
+  context.appState.runRequestRows.clear();context.appState.runRequests=[];context.appState.authorized=false;
+  const before={...metrics};context.renderRunRequests({docs:[{id:'late',data:()=>monitorRequest('late')}]});
+  assert.equal(context.appState.runRequests.length,0);assert.equal(context.appState.runRequestRows.size,0);assert.deepEqual(metrics,before);
+});
+
+test('the existing activity timer never reconciles rows and suspends clock updates in hidden or signed-out tabs', () => {
+  const {context,clock}=monitorHarness(['setupActivityTracking']);const timers=[];let details=0,renders=0;
+  context.window.addEventListener=()=>{};context.document.addEventListener=()=>{};
+  context.window.setInterval=callback=>timers.push(callback);context.resetIdleTimer=()=>{};context.checkIdleTimer=()=>{};
+  context.updateRunnerDetail=()=>details++;
+  context.appState.runRequests=[monitorRequest('run','running',{startedAt:'2026-10-10T05:55:00Z'})];
+  context.renderRunRequestList();context.renderRunRequestList=()=>renders++;
+  context.setupActivityTracking();assert.equal(timers.length,2);context.appState.runner={state:'running'};
+  clock.now+=1000;timers[1]();assert.equal(details,1);assert.equal(renders,0);
+  const row=context.appState.runRequestRows.get('run'),before=row.detail.textContent;
+  context.document.visibilityState='hidden';clock.now+=1000;timers[1]();assert.equal(row.detail.textContent,before);
+  context.document.visibilityState='visible';context.appState.authorized=false;timers[1]();assert.equal(details,1);
 });
 test('monitor refresh has consistent page size and ignores logged-out responses', async () => {
   const {context}=harness(['refreshMonitor']); let observedLimit, renders=0;
   Object.assign(context,{doc(){},collection(){},orderBy(){},limit(n){observedLimit=n;},query(){},
-    async getDoc(){return {};},async getDocFromServer(){return {};},async getDocs(){return {};},renderResourceProfile(){},renderRunner(){renders++;},renderRunRequests(){renders++;}});
+    async getDoc(){return {};},async getDocFromServer(){return {};},async getDocs(){return {};},renderResourceProfile(){},
+    renderRunner(){assert(context.appState.monitorRefreshedAt instanceof Date);renders++;},renderRunRequests(){renders++;}});
   await context.refreshMonitor(); assert.equal(observedLimit,100); assert.equal(renders,2);
   const pending=context.refreshMonitor(); context.appState.authorized=false;
   await pending; assert.equal(renders,2);

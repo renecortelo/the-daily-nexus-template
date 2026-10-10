@@ -401,6 +401,24 @@ Existing host-appropriate voice constraints and automatic web publication stay
 in force. No saved record migration, additional provider/model/cloud operation,
 private offline persistence or UI redesign is introduced.
 
+## Incremental process monitor
+
+The 4.1.13 console retains monitor rows keyed by Firestore document ID. Snapshots
+patch changed copy, actions and membership/order without rebuilding unchanged
+rows. The existing second timer changes only queued/running clock text, not
+sorting or cloud reads, and skips hidden tabs without suspending session expiry.
+Focus survives sorting; removed actions return focus to their row/list. Manual
+refresh renders the new client refresh time alongside the separate runner check
+time. Filters and sorting keep their existing meaning.
+
+The visible-row map is bounded by the existing latest-100 request window, pruned
+when rows disappear and cleared at logout with private monitor filters. Late
+unauthorized snapshots cannot repopulate it. Copy uses inert text, with no new
+HTML injection, persistent storage, cloud operation, model call or runner change.
+Synthetic browser checks confirm zero monitor DOM mutations for 20 identical
+100-row snapshots and text-only clock ticks; they do not measure generation
+runtime or certify real Safari/assistive-technology behavior.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets
