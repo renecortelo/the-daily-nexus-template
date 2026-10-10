@@ -18,6 +18,13 @@ It does not rotate Gmail, Antigravity, deployment credentials, or private feeds.
   browser requests use the same owner-document check; stored alarms do not need
   a browser token and continue running.
 
+This scope applies to the dedicated queue/Firestore credential, **not every
+credential inside a production job**. Publishing still uses the existing,
+separate Firebase CLI deployment grant, which can carry privileged project
+access outside these rules. A compromised publishing job or trusted collaborator
+remains a risk; keep the production repository private and its write access
+restricted. This migration does not redesign deployment IAM.
+
 The 15-minute idle lock remains a browser control. Logout clears the local console,
 but does not immediately revoke copied Firebase tokens. Static Apple RSS/media
 URLs are still capability links, not account-authenticated downloads; this
