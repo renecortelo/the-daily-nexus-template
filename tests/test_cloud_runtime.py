@@ -14,6 +14,96 @@ from audiodigest.config import load_settings
 
 
 class CloudRuntimeTests(TestCase):
+    def test_cleanup_outside_private_actions_never_removes_local_files(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            config = root / "config.toml.cloud"
+            config.write_text("untouched")
+            with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=True):
+                with self.assertRaises(CloudRuntimeError):
+                    cleanup_cloud_runtime(config_path=config)
+            self.assertEqual("untouched", config.read_text())
+
+    def test_cleanup_rejects_wrong_config_and_broad_temporary_root_before_deleting(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            sentinel = root / "keep.toml"
+            sentinel.write_text("untouched")
+            environment = dict(os.environ)
+            environment.update(self._environment(root))
+            with patch.dict(os.environ, environment, clear=True):
+                with self.assertRaisesRegex(CloudRuntimeError, "config.toml.cloud"):
+                    cleanup_cloud_runtime(config_path=sentinel)
+            environment["RUNNER_TEMP"] = str(root)
+            with patch.dict(os.environ, environment, clear=True):
+                with self.assertRaisesRegex(CloudRuntimeError, "workspace, home or root"):
+                    cleanup_cloud_runtime(config_path=root / "config.toml.cloud")
+            self.assertEqual("untouched", sentinel.read_text())
+
+    def test_cleanup_rejects_a_linked_runtime_without_touching_its_target(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            environment = dict(os.environ)
+            environment.update(self._environment(root))
+            temporary = Path(environment["RUNNER_TEMP"])
+            temporary.mkdir()
+            target = root / "keep"
+            target.mkdir()
+            sentinel = target / "keep.txt"
+            sentinel.write_text("untouched")
+            try:
+                (temporary / "the-daily-nexus").symlink_to(target, target_is_directory=True)
+            except OSError:
+                self.skipTest("symbolic links are unavailable")
+            with patch.dict(os.environ, environment, clear=True):
+                with self.assertRaisesRegex(CloudRuntimeError, "unlinked"):
+                    cleanup_cloud_runtime(config_path=root / "config.toml.cloud")
+            self.assertEqual("untouched", sentinel.read_text())
+
+    def test_prepare_rejects_a_config_symlink_before_writing_credentials(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            target = root / "keep.toml"
+            target.write_text("untouched")
+            config = root / "config.toml.cloud"
+            try:
+                config.symlink_to(target)
+            except OSError:
+                self.skipTest("symbolic links are unavailable")
+            environment = dict(os.environ)
+            environment.update(self._environment(root))
+            with (
+                patch.dict(os.environ, environment, clear=True),
+                patch("audiodigest.cloud_runtime.Path.home", return_value=root / "home"),
+            ):
+                with self.assertRaisesRegex(CloudRuntimeError, "config.toml.cloud"):
+                    prepare_cloud_runtime(template_path=Path("config.cloud.example.toml"),
+                                          output_path=config)
+            self.assertFalse((root / "runner-temp").exists())
+            self.assertEqual("untouched", target.read_text())
+
+    def test_cleanup_failure_is_reported_and_other_managed_credentials_are_removed(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            home = root / "home"
+            output = root / "config.toml.cloud"
+            environment = dict(os.environ)
+            environment.update(self._environment(root))
+            with (
+                patch.dict(os.environ, environment, clear=True),
+                patch("audiodigest.cloud_runtime.Path.home", return_value=home),
+            ):
+                prepare_cloud_runtime(template_path=Path("config.cloud.example.toml"),
+                                      output_path=output)
+                with patch(
+                    "audiodigest.cloud_runtime.shutil.rmtree", side_effect=OSError("failure"),
+                ):
+                    with self.assertRaisesRegex(CloudRuntimeError, "incomplete"):
+                        cleanup_cloud_runtime(config_path=output)
+                self.assertFalse(output.exists())
+                self.assertFalse((home / ".gemini" / "settings.json").exists())
+                cleanup_cloud_runtime(config_path=output)
+
     def _environment(self, root: Path) -> dict[str, str]:
         gmail = {
             "refresh_token": "gmail-refresh-token-value",

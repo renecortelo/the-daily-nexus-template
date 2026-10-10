@@ -32,10 +32,12 @@ def _expand_environment(value: str) -> str:
     return os.path.expandvars(os.path.expanduser(portable))
 
 
-def _expand_path(value: str, base_dir: Path) -> Path:
+def _expand_path(value: str, base_dir: Path, *, preserve_links: bool = False) -> Path:
     expanded = _expand_environment(value)
     path = Path(expanded)
-    return path if path.is_absolute() else (base_dir / path).resolve()
+    if path.is_absolute():
+        return path
+    return (base_dir / path).absolute() if preserve_links else (base_dir / path).resolve()
 
 
 def _expand_executable(value: str, base_dir: Path) -> str:
@@ -283,7 +285,11 @@ def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 def _optional_path(raw: dict[str, Any], key: str, base: Path) -> Path | None:
     value = str(raw.get(key, "")).strip()
-    return _expand_path(value, base) if value else None
+    if not value:
+        return None
+    # Preserve aliases until the private-file boundary can reject them. Resolving
+    # a relative credential path here would silently erase its symbolic links.
+    return _expand_path(value, base, preserve_links=True)
 
 
 def load_settings(path: str | Path = "config.toml") -> Settings:
@@ -348,6 +354,7 @@ def load_settings(path: str | Path = "config.toml") -> Settings:
                 )
             ),
             base,
+            preserve_links=True,
         ),
         settings_path=_expand_path(
             str(

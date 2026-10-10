@@ -12,6 +12,7 @@ from pathlib import Path
 from audiodigest.cost_guard import SparkConfirmation
 from audiodigest.private_store import (
     PrivateStoreError,
+    assert_private_directory,
     delete_private_value,
     write_private_value,
 )
@@ -167,6 +168,29 @@ def _replace_template(template: str, replacements: dict[str, str]) -> str:
     return result
 
 
+def _cloud_runtime_paths(config_path: Path) -> tuple[Path, Path]:
+    """Keep preparation and cleanup inside the same fixed disposable boundary."""
+    workspace = Path(_required_environment("GITHUB_WORKSPACE")).absolute()
+    runner_temp = Path(_required_environment("RUNNER_TEMP")).absolute()
+    config_path = config_path.absolute()
+    try:
+        assert_private_directory(workspace)
+        assert_private_directory(runner_temp)
+        assert_private_directory(runner_temp / "the-daily-nexus")
+        assert_private_directory(Path.home() / ".gemini")
+    except (OSError, PrivateStoreError) as exc:
+        raise CloudRuntimeError("cloud runtime directories must be unlinked managed paths") from exc
+    workspace, runner_temp = workspace.resolve(), runner_temp.resolve()
+    if config_path != workspace / "config.toml.cloud" or config_path.is_symlink():
+        raise CloudRuntimeError("cloud configuration must be config.toml.cloud at repository root")
+    if runner_temp in {workspace, Path.home().absolute(), Path(runner_temp.anchor)}:
+        raise CloudRuntimeError("cloud temporary directory must not be a workspace, home or root")
+    runtime = runner_temp / "the-daily-nexus"
+    if runtime in {workspace, Path.home().resolve()}:
+        raise CloudRuntimeError("cloud runtime must not alias the workspace or home")
+    return runtime, config_path
+
+
 def prepare_cloud_runtime(
     *,
     template_path: Path,
@@ -179,11 +203,7 @@ def prepare_cloud_runtime(
     values = _validate_probe_credentials()
     if phase == "run":
         values.update(_validate_generation_credentials())
-    runner_temp = Path(_required_environment("RUNNER_TEMP")).resolve()
-    github_workspace = Path(_required_environment("GITHUB_WORKSPACE")).resolve()
-    if output_path.resolve().parent != github_workspace:
-        raise CloudRuntimeError("generated cloud configuration must stay at repository root")
-    runtime = runner_temp / "the-daily-nexus"
+    runtime, output_path = _cloud_runtime_paths(output_path)
     secrets_root = runtime / "secrets"
     gmail_token_path = secrets_root / "gmail-token.json"
     firebase_refresh_path = secrets_root / "firebase-refresh-token"
@@ -279,11 +299,14 @@ def prepare_cloud_runtime(
 
 
 def cleanup_cloud_runtime(*, config_path: Path) -> None:
-    runner_temp = os.environ.get("RUNNER_TEMP", "")
-    if runner_temp:
-        runtime = Path(runner_temp).resolve() / "the-daily-nexus"
-        if runtime.parent == Path(runner_temp).resolve() and runtime.name == "the-daily-nexus":
-            shutil.rmtree(runtime, ignore_errors=True)
+    _validate_github_boundary()
+    runtime, config_path = _cloud_runtime_paths(config_path)
+    failed = False
+    if runtime.exists():
+        try:
+            shutil.rmtree(runtime)
+        except OSError:
+            failed = True
     for path in (
         config_path,
         Path.home() / ".gemini" / "settings.json",
@@ -292,8 +315,12 @@ def cleanup_cloud_runtime(*, config_path: Path) -> None:
     ):
         try:
             delete_private_value(path)
-        except PrivateStoreError:
-            pass
+        except (OSError, PrivateStoreError):
+            failed = True
+    if failed:
+        raise CloudRuntimeError(
+            "private cloud cleanup was incomplete; runtime was not declared clean"
+        )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -309,14 +336,14 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "prepare":
         prepare_cloud_runtime(
             template_path=args.template.resolve(),
-            output_path=args.output.resolve(),
+            output_path=args.output.absolute(),
             phase=args.phase,
         )
         print(
             f"Private cloud {args.phase} runtime prepared without displaying credentials."
         )
         return
-    cleanup_cloud_runtime(config_path=args.config.resolve())
+    cleanup_cloud_runtime(config_path=args.config.absolute())
     print("Private cloud runtime credentials removed.")
 
 

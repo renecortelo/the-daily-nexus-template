@@ -71,8 +71,26 @@ Local regression coverage includes actual Firestore emulator rules, old/refreshe
 browser tokens, unknown/cross-owner identities, restricted automation operations,
 revocation and secret-install failures. Production activation is NOT implied by
 these tests or a rules deployment. Idle expiry/logout remain browser-local and do
-not immediately revoke copied tokens. Credential/file boundaries and separately
-reviewed feed-link rotation remain open; no working feed rotates automatically.
+not immediately revoke copied tokens. Separately reviewed feed-link rotation
+remains open; no working feed rotates automatically.
+
+Credential/file increment implemented on 2026-10-10 without identity activation:
+private file paths reject linked ancestors/junctions and hard-link aliases;
+bounded descriptor reads validate regular files and POSIX ownership/access.
+Atomic writes establish 0700 directories and 0600 files before writing on Linux;
+permission failure is explicit. Windows uses its existing ACL/vault boundary,
+not a new cross-platform ACL guarantee. Relative credential paths retain aliases
+until this validation instead of resolving them away during configuration load.
+Antigravity's request and bundled agent files use the protected writer. Requests
+have a separate 16 MiB envelope limit, with no cropping; credential reads/writes
+keep their 2 MiB limit. Recognized unrelated service credentials are excluded from
+the model subprocess environment; the OAuth/keyring transport is unchanged.
+Preparation and cleanup validate the same fixed private Actions paths, reject
+broad/linked targets and report incomplete cleanup. No provider call, new model
+pass, browser change, credential rotation, extra generation or runtime-cap change
+is added. Same-user compromise, unknown environment secrets, CLI-managed state and
+secure disk erasure remain outside this boundary. Real iOS reading/accessibility
+and production adoption of these file controls remain open.
 
 ## 2. Original-source verification and source lineage
 

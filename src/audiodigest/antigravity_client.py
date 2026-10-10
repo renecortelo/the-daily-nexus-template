@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 import uuid
@@ -14,6 +13,12 @@ from typing import Any, TypeVar
 from audiodigest.config import AntigravitySettings
 from audiodigest.execution_budget import operation_timeout
 from audiodigest.models import AntigravityMetadata, DataValidationError
+from audiodigest.private_store import (
+    PrivateStoreError,
+    assert_private_directory,
+    delete_private_value,
+    write_private_value,
+)
 from audiodigest.progress import increment, record_failure_code, timed_operation
 
 T = TypeVar("T")
@@ -328,22 +333,26 @@ class AntigravityCLI:
                 f"Antigravity agent definition is missing: {self.settings.agent_path}"
             )
         agent_dir = self.settings.workspace_dir / ".agents" / "agents" / self.settings.agent_name
-        agent_dir.mkdir(parents=True, exist_ok=True)
         agent_destination = agent_dir / "agent.md"
-        if (
-            not agent_destination.exists()
-            or agent_destination.read_bytes() != self.settings.agent_path.read_bytes()
-        ):
-            shutil.copy2(self.settings.agent_path, agent_destination)
         request_path = self.settings.workspace_dir / f"request-{uuid.uuid4().hex}.json"
-        request_path.write_text(
-            json.dumps(
-                {"instruction": instruction, "payload": payload},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-            encoding="utf-8",
-        )
+        try:
+            assert_private_directory(agent_dir)
+            write_private_value(
+                agent_destination, self.settings.agent_path.read_text(encoding="utf-8"),
+            )
+            write_private_value(
+                request_path,
+                json.dumps(
+                    {"instruction": instruction, "payload": payload},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                maximum_bytes=16 * 1024 * 1024,
+            )
+        except (OSError, PrivateStoreError) as exc:
+            raise AntigravityConfigurationError(
+                "Could not secure the editorial request file"
+            ) from exc
         return request_path
 
     def invoke(
@@ -366,6 +375,19 @@ class AntigravityCLI:
             "GOOGLE_CLOUD_PROJECT",
             "GOOGLE_CLOUD_LOCATION",
             "VERTEX_AI_PROJECT",
+            "TDN_GMAIL_TOKEN_JSON",
+            "TDN_FIREBASE_REFRESH_TOKEN",
+            "TDN_FIREBASE_DEPLOY_TOKEN",
+            "TDN_FIREBASE_OWNER_UID",
+            "TDN_FIREBASE_API_KEY",
+            "TDN_FIREBASE_PROJECT_ID",
+            "TDN_FIREBASE_SECRET_PATH",
+            "TDN_ANTIGRAVITY_KEYRING_JSON",
+            "TDN_CLOUD_CLOCK_URL",
+            "TDN_CLOUD_CLOCK_DISPATCH_SECRET",
+            "FIREBASE_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
         ):
             env.pop(name, None)
 
@@ -395,7 +417,7 @@ class AntigravityCLI:
                 record_failure_code("model_timeout")
                 raise
             finally:
-                request_path.unlink(missing_ok=True)
+                delete_private_value(request_path)
                 enforce_safe_antigravity_settings(self.settings)
             elapsed_ms = int((time.perf_counter() - started) * 1000)
             if completed.returncode != 0:
