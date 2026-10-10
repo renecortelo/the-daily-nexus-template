@@ -126,6 +126,8 @@ function clearPrivateInterface() {
   byId("player-details").replaceChildren();
   byId("edition-pages").replaceChildren();
   byId("edition-pdf-link").removeAttribute("href");
+  byId("edition-pdf-link").hidden = true;
+  clearEditionControls();
   byId("mini-player").hidden = true;
   appState.episodeRecords = [];
   appState.olderEpisodes = new Map();
@@ -1938,7 +1940,9 @@ async function openArchivedEdition(edition) {
   try {
     const record = await availableArchiveRecord(edition.id, ".pdf");
     if (!record || token !== appState.editionSelectionToken) return;
-    selectEdition({ ...edition, url: archiveMediaURL(record, ".pdf"), pageCount: record.newspaperPages });
+    selectEdition({ ...edition, url: archiveMediaURL(record, ".pdf"), pageCount: record.newspaperPages,
+      previews: record.newspaperPreviews, revision: record.updatedAt?.toMillis?.(),
+      reading: validatedEditionReading(record.newspaperReading) });
   } catch (error) {
     if (appState.authorized && epoch === appState.authEpoch && token === appState.editionSelectionToken) {
       showAlert(error.message || firebaseErrorMessage(error), true);
@@ -1968,6 +1972,7 @@ function renderEpisodeArchives() {
     appState.readerToken = null;
     appState.editionSelectionToken = null;
     byId("edition-pages").replaceChildren();
+    clearEditionControls();
     byId("edition-pdf-link").removeAttribute("href");
     byId("edition-pdf-link").hidden = true;
     byId("edition-title").textContent = "EDITION RETIRED // SELECT ANOTHER EDITION";
@@ -2450,6 +2455,39 @@ function selectRelativeEpisode(direction) {
   openArchivedEpisode(target, wasPlaying);
 }
 
+function clearEditionControls() {
+  appState.editionModePreference = null;
+  byId("edition-reader-note").textContent = "";
+  for (const id of ["edition-readable", "edition-facsimile"]) {
+    byId(id).disabled = true;
+    byId(id).setAttribute("aria-pressed", "false");
+  }
+}
+
+function validatedEditionReading(value) {
+  // No arbitrary markup, URL, internal field or unbounded collection is rendered.
+  if (!value || value.version !== 1 || JSON.stringify(value).length > 131072) return null;
+  const text = candidate => typeof candidate === "string" && candidate.length <= 40000;
+  const texts = (candidate, max) => Array.isArray(candidate) && candidate.length <= max && candidate.every(text);
+  const rows = (candidate, max, valid) => Array.isArray(candidate) && candidate.length <= max && candidate.every(item => item && valid(item));
+  const item = row => text(row.label) && text(row.value) && text(row.detail);
+  if (![value.headline, value.deck, value.lead, value.kicker, value.pullQuote].every(text)
+      || !rows(value.articles, 8, row => [row.title, row.section, row.standfirst, row.body].every(text)
+        && texts(row.bullets, 20) && texts(row.highlights, 20)) || !value.articles.length
+      || !rows(value.executive, 4, item) || !texts(value.briefs, 8) || !texts(value.dataPoints, 30)
+      || !rows(value.visuals, 3, row => text(row.kind) && text(row.title) && text(row.caption)
+        && rows(row.items, 6, item))) return null;
+  const copyItem = row => ({ label: row.label, value: row.value, detail: row.detail });
+  return { version: 1, headline: value.headline, deck: value.deck, lead: value.lead,
+    kicker: value.kicker, pullQuote: value.pullQuote,
+    articles: value.articles.map(row => ({ title: row.title, section: row.section,
+      standfirst: row.standfirst, body: row.body, bullets: row.bullets,
+      highlights: row.highlights.filter(phrase => phrase && row.body.includes(phrase)) })),
+    executive: value.executive.map(copyItem), briefs: value.briefs, dataPoints: value.dataPoints,
+    visuals: value.visuals.map(row => ({ kind: row.kind, title: row.title, caption: row.caption,
+      items: row.items.map(copyItem) })) };
+}
+
 function selectEdition(edition) {
   const { id, title, url } = edition;
   appState.activeEdition = edition;
@@ -2457,42 +2495,145 @@ function selectEdition(edition) {
     card.classList.toggle("selected", card.dataset.editionId === id);
   }
   byId("edition-title").textContent = title;
-  const pages = byId("edition-pages");
   const link = byId("edition-pdf-link");
-  pages.replaceChildren();
-  pages.className = "edition-pages";
   link.href = url;
   link.hidden = false;
-  let firstPageLoaded = false;
-  const previewRequest = Date.now().toString(36);
+  renderEditionView(appState.editionModePreference || (edition.reading ? "readable" : "pages"));
+}
+
+function setEditionMode(mode) {
+  if (!appState.authorized || !appState.activeEdition) return;
+  if (mode === "readable" && !appState.activeEdition.reading) return;
+  appState.editionModePreference = mode;
+  renderEditionView(mode);
+}
+
+function renderEditionView(mode) {
+  const edition = appState.activeEdition;
+  if (!edition) return;
+  const readable = mode === "readable" && Boolean(edition.reading);
+  const pages = byId("edition-pages");
+  pages.replaceChildren();
+  pages.className = readable ? "edition-pages edition-readable" : "edition-pages";
+  pages.scrollTo({ top: 0, left: 0 });
+  byId("edition-readable").disabled = !edition.reading;
+  byId("edition-facsimile").disabled = false;
+  byId("edition-readable").setAttribute("aria-pressed", String(readable));
+  byId("edition-facsimile").setAttribute("aria-pressed", String(!readable));
+  byId("edition-reader-note").textContent = edition.reading
+    ? "Same approved edition: adaptable text or original pages."
+    : "This edition has original pages only. Readable text is included with newly published papers.";
   const readerToken = {};
   appState.readerToken = readerToken;
+  if (readable) renderReadableEdition(edition.reading, pages);
+  else renderEditionPages(edition, pages, readerToken);
+  applyEditionZoom();
+}
+
+function renderReadableEdition(issue, pages) {
+  const paper = element("article", "readable-paper");
+  paper.append(element("p", "eyebrow", issue.kicker));
+  paper.append(element("h4", "readable-headline", issue.headline));
+  paper.append(element("p", "readable-deck", issue.deck));
+  paper.append(element("p", "readable-lead", issue.lead));
+  const renderItems = (title, items, caption = "") => {
+    const section = element("section", "readable-brief");
+    section.append(element("h5", "", title));
+    const list = element("dl", "readable-facts");
+    for (const item of items) {
+      list.append(element("dt", "", [item.value, item.label].filter(Boolean).join(" — ")));
+      if (item.detail) list.append(element("dd", "", item.detail));
+    }
+    section.append(list);
+    if (caption) section.append(element("p", "readable-caption", caption));
+    paper.append(section);
+  };
+  if (issue.executive.length) renderItems("Executive signal", issue.executive);
+  for (const article of issue.articles) {
+    const section = element("section", "readable-story");
+    section.append(element("p", "eyebrow", article.section));
+    section.append(element("h5", "", article.title));
+    if (article.standfirst) section.append(element("p", "readable-deck", article.standfirst));
+    for (const paragraph of article.body.split(/\n\s*\n/).filter(text => text.trim())) {
+      const body = element("p", "", "");
+      let rest = paragraph;
+      // Exact matching highlights only; all untrusted text stays text, never HTML.
+      const phrases = article.highlights.filter(phrase => phrase && rest.includes(phrase));
+      while (phrases.some(phrase => rest.includes(phrase))) {
+        const phrase = phrases.filter(value => rest.includes(value)).sort((a, b) => rest.indexOf(a) - rest.indexOf(b))[0];
+        const index = rest.indexOf(phrase);
+        body.append(element("span", "", rest.slice(0, index)));
+        body.append(element("strong", "", phrase));
+        rest = rest.slice(index + phrase.length);
+      }
+      body.append(element("span", "", rest));
+      section.append(body);
+    }
+    if (article.bullets.length) {
+      const list = element("ul", "");
+      for (const bullet of article.bullets) list.append(element("li", "", bullet));
+      section.append(list);
+    }
+    paper.append(section);
+  }
+  for (const visual of issue.visuals) renderItems(visual.title, visual.items, visual.caption);
+  for (const [title, items] of [["Also inside", issue.briefs], ["In figures", issue.dataPoints]]) {
+    if (!items.length) continue;
+    const section = element("section", "readable-brief");
+    section.append(element("h5", "", title));
+    const list = element("ul", "");
+    for (const text of items) list.append(element("li", "", text));
+    section.append(list);
+    paper.append(section);
+  }
+  if (issue.pullQuote) paper.append(element("blockquote", "", issue.pullQuote));
+  pages.append(paper);
+}
+
+function renderEditionPages(edition, pages, readerToken) {
+  const { url, title } = edition;
   const count = [1, 2, 3].includes(edition.pageCount) ? edition.pageCount : 3;
+  const expected = Array.from({ length: count }, (_, index) => {
+    const value = new URL(url);
+    value.pathname = value.pathname.replace(/\.pdf$/i, `-${index + 1}.png`);
+    return value.href;
+  });
+  const explicit = Array.isArray(edition.previews) && edition.previews.length === count
+    && edition.previews.every((value, index) => value === expected[index]);
+  const sources = explicit ? edition.previews : expected;
+  let settled = 0;
+  let loaded = 0;
+  const finish = () => {
+    settled++;
+    if (settled !== count) return;
+    if (!loaded) {
+      pages.className = "edition-pages empty-state";
+      pages.textContent = "The in-app preview is unavailable. Use OPEN PDF to read the original.";
+    } else if (loaded < count && [1, 2, 3].includes(edition.pageCount)) {
+      pages.append(element("p", "item-meta", "Some pages could not load. OPEN PDF contains the original edition."));
+    }
+  };
   for (let number = 1; number <= count; number++) {
     const preview = element("img", "edition-page");
     preview.alt = `${title}, page ${number}`;
-    const previewURL = new URL(url);
-    previewURL.pathname = previewURL.pathname.replace(/\.pdf$/i, `-${number}.png`);
-    previewURL.searchParams.set("_tdn_preview", `${previewRequest}-${number}`);
+    const previewURL = new URL(sources[number - 1]);
+    if (Number.isSafeInteger(edition.revision) && edition.revision > 0) {
+      previewURL.searchParams.set("_tdn_revision", String(edition.revision));
+    }
     preview.src = previewURL.href;
+    preview.referrerPolicy = "no-referrer";
     preview.addEventListener("load", () => {
       if (appState.readerToken !== readerToken) return;
-      if (number !== 1 || firstPageLoaded) return;
-      firstPageLoaded = true;
-      link.href = url;
-      link.hidden = false;
+      loaded++;
+      finish();
     });
     preview.addEventListener("error", () => {
       if (appState.readerToken !== readerToken) return;
       preview.remove();
-      if (number === 1 && !firstPageLoaded) {
-        pages.className = "edition-pages empty-state";
-        pages.textContent = "The in-app preview is unavailable for this edition. Use OPEN PDF to read the original.";
-      }
+      finish();
     });
     pages.append(preview);
   }
-  applyEditionZoom();
 }
 
 function applyEditionZoom() {
@@ -2501,6 +2642,7 @@ function applyEditionZoom() {
   byId("edition-zoom-value").textContent = `${percent}%`;
   byId("edition-zoom-out").disabled = appState.editionZoom <= EDITION_ZOOM_STEPS[0];
   byId("edition-zoom-in").disabled = appState.editionZoom >= EDITION_ZOOM_STEPS[EDITION_ZOOM_STEPS.length - 1];
+  pages.style.setProperty("--reading-scale", String(appState.editionZoom));
   for (const preview of pages.querySelectorAll(".edition-page")) {
     preview.style.width = `${percent}%`;
     preview.style.maxWidth = `${58 * appState.editionZoom}rem`;
@@ -2592,6 +2734,8 @@ function setupWebPlayer() {
   }
   byId("edition-zoom-out").addEventListener("click", () => adjustEditionZoom(-1));
   byId("edition-zoom-in").addEventListener("click", () => adjustEditionZoom(1));
+  byId("edition-readable").addEventListener("click", () => setEditionMode("readable"));
+  byId("edition-facsimile").addEventListener("click", () => setEditionMode("pages"));
   applyEditionZoom();
   const seekFromPointer = (control, event) => {
     if (!audio.duration) return;

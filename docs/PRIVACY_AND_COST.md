@@ -164,3 +164,18 @@ credits and Google Developer Program cloud credits are deliberately unused.
 Kokoro model files may be downloaded from Hugging Face on first use without an
 account token; later synthesis uses the local cache. The app disables optional
 Hugging Face telemetry.
+
+### Newspaper reading views
+
+Newly published, ready papers carry a bounded reading projection in the existing
+owner-only Firestore episode document. It contains the final independent
+newspaper's editorial copy, not its internal IDs, original source evidence,
+local paths or URLs. No model call or extra subscription/read is added; the
+existing metadata writes, storage and archive transfers become slightly larger.
+READABLE uses that copy as text, never executable markup, with session-only view
+selection. PAGES and OPEN PDF preserve the original edition. Missing/invalid or
+recognized legacy script-derived copies use the original pages instead. There
+is no automatic historical backfill, regeneration or private offline cache.
+Preview URLs are stable and same-edition only; text view requests no previews.
+Logout removes the reader content and rejects stale responses, but does not
+promise secure browser/disk erasure or revoke existing bearer media links.

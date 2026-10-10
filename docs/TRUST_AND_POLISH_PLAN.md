@@ -308,9 +308,39 @@ real future editions and accessibility/mobile UX remain to be evaluated.
 
 ## 6. Mobile accessibility, UX and maintainability
 
-Status: first interaction/accessibility increment implemented on 2026-10-10;
-semantic mobile reading, maintainability consolidation and real Safari/PWA,
+Status: interaction/accessibility and semantic reading increments implemented
+on 2026-10-10; maintainability consolidation and real Safari/PWA,
 VoiceOver and software-keyboard testing remain open.
+
+Reading increment implemented on 2026-10-10: newly published ready newspapers
+include a bounded, allowlisted reading projection in the existing owner archive
+document. It comes from the final independent newspaper artifact, not the audio
+script, raw newsletters or a new model request. Internal source/story identifiers,
+source passages, local paths and URLs are not projected. Missing, oversized,
+invalid or recognized legacy script-derived artifacts retain the page/PDF view;
+there is no automatic historical regeneration or backfill.
+
+READABLE reflows complete copy with semantic headings, paragraphs, lists, exact
+bold highlights and visual facts expressed as labeled text. PAGES preserves the
+original graphics; the PDF itself is unchanged. Reader zoom scales text without
+horizontal scrolling. View choice is session-only, and logout/retirement clear
+content and invalidate pending callbacks. Text view does not request preview
+images. Both views are populated only after the existing fresh owner-server
+availability check. New publication metadata records exact preview URLs; legacy
+records keep same-file page fallback. The owner record's update timestamp provides
+a stable cache revision, replacing per-selection random cache busters while
+allowing corrected editions to refresh. A failed first preview cannot destroy
+successful later pages.
+
+No additional cloud read/subscription, generation, model pass, provider, schedule
+change or runtime-cap change is added. Bounded metadata increases existing archive
+transfer/storage and the publication writes slightly; this is not zero resource
+overhead. Private reading content is not stored in local/session storage or the
+service-worker offline cache. Existing Hosting media remain bearer-link resources,
+and logout does not guarantee browser-memory/disk erasure or revoke their URLs.
+The shell advances to 4.1.11 / cache v4-41. Real Safari/PWA, VoiceOver and production
+adoption on normal future papers remain to be evaluated; maintainability
+consolidation is still open.
 
 Both section editors now offer earlier/later buttons and Alt+Left/Right,
 retain focus after moving, return focus to the input after removal and announce

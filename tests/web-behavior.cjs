@@ -27,6 +27,7 @@ function harness(names) {
     document: {querySelectorAll(){return []; }},
     element(_tag,_class,text){const image=node(); if(text!==undefined) image.textContent=text; images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
+    clearEditionControls(){},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
     window: {clearTimeout(){}, matchMedia(){return {matches:false};}},
@@ -270,12 +271,69 @@ test('newspaper option preserves edition scale when disabled and defaults on for
   assert.deepEqual(form.sections,['Data']);
 });
 test('late reader responses cannot change the selected PDF or content', () => {
-  const {context,images,nodes}=harness(['selectEdition']);
+  const {context,images,nodes}=harness(['selectEdition','renderEditionView','renderEditionPages']);
   const select=id=>context.selectEdition({id,title:id,url:`https://example.com/${id}.pdf`,pageCount:2});
   select('A'); const stale=images[0]; select('B'); stale.load(); stale.error();
   assert.equal(nodes.get('edition-pdf-link').href,'https://example.com/B.pdf');
   assert.equal(nodes.get('edition-pages').textContent,'');
   assert.equal(context.appState.activeEdition.id,'B'); assert.equal(images.length,4);
+});
+
+test('a failed first preview never hides a successful later page and URLs stay stable', () => {
+  const {context,images,nodes}=harness(['selectEdition','renderEditionView','renderEditionPages']);
+  const edition={id:'A',title:'Synthetic',url:'https://example.org/a.pdf',pageCount:2,
+    previews:['https://untrusted.example/a.png']};
+  context.selectEdition(edition); images[0].error(); images[1].load();
+  assert.equal(nodes.get('edition-pages').textContent,'');
+  assert.equal(images[1].src,'https://example.org/a-2.png');
+  assert.equal(images[1].referrerPolicy,'no-referrer');
+  context.selectEdition(edition);
+  assert.equal(images[0].src,images[3].src);
+});
+
+test('reader distinguishes all failed previews and ignores callbacks after switching views', () => {
+  const {context,images,nodes}=harness(['selectEdition','renderEditionView','renderEditionPages']);
+  context.selectEdition({id:'A',title:'A',url:'https://example.org/a.pdf',pageCount:2});
+  const stale=images[0]; images[0].error(); images[1].error();
+  assert.match(nodes.get('edition-pages').textContent,/OPEN PDF/);
+  context.selectEdition({id:'B',title:'B',url:'https://example.org/b.pdf',pageCount:2});
+  stale.error(); assert.equal(nodes.get('edition-pages').textContent,'');
+});
+
+test('preview revision follows server metadata rather than each selection or an arbitrary URL', () => {
+  const {context,images}=harness(['selectEdition','renderEditionView','renderEditionPages']);
+  const edition={id:'A',title:'A',url:'https://example.org/a.pdf',pageCount:1,revision:1234};
+  context.selectEdition(edition); context.selectEdition(edition);
+  assert.equal(images[0].src,images[1].src);
+  assert.equal(new URL(images[0].src).searchParams.get('_tdn_revision'),'1234');
+  context.selectEdition({...edition,revision:1235}); assert.notEqual(images[2].src,images[1].src);
+});
+
+test('bounded readable copy strips unknown fields and renders markup as inert text', () => {
+  const {context,images,nodes}=harness(['validatedEditionReading','selectEdition','renderEditionView','renderReadableEdition','setEditionMode','renderEditionPages']);
+  const fixture={version:1,headline:'A useful edition',deck:'Context',lead:'Reporting',kicker:'Example',pullQuote:'',
+    articles:[{title:'A story',section:'AI',standfirst:'',body:'<img src=x onerror=alert(1)> A full condition.',
+      bullets:['A second fact.'],highlights:['A full condition.','Invented']}],executive:[],visuals:[],briefs:[],dataPoints:[],privateId:'hidden'};
+  const reading=context.validatedEditionReading(fixture);
+  assert(!('privateId' in reading)); assert.equal(reading.articles[0].highlights.length,1);
+  context.selectEdition({id:'A',title:'A',url:'https://example.org/a.pdf',pageCount:2,reading});
+  assert.equal(nodes.get('edition-pages').className,'edition-pages edition-readable');
+  assert.equal(nodes.get('edition-readable').attributes['aria-pressed'],'true');
+  assert(images.some(node=>node.textContent.includes('<img src=x onerror=alert(1)>')));
+  assert(!images.some(node=>node.src)); // Text view downloads no preview image.
+  context.setEditionMode('pages'); assert(images.some(node=>node.src));
+  context.setEditionMode('readable'); assert.equal(nodes.get('edition-readable').attributes['aria-pressed'],'true');
+  assert.equal(context.validatedEditionReading({...fixture,articles:[...fixture.articles,...Array(8).fill(fixture.articles[0])]}),null);
+  assert.equal(context.validatedEditionReading({...fixture,lead:'x'.repeat(131073)}),null);
+});
+
+test('late owner newspaper selection cannot repopulate a logged out reader', async () => {
+  const {context}=harness(['openArchivedEdition']); let release, selected=0;
+  context.availableArchiveRecord=()=>new Promise(resolve=>release=resolve);
+  context.selectEdition=()=>selected++;
+  const pending=context.openArchivedEdition({id:'A'});
+  context.appState.editionSelectionToken=null; context.appState.authEpoch++; context.appState.authorized=false;
+  release({}); await pending; assert.equal(selected,0);
 });
 test('logout unloads audio and clears private reader/player state', () => {
   const {context,nodes}=harness(['clearPrivateInterface']);

@@ -22,6 +22,7 @@ from audiodigest.jobs import (
     ScheduledJob,
     apply_generation_parameters,
 )
+from audiodigest.newspaper_reading import approved_reading_copy
 from audiodigest.pipeline import Pipeline
 from audiodigest.progress import ProgressReporter, increment
 from audiodigest.publisher import MAX_REMOTE_EPISODES, load_remote_publication
@@ -262,6 +263,9 @@ def _published_metadata(
     episode_budget: dict[str, int | float] = {}
     newspaper_pages = 0
     newspaper_status = "unknown"
+    newspaper_reading = None
+    newspaper_document = None
+    preview_paths = []
     closing_quote_id = ""
     manifest_path = Path(str(episode.get("manifest_path", "")))
     if manifest_path.is_file():
@@ -269,9 +273,13 @@ def _published_metadata(
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if manifest.get("newspaper_status") in {"ready", "failed", "skipped"}:
                 newspaper_status = manifest["newspaper_status"]
+            if isinstance(manifest.get("newspaper"), dict):
+                newspaper_document = manifest["newspaper"]
             previews = manifest.get("newspaper_preview_paths", [])
             if isinstance(previews, list) and 1 <= len(previews) <= 3:
                 newspaper_pages = len(previews)
+                if all(isinstance(value, str) and Path(value).is_file() for value in previews):
+                    preview_paths = previews
             candidate_quote_id = manifest.get("closing_quote_id", "")
             if (
                 isinstance(candidate_quote_id, str)
@@ -353,6 +361,14 @@ def _published_metadata(
         newspaper_path = episode.get("newspaper_path")
         if newspaper_path and Path(str(newspaper_path)).is_file():
             newspaper_url = f"{root}/read/{filename}.pdf"
+            if (
+                newspaper_status == "ready"
+                and newspaper_document is not None
+                and Path(str(newspaper_path)).parent == manifest_path.parent
+            ):
+                newspaper_reading = approved_reading_copy(
+                    manifest_path.parent / "newspaper.json", expected=newspaper_document,
+                )
     metadata = {
         "guid": str(episode["guid"]),
         "mediaState": "available" if status == "published" else "unpublished",
@@ -363,6 +379,12 @@ def _published_metadata(
         "audioUrl": audio_url,
         "newspaperUrl": newspaper_url,
         "newspaperPages": newspaper_pages,
+        "newspaperPreviews": [
+            f"{newspaper_url[:-4]}-{index}.png" for index in range(1, len(preview_paths) + 1)
+        ]
+        if newspaper_url
+        else [],
+        "newspaperReading": newspaper_reading,
         "newspaperStatus": "ready" if newspaper_url else newspaper_status,
         "references": references[:100],
         "sourceMix": source_mix,
@@ -380,24 +402,32 @@ def _published_metadata(
 
 
 def _reconcile_archive_lifecycle(
-    settings: Settings, client: FirebaseWebRunnerClient, retained_guids: list[str],
+    settings: Settings,
+    client: FirebaseWebRunnerClient,
+    retained_guids: list[str],
 ) -> None:
     """Reconcile owner records only after a verified publication, never from a partial page.
 
     Published history and numbering remain intact. This is idempotent metadata
     convergence, not atomic cross-service deletion or a generation retry.
     """
-    if (not isinstance(retained_guids, list) or not retained_guids
-            or len(retained_guids) > MAX_REMOTE_EPISODES
-            or any(not isinstance(guid, str) or not REMOTE_GUID_PATTERN.fullmatch(guid)
-                   for guid in retained_guids)):
+    if (
+        not isinstance(retained_guids, list)
+        or not retained_guids
+        or len(retained_guids) > MAX_REMOTE_EPISODES
+        or any(
+            not isinstance(guid, str) or not REMOTE_GUID_PATTERN.fullmatch(guid)
+            for guid in retained_guids
+        )
+    ):
         raise WebRunnerError("verified publication has an invalid retention inventory")
     retained = set(retained_guids)
     base = urlsplit(settings.firebase.base_url)
     prefix = f"/p/{settings.firebase.secret_path}/audio/"
     # A complete read prevents first-page retirement of still-retained editions.
     records = client.list_private_collection(
-        "episodes", all_pages=True,
+        "episodes",
+        all_pages=True,
         field_mask=["audioUrl", "guid", "status", "mediaState"],
     )
     now = datetime.now(UTC)
@@ -408,13 +438,22 @@ def _reconcile_archive_lifecycle(
             url = urlsplit(str(record.get("audioUrl", "")))
         except ValueError:
             continue
-        if (url.scheme != "https" or url.netloc != base.netloc or url.query or url.fragment
-                or not url.path.startswith(prefix) or not url.path.endswith(".mp3")):
+        if (
+            url.scheme != "https"
+            or url.netloc != base.netloc
+            or url.query
+            or url.fragment
+            or not url.path.startswith(prefix)
+            or not url.path.endswith(".mp3")
+        ):
             continue  # A different deployment/feed is never retired by this inventory.
         filename = url.path.removeprefix(prefix)
         guid = filename[11:-4]
-        if ("/" in filename or not REMOTE_GUID_PATTERN.fullmatch(guid)
-                or record.get("guid", guid) != guid):
+        if (
+            "/" in filename
+            or not REMOTE_GUID_PATTERN.fullmatch(guid)
+            or record.get("guid", guid) != guid
+        ):
             continue
         try:
             date.fromisoformat(filename[:10])
@@ -424,9 +463,13 @@ def _reconcile_archive_lifecycle(
         if record.get("mediaState") == media_state:
             continue
         client.patch_private_document(
-            "episodes", str(record["document_id"]),
-            {"mediaState": media_state, "retiredAt": now if media_state == "retired" else None,
-             "updatedAt": now},
+            "episodes",
+            str(record["document_id"]),
+            {
+                "mediaState": media_state,
+                "retiredAt": now if media_state == "retired" else None,
+                "updatedAt": now,
+            },
         )
 
 
@@ -574,8 +617,11 @@ def _execute_generation(
         }
     database.claim_scheduled_execution(execution_id, episode_date)
     generation_started_at = datetime.now(UTC)
-    timing_context = {"started_at": generation_started_at, "expected_start": expected_start,
-                      "ready_by": ready_by}
+    timing_context = {
+        "started_at": generation_started_at,
+        "expected_start": expected_start,
+        "ready_by": ready_by,
+    }
     resources: dict = {}
     _runner_status(
         client,
@@ -841,7 +887,9 @@ def _execute_generation(
 
 
 def _schedule_timing(
-    schedule: ScheduledJob, current: datetime, occurrence: date | None = None,
+    schedule: ScheduledJob,
+    current: datetime,
+    occurrence: date | None = None,
 ) -> dict[str, datetime]:
     local = schedule.local_now(current)
     local_day = occurrence or local.date()

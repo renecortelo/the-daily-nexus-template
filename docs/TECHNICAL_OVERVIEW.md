@@ -305,7 +305,7 @@ reviewed inventory. No paid fallback, polling scheduler or timeout increase is a
 
 ## Console interaction accessibility
 
-The 4.1.10 static console offers earlier/later buttons and keyboard shortcuts
+The static console offers earlier/later buttons and keyboard shortcuts
 alongside section dragging in both GEN and SCHED. Reordering preserves focus,
 announces positions and rejects foreign drop text; logout clears announcements.
 Mobile/coarse-pointer buttons have 44-pixel minimum targets at default text size,
@@ -367,6 +367,26 @@ coverage checks and original-source factual approval remain authoritative. Only
 draft instructions change: no automatic evidence deletion, quota increase or
 verification bypass. Prompt text grows slightly; runtime/retry improvements must
 be measured in ordinary runs and are not guaranteed by passing local tests.
+
+## Adaptive newspaper reading
+
+The 4.1.11 console defaults to READABLE when the freshly checked owner record
+contains a supported reading projection. The runner adds that bounded copy only
+for a published ready paper whose final JSON matches the verified manifest.
+Only editorial fields survive; internal source IDs, evidence, local paths and
+URLs do not. Text, lists and exact highlights become semantic DOM nodes, never
+HTML. Visual facts retain labels, values, details and captions in text; original
+charts and design remain available under PAGES and in the unchanged PDF.
+
+Old/invalid/legacy projections use page previews without historical regeneration.
+New metadata lists exact same-edition preview URLs; a stable owner-update revision
+refreshes corrected editions without random cache busting on every selection.
+Partial preview failures preserve the pages that loaded. Selection uses the
+existing fresh owner-server check, stale callbacks are invalidated on logout or
+view changes, and private reading copy is not persisted in the offline shell.
+There is no additional model call, cloud read/subscription or provider; existing
+metadata writes/transfer/storage are slightly larger. Real iOS/PWA and VoiceOver
+testing, and adoption on normally generated papers, remain open.
 
 ## Adoption requirements and limitations
 
