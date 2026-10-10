@@ -41,6 +41,7 @@ class WebRunnerTests(TestCase):
             "localId": "owner-uid",
             "email": "owner@example.com",
             "refreshToken": "firebase-refresh-token",
+            "idToken": "synthetic-owner-id-token",
         }
 
         with (
@@ -50,7 +51,7 @@ class WebRunnerTests(TestCase):
             ),
             patch(
                 "audiodigest.web_runner._json_request",
-                return_value=firebase_response,
+                side_effect=[firebase_response, {'_not_found': True}],
             ) as request,
             patch(
                 "audiodigest.web_runner.GmailTokenStore.get_account_email",
@@ -60,7 +61,7 @@ class WebRunnerTests(TestCase):
         ):
             identity = authenticate_web_runner(settings)
 
-        post_body = request.call_args.kwargs["payload"]["postBody"]
+        post_body = request.call_args_list[0].kwargs["payload"]["postBody"]
         self.assertIn("access_token=short-lived-google-access-token", post_body)
         self.assertNotIn("id_token=", post_body)
         self.assertEqual("owner-uid", identity.uid)

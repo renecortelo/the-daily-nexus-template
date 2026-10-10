@@ -164,7 +164,7 @@ def _firebase_auth_url(settings: Settings, endpoint: str) -> str:
     return f"https://identitytoolkit.googleapis.com/v1/{endpoint}?key={key}"
 
 
-def authenticate_web_runner(settings: Settings) -> WebRunnerIdentity:
+def _authenticate_owner(settings: Settings) -> dict[str, Any]:
     if not settings.web.enabled:
         raise WebRunnerError("enable the V4 web runner in config.toml first")
     client_path = settings.web.oauth_client_secret_path
@@ -222,8 +222,17 @@ def authenticate_web_runner(settings: Settings) -> WebRunnerIdentity:
         raise WebRunnerError(
             "the web runner must use the same Google account as the connected Gmail source"
         )
-    WebRunnerTokenStore(settings).set(refresh_token)
-    return WebRunnerIdentity(uid=uid, email=email)
+    return response
+
+
+def authenticate_web_runner(settings: Settings) -> WebRunnerIdentity:
+    response = _authenticate_owner(settings)
+    client = FirebaseWebRunnerClient(settings)
+    grant = client._automation_authorization(str(response.get('idToken', '')))
+    if grant and grant.get('mode') != 'prepared':
+        raise WebRunnerError('dedicated runner is active; legacy pairing is disabled')
+    WebRunnerTokenStore(settings).set(response['refreshToken'])
+    return WebRunnerIdentity(uid=response['localId'], email=response['email'])
 
 
 def unpair_web_runner(settings: Settings) -> bool:
@@ -299,6 +308,7 @@ class FirebaseWebRunnerClient:
         self.token_store = WebRunnerTokenStore(settings)
         self.uid = settings.web.owner_uid
         self._id_token = ""
+        self.identity_uid = ""
 
     def authenticate(self) -> str:
         refresh_token = self.token_store.get()
@@ -315,16 +325,40 @@ class FirebaseWebRunnerClient:
             },
         )
         uid = str(response.get("user_id", ""))
-        if uid != self.uid:
-            raise WebRunnerError("runner token does not belong to the configured owner")
         token = response.get("id_token")
         rotated = response.get("refresh_token")
         if not isinstance(token, str) or not token:
             raise WebRunnerError("Firebase did not refresh the runner identity")
+        grant = self._automation_authorization(token)
+        if uid == self.uid:
+            if grant and grant.get('mode') != 'prepared':
+                raise WebRunnerError('legacy owner runner authorization is disabled')
+        elif not (
+            uid and grant and grant.get('runnerUid') == uid
+            and grant.get('schemaVersion') == 1
+            and grant.get('mode') in {'prepared', 'active'}
+        ):
+            raise WebRunnerError('runner identity has no active owner authorization')
         if isinstance(rotated, str) and rotated and rotated != refresh_token:
             self.token_store.set(rotated)
         self._id_token = token
+        self.identity_uid = uid
         return token
+
+    def _automation_authorization(self, token: str) -> dict[str, Any] | None:
+        if not token:
+            raise WebRunnerError('Firebase did not return an identity token')
+        uid = urllib.parse.quote(self.uid, safe='')
+        response = _json_request(
+            f'{self._documents_root}/automationAuthorizations/{uid}',
+            bearer=token, allow_not_found=True,
+        )
+        if response.get('_not_found'):
+            return None
+        fields = response.get('fields')
+        if not isinstance(fields, dict):
+            raise WebRunnerError('runner authorization was malformed')
+        return _decode_firestore_fields(fields)
 
     @property
     def _documents_root(self) -> str:

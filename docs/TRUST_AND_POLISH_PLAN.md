@@ -49,12 +49,30 @@ private controls; generated reference fixtures retain functional article query
 arguments but no recognized personalization/authentication values; original
 mailbox IDs and personal email addresses do not appear in source prompts.
 
-Remaining authorization gate: the console and unattended runner currently share
-the owner identity. Browser timeout controls do not invalidate a copied token
-server-side. Design distinct automation authorization before adding server-side
-browser-session expiry. Do not apply a blanket owner-token age rule that breaks
-scheduled generation. Test credential/file access boundaries and feed-link
-rotation separately; no rotation of a working private feed is automatic.
+Authorization migration implemented/tested on 2026-10-10, but activation requires
+an explicit operator step: [RUNNER_IDENTITY.md](RUNNER_IDENTITY.md). A dedicated
+Firebase Anonymous identity receives an exact owner grant; it cannot change
+owner records, schedules, clock projections, or its own authorization. Active or
+revoked grants enforce the browser's original-sign-in one-hour limit in Firestore,
+including the owner-document check used by Cloud Clock. Automation tokens are
+separate and not subject to this browser age limit. Existing alarms are unchanged.
+
+Prepared/absent grants deliberately preserve the legacy runner until the private
+encrypted secret is replaced. The explicit migration checks for an idle runner,
+secures the token locally, verifies a bounded schedule read, replaces only that
+GitHub secret, checks activity again and activates the grant. It never runs during
+generation. Resuming requires the exact prepared identity; active/revoked grants
+cannot downgrade to prepared through client rules. No service account, model
+call, paid service, feed rotation or episode generation is added. Authentication
+adds one authorization-document read per new runner client; rule document checks
+can consume Firestore reads. Do not describe this as zero compute/read overhead.
+
+Local regression coverage includes actual Firestore emulator rules, old/refreshed
+browser tokens, unknown/cross-owner identities, restricted automation operations,
+revocation and secret-install failures. Production activation is NOT implied by
+these tests or a rules deployment. Idle expiry/logout remain browser-local and do
+not immediately revoke copied tokens. Credential/file boundaries and separately
+reviewed feed-link rotation remain open; no working feed rotates automatically.
 
 ## 2. Original-source verification and source lineage
 

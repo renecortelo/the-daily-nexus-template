@@ -80,6 +80,13 @@ sign-out and a one-hour absolute session limit. Active playback counts as
 activity; sign-out unloads the player and clears private reader content.
 The unattended Linux runner uses separate encrypted GitHub Actions
 secrets for Gmail, Antigravity, Firebase owner access, and Firebase deployment.
+Deployments completing [RUNNER_IDENTITY.md](RUNNER_IDENTITY.md) use a dedicated
+Firebase automation identity instead of the owner's Google refresh token.
+Their Firestore rules enforce one hour from original browser authentication;
+idle expiry and logout remain local and do not immediately revoke copied tokens.
+Prepared/absent authorization keeps legacy compatibility until migration is
+activated. Rule authorization checks and the runner's grant check add bounded
+Firestore reads; no new paid service or polling job is introduced.
 Those encrypted repository secrets persist until the operator rotates or deletes
 them. A job materializes temporary owner-only copies on an ephemeral machine;
 cleanup removes the copies, and the grants can be revoked independently.

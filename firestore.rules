@@ -6,10 +6,64 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
+    function ownerIdentity(uid) {
       return signedIn()
         && request.auth.uid == uid
         && exists(/databases/$(database)/documents/owners/$(uid));
+    }
+
+    function freshOwner(uid) {
+      return ownerIdentity(uid)
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.auth_time is int
+        && request.auth.token.auth_time > 0
+        && request.time >= timestamp.value(request.auth.token.auth_time * 1000)
+        && request.time < timestamp.value(request.auth.token.auth_time * 1000)
+          + duration.value(1, 'h');
+    }
+
+    // Temporary compatibility only, until the operator activates the migration.
+    // A revoked authorization does NOT restore the legacy owner-token bypass.
+    function legacyOwner(uid) {
+      return ownerIdentity(uid)
+        && (!exists(/databases/$(database)/documents/automationAuthorizations/$(uid))
+          || get(/databases/$(database)/documents/automationAuthorizations/$(uid)).data.mode == 'prepared');
+    }
+
+    function isOwner(uid) {
+      return freshOwner(uid) || legacyOwner(uid);
+    }
+
+    function automation(uid) {
+      return signedIn()
+        && request.auth.uid != uid
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && exists(/databases/$(database)/documents/owners/$(uid))
+        && exists(/databases/$(database)/documents/automationAuthorizations/$(uid))
+        && get(/databases/$(database)/documents/automationAuthorizations/$(uid)).data.runnerUid == request.auth.uid
+        && get(/databases/$(database)/documents/automationAuthorizations/$(uid)).data.mode in ['prepared', 'active'];
+    }
+
+    function runnerAccess(uid) {
+      return automation(uid) || legacyOwner(uid);
+    }
+
+    match /automationAuthorizations/{uid} {
+      allow get: if isOwner(uid) || (signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && resource.data.runnerUid == request.auth.uid);
+      allow list, delete: if false;
+      allow create, update: if freshOwner(uid)
+        && request.resource.data.keys().hasOnly(['runnerUid', 'mode', 'schemaVersion'])
+        && request.resource.data.runnerUid is string
+        && request.resource.data.runnerUid.size() > 0
+        && request.resource.data.runnerUid.size() <= 128
+        && request.resource.data.runnerUid != uid
+        && request.resource.data.mode in ['prepared', 'active', 'revoked']
+        && request.resource.data.schemaVersion == 1
+        && (!exists(/databases/$(database)/documents/automationAuthorizations/$(uid))
+          || resource.data.mode == 'prepared'
+          || request.resource.data.mode != 'prepared');
     }
 
     function validParameters(parameters) {
@@ -144,12 +198,13 @@ service cloud.firestore {
     }
 
     match /owners/{uid} {
-      allow get: if signedIn() && request.auth.uid == uid;
+      allow get: if isOwner(uid);
       allow list, create, update, delete: if false;
     }
 
     match /users/{uid}/schedules/{scheduleId} {
-      allow read, delete: if isOwner(uid);
+      allow read: if isOwner(uid) || automation(uid);
+      allow delete: if isOwner(uid);
       allow create, update: if isOwner(uid) && validSchedule();
     }
 
@@ -162,7 +217,8 @@ service cloud.firestore {
     }
 
     match /users/{uid}/runRequests/{requestId} {
-      allow read, delete: if isOwner(uid);
+      allow read: if isOwner(uid) || automation(uid);
+      allow delete: if isOwner(uid) && resource.data.status in ['failed', 'expired'];
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly([
           'parameters',
@@ -179,7 +235,7 @@ service cloud.firestore {
         && request.resource.data.schemaVersion == 1
         && request.resource.data.requestedAt == request.time
         && request.resource.data.updatedAt == request.time;
-      allow update: if isOwner(uid)
+      allow update: if runnerAccess(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'startedAt', 'finishedAt', 'updatedAt', 'detail'
         ])
@@ -190,13 +246,15 @@ service cloud.firestore {
     }
 
     match /users/{uid}/episodes/{episodeId} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid) || automation(uid);
+      allow create, update: if runnerAccess(uid);
+      allow delete: if false;
     }
 
     match /users/{uid}/executions/{executionId} {
-      allow read: if isOwner(uid);
-      allow create: if isOwner(uid) && validExecutionCreate();
-      allow update: if isOwner(uid)
+      allow read: if isOwner(uid) || automation(uid);
+      allow create: if runnerAccess(uid) && validExecutionCreate();
+      allow update: if runnerAccess(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status',
           'startedAt',
@@ -215,7 +273,9 @@ service cloud.firestore {
     }
 
     match /users/{uid}/runner/{documentId} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid) || automation(uid);
+      allow create, update: if runnerAccess(uid);
+      allow delete: if false;
     }
 
     match /{document=**} {
