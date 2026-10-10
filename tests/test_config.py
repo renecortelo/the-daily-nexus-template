@@ -5,9 +5,32 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from audiodigest.config import load_settings
+from audiodigest.private_store import PrivateStoreError, read_private_value, write_private_value
 
 
 class ConfigTests(TestCase):
+    def test_relative_token_path_does_not_hide_a_symbolic_link(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            runtime = root / "runtime"
+            runtime.mkdir()
+            target = runtime / "target"
+            write_private_value(target, "private-value")
+            alias = runtime / "alias"
+            try:
+                alias.symlink_to(target)
+            except OSError:
+                self.skipTest("symbolic links are unavailable")
+            config = root / "config.toml"
+            config.write_text('[app]\nruntime_dir="runtime"\n'
+                              '[web]\ntoken_file_path="runtime/alias"\n'
+                              '[antigravity]\nworkspace_dir="runtime/alias"\n')
+            settings = load_settings(config)
+            self.assertEqual(alias, settings.web.token_file_path)
+            self.assertEqual(alias, settings.antigravity.workspace_dir)
+            with self.assertRaises(PrivateStoreError):
+                read_private_value(settings.web.token_file_path)
+
     def test_loudness_settings_reject_nonfinite_and_unsupported_filter_values(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
             path = Path(name) / "config.toml"

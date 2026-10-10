@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -213,6 +214,9 @@ class AntigravitySafetyTests(TestCase):
                 workspace = Path(kwargs["cwd"])
                 requests = list(workspace.glob("request-*.json"))
                 self.assertEqual(len(requests), 1)
+                if os.name == "posix":
+                    self.assertEqual(0o600, requests[0].stat().st_mode & 0o777)
+                    self.assertEqual(0o700, workspace.stat().st_mode & 0o777)
                 envelope = json.loads(requests[0].read_text(encoding="utf-8"))
                 self.assertEqual(envelope["payload"], {"source": "fixture"})
                 self.assertIn("--sandbox", command)
@@ -248,6 +252,85 @@ class AntigravitySafetyTests(TestCase):
             self.assertTrue(result["approved"])
             self.assertEqual(metadata.output_tokens, 2)
             self.assertEqual(list(settings.workspace_dir.glob("request-*.json")), [])
+
+    def test_child_environment_excludes_unrelated_credentials_but_keeps_cli_auth_transport(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            settings.settings_path.write_text('{"useG1Credits":false,"enableTelemetry":false}')
+            blocked = {key: "synthetic-secret" for key in (
+                "TDN_GMAIL_TOKEN_JSON", "TDN_FIREBASE_REFRESH_TOKEN", "FIREBASE_TOKEN",
+                "GH_TOKEN", "GITHUB_TOKEN", "TDN_FIREBASE_SECRET_PATH",
+                "TDN_ANTIGRAVITY_KEYRING_JSON", "TDN_CLOUD_CLOCK_URL",
+            )}
+            with (
+                patch.dict(os.environ, {**blocked, "DBUS_SESSION_BUS_ADDRESS": "test-transport"}),
+                patch("audiodigest.antigravity_client.subprocess.run") as run,
+            ):
+                run.return_value = subprocess.CompletedProcess(
+                    [], 0, stdout='{"response":"{\\"approved\\":true}"}', stderr="",
+                )
+                AntigravityCLI(settings).invoke("Check.", {}, lambda value: value, retries=0)
+                child = run.call_args.kwargs["env"]
+            self.assertTrue(set(blocked).isdisjoint(child))
+            self.assertEqual("test-transport", child["DBUS_SESSION_BUS_ADDRESS"])
+            self.assertEqual("synthetic-secret", blocked["GH_TOKEN"])
+
+    def test_timed_out_child_still_removes_private_request(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            settings.settings_path.write_text('{"useG1Credits":false,"enableTelemetry":false}')
+            with patch("audiodigest.antigravity_client.subprocess.run",
+                       side_effect=subprocess.TimeoutExpired("synthetic-cli", 1)):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    AntigravityCLI(settings).invoke("Check.", {}, lambda value: value, retries=0)
+            self.assertEqual([], list(settings.workspace_dir.glob("request-*.json")))
+
+    def test_request_over_credential_limit_is_not_clipped(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            client = AntigravityCLI(settings)
+            source = "x" * (2 * 1024 * 1024 + 1)
+            request = client._prepare_workspace("Check.", {"source": source})
+            self.assertEqual(source, json.loads(request.read_text())["payload"]["source"])
+            request.unlink()
+
+    def test_failed_private_write_prevents_cli_start(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            settings.settings_path.write_text('{"useG1Credits":false,"enableTelemetry":false}')
+            with (
+                patch("audiodigest.antigravity_client.write_private_value",
+                      side_effect=OSError("synthetic failure")),
+                patch("audiodigest.antigravity_client.subprocess.run") as run,
+            ):
+                with self.assertRaisesRegex(AntigravityConfigurationError, "secure"):
+                    AntigravityCLI(settings).invoke("Check.", {}, lambda value: value, retries=0)
+                run.assert_not_called()
+
+    def test_linked_workspace_cannot_receive_a_private_request(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            root = Path(name)
+            settings = self._settings(root)
+            target = root / "keep"
+            target.mkdir()
+            alias = root / "linked-workspace"
+            try:
+                alias.symlink_to(target, target_is_directory=True)
+            except OSError:
+                self.skipTest("symbolic links are unavailable")
+            settings.workspace_dir = alias
+            with self.assertRaises(AntigravityConfigurationError):
+                AntigravityCLI(settings)._prepare_workspace("Check.", {"private": "fixture"})
+            self.assertEqual([], list(target.iterdir()))
+
+    def test_oversized_request_fails_without_cropping_or_leaving_payload(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            with self.assertRaises(AntigravityConfigurationError):
+                AntigravityCLI(settings)._prepare_workspace(
+                    "Check.", {"source": "x" * (16 * 1024 * 1024)},
+                )
+            self.assertEqual([], list(settings.workspace_dir.glob("request-*.json")))
 
     def test_validation_retry_receives_the_rejected_response(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:

@@ -45,6 +45,35 @@ sign-out or provider revocation when the grant is no longer needed.
 
 ## Antigravity isolation
 
+### Private file boundaries
+
+Configured credential files and editorial requests reject symbolic links,
+linked ancestors, Windows directory junctions and hard-link aliases. Credential
+reads are bounded to 2 MiB and validate the opened regular file; supported POSIX
+systems use a no-follow open and reject foreign-owned or group/world-accessible
+files. Writes create an exclusive temporary file, establish owner-only access
+before writing, flush and atomically replace the destination. POSIX permission
+failures are fatal, not silently ignored. Linux writes use directory 0700/file
+0600; Windows still relies on inherited OS ACLs and the credential vault for
+normal desktop tokens, not an equivalent POSIX-mode guarantee.
+
+Antigravity request envelopes use the same protected writer, with a separate
+16 MiB maximum so ordinary multi-newsletter input is not limited to the credential
+size. Oversized inputs fail rather than being cropped. Requests are removed on
+subprocess success/failure/timeout. The child environment excludes recognized
+Gmail, Firebase, GitHub and cloud-clock values while retaining the CLI's required
+OAuth/keyring transport. This is defense in depth; it does not isolate processes
+running as the same OS user, arbitrary unknown environment secrets, provider-side
+processing or CLI-managed conversation state.
+
+Cloud preparation and cleanup require the private Linux Actions boundary and
+the fixed repository-root `config.toml.cloud`. Cleanup rejects linked or broad
+targets, removes only its managed runtime/configuration/settings, and reports
+incomplete removal instead of claiming success. No secure-disk-erasure guarantee
+is made; GitHub destroys its hosted runner after the job. Existing unmanaged
+POSIX credential files with broad permissions must be secured by their owner
+before use; normal runtime files are regenerated with the protected writer.
+
 - Google OAuth is required; a Google Cloud project, API key, or Vertex credential is forbidden.
 - `useG1Credits` must be explicitly `false`, so paid AI-credit fallback cannot occur.
 - `enableTelemetry` must be explicitly `false`.
