@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.13', page)
-        self.assertIn('/styles.css?v=4.1.13', page)
-        self.assertIn('tdn-shell-v4-43', worker)
+        self.assertIn('/app.js?v=4.1.14', page)
+        self.assertIn('/styles.css?v=4.1.14', page)
+        self.assertIn('tdn-shell-v4-44', worker)
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")

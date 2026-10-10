@@ -48,6 +48,11 @@ const LOCAL_VOICE_GENDERS = Object.freeze({
   am_eric: "Male",
   am_puck: "Male",
 });
+// Both views control the same audio element through one transport/level mapping.
+const PLAYER_SURFACES = Object.freeze([
+  Object.freeze({ prefix: "player", panel: "web-player", progress: "episode-progress", current: "player-current", total: "player-total" }),
+  Object.freeze({ prefix: "mini", panel: "mini-player", progress: "mini-player-progress", current: "mini-player-current", total: "mini-player-total" }),
+]);
 const appState = {
   auth: null,
   db: null,
@@ -2221,30 +2226,24 @@ function setRangeProgress(control, value = control.value) {
 
 function syncPlayer() {
   const audio = byId("episode-audio");
-  const duration = audio.duration || 0;
-  const current = audio.currentTime || 0;
+  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+  const current = duration && Number.isFinite(audio.currentTime) ? Math.max(0, Math.min(duration, audio.currentTime)) : 0;
   const progress = duration ? String((current / duration) * 100) : "0";
-  byId("episode-progress").value = progress;
-  setRangeProgress(byId("episode-progress"), progress);
-  const playbackText = `${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}`;
-  byId("player-time").textContent = playbackText;
-  byId("player-current").textContent = formatPlaybackTime(current);
-  byId("player-total").textContent = formatPlaybackTime(duration);
-  byId("player-pause-button").classList.toggle("active", !audio.paused && !audio.ended);
-  byId("player-pause-button").setAttribute("aria-label", audio.paused ? "Resume" : "Pause");
-  byId("player-pause-button").title = audio.paused ? "Resume" : "Pause";
-  byId("mini-player-progress").value = progress;
-  setRangeProgress(byId("mini-player-progress"), progress);
-  byId("mini-player-current").textContent = formatPlaybackTime(current);
-  byId("mini-player-total").textContent = formatPlaybackTime(duration);
-  byId("mini-pause-button").classList.toggle("active", !audio.paused && !audio.ended);
-  byId("mini-pause-button").setAttribute("aria-label", audio.paused ? "Resume" : "Pause");
-  byId("mini-pause-button").title = audio.paused ? "Resume" : "Pause";
-  for (const id of ["episode-progress", "mini-player-progress"]) {
-    byId(id).setAttribute("aria-valuetext", `${formatPlaybackTime(current)} of ${formatPlaybackTime(duration)}`);
+  const playing = !audio.paused && !audio.ended;
+  for (const surface of PLAYER_SURFACES) {
+    const control = byId(surface.progress);
+    control.value = progress;
+    setRangeProgress(control, progress);
+    control.setAttribute("aria-valuetext", `${formatPlaybackTime(current)} of ${formatPlaybackTime(duration)}`);
+    byId(surface.current).textContent = formatPlaybackTime(current);
+    byId(surface.total).textContent = formatPlaybackTime(duration);
+    const pause = byId(`${surface.prefix}-pause-button`);
+    pause.classList.toggle("active", playing);
+    pause.setAttribute("aria-label", audio.paused ? "Resume" : "Pause");
+    pause.title = audio.paused ? "Resume" : "Pause";
+    byId(surface.panel).classList.toggle("playing", playing);
   }
-  byId("web-player").classList.toggle("playing", !audio.paused && !audio.ended);
-  byId("mini-player").classList.toggle("playing", !audio.paused && !audio.ended);
+  byId("player-time").textContent = `${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}`;
   byId("mini-player").hidden = !appState.activeEpisode || appState.playbackStopped === true || audio.ended;
   syncMediaSession();
   savePlaybackPosition();
@@ -2257,7 +2256,7 @@ function syncPlayer() {
     chapters.selectedIndex = chapterIndex;
   }
   if (appState.playerDetailMode === "transcript") {
-    const currentMs = audio.currentTime * 1000;
+    const currentMs = current * 1000;
     let active = null;
     for (const segment of document.querySelectorAll(".transcript-segment")) {
       const start = Number(segment.dataset.startMs);
@@ -2377,9 +2376,7 @@ function renderPlayerDetails(mode = "references") {
     const nextStart = episode.transcript[index + 1]?.startMs;
     if (Number.isFinite(Number(nextStart))) button.dataset.nextStartMs = String(nextStart);
     button.addEventListener("click", () => {
-      const audio = byId("episode-audio");
-      if (Number.isFinite(Number(segment.startMs))) audio.currentTime = Number(segment.startMs) / 1000;
-      syncPlayer();
+      if (Number.isFinite(Number(segment.startMs))) seekEpisodeAudio(Number(segment.startMs) / 1000, true);
     });
     container.append(button);
   }
@@ -2515,6 +2512,7 @@ function syncMediaSession() {
 }
 
 function selectRelativeEpisode(direction) {
+  if (!appState.authorized || !appState.activeEpisode) return;
   const index = appState.episodes.findIndex((item) => item.id === appState.activeEpisode?.id);
   if (index < 0 || !appState.episodes.length) return;
   const target = appState.episodes[(index + direction + appState.episodes.length) % appState.episodes.length];
@@ -2723,7 +2721,130 @@ function adjustEditionZoom(direction) {
   applyEditionZoom();
 }
 
+function playbackSelection() {
+  const audio = byId("episode-audio");
+  return appState.authorized && appState.activeEpisode && audio.src
+    ? { epoch: appState.authEpoch, id: appState.activeEpisode.id, src: audio.src } : null;
+}
+
+function isPlaybackSelectionCurrent(selection) {
+  return Boolean(selection && appState.authorized && appState.authEpoch === selection.epoch
+    && appState.activeEpisode?.id === selection.id && byId("episode-audio").src === selection.src);
+}
+
+async function playEpisodeAudio() {
+  const selection = playbackSelection();
+  if (!selection) return;
+  appState.playbackStopped = false;
+  try { await byId("episode-audio").play(); }
+  catch {
+    if (isPlaybackSelectionCurrent(selection)) showAlert("Playback could not start in this browser.", true);
+  }
+}
+
+function pauseEpisodeAudio() {
+  if (playbackSelection()) byId("episode-audio").pause();
+}
+
+function toggleEpisodeAudio() {
+  if (!playbackSelection()) return;
+  if (byId("episode-audio").paused) return playEpisodeAudio();
+  pauseEpisodeAudio();
+}
+
+function stopEpisodeAudio() {
+  if (!playbackSelection()) return;
+  const audio = byId("episode-audio");
+  appState.playbackStopped = true;
+  audio.pause();
+  audio.currentTime = 0;
+  savePlaybackPosition(true);
+  syncPlayer();
+}
+
+function seekEpisodeAudio(seconds, commit = false) {
+  const audio = byId("episode-audio");
+  if (!playbackSelection() || !Number.isFinite(seconds) || !Number.isFinite(audio.duration) || audio.duration <= 0) return false;
+  try { audio.currentTime = Math.max(0, Math.min(audio.duration, seconds)); }
+  catch { return false; }
+  if (commit) savePlaybackPosition(true);
+  syncPlayer();
+  return true;
+}
+
+function syncPlaybackLevels() {
+  const audio = byId("episode-audio");
+  const volume = Math.round(Math.max(0, Math.min(1, Number.isFinite(audio.volume) ? audio.volume : 0.85)) * 100);
+  const speed = Number.isFinite(audio.playbackRate) && audio.playbackRate > 0 ? audio.playbackRate : 1;
+  const label = `${speed.toFixed(2).replace(/0$/, "")}x`;
+  for (const { prefix } of PLAYER_SURFACES) {
+    byId(`${prefix}-volume`).value = String(volume);
+    byId(`${prefix}-volume-value`).textContent = `${volume}%`;
+    byId(`${prefix}-volume`).setAttribute("aria-valuetext", `${volume}%`);
+    byId(`${prefix}-speed`).value = String(speed * 100);
+    byId(`${prefix}-speed-value`).textContent = label;
+    byId(`${prefix}-speed`).setAttribute("aria-valuetext", label);
+  }
+}
+
+function setPlaybackLevel(kind, value) {
+  if (!appState.authorized || !["volume", "speed"].includes(kind)
+      || !["number", "string"].includes(typeof value) || String(value).trim() === "" || !Number.isFinite(Number(value))) return false;
+  const audio = byId("episode-audio");
+  if (kind === "volume") audio.volume = Math.max(0, Math.min(100, Number(value))) / 100;
+  else {
+    audio.preservesPitch = true;
+    audio.webkitPreservesPitch = true;
+    audio.playbackRate = Math.max(75, Math.min(200, Number(value))) / 100;
+  }
+  syncPlaybackLevels();
+  return true;
+}
+
+function playbackPointerRatio(control, event) {
+  const bounds = control.getBoundingClientRect();
+  if (!Number.isFinite(event.clientX) || !Number.isFinite(bounds.left) || !Number.isFinite(bounds.width) || bounds.width <= 0) return null;
+  return Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+}
+
+function setupPlaybackProgress(control) {
+  if (control.dataset.playbackReady === "true") return;
+  let drag = null;
+  const audio = byId("episode-audio");
+  control.addEventListener("input", () => {
+    if (drag && !isPlaybackSelectionCurrent(drag.selection)) return;
+    seekEpisodeAudio((Number(control.value) / 100) * audio.duration, !drag);
+  });
+  control.addEventListener("pointerdown", event => {
+    if ((event.button !== undefined && event.button !== 0) || event.isPrimary === false) return;
+    const selection = playbackSelection();
+    const ratio = playbackPointerRatio(control, event);
+    if (!selection || ratio === null || !seekEpisodeAudio(ratio * audio.duration)) return;
+    drag = { pointerId: event.pointerId, selection };
+    try { control.setPointerCapture?.(event.pointerId); } catch { /* Native range input remains available. */ }
+  });
+  control.addEventListener("pointermove", event => {
+    const ratio = playbackPointerRatio(control, event);
+    if (ratio === null || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    control.title = `Seek to ${formatPlaybackTime(ratio * audio.duration)}`;
+    if (drag?.pointerId === event.pointerId && isPlaybackSelectionCurrent(drag.selection)) seekEpisodeAudio(ratio * audio.duration);
+  });
+  const finish = event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const selection = drag.selection;
+    drag = null;
+    try {
+      if (control.hasPointerCapture?.(event.pointerId)) control.releasePointerCapture(event.pointerId);
+    } catch { /* Capture can already be lost when the browser cancels a gesture. */ }
+    if (isPlaybackSelectionCurrent(selection)) { savePlaybackPosition(true); syncPlayer(); }
+  };
+  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) control.addEventListener(name, finish);
+  control.dataset.playbackReady = "true";
+}
+
 function setupWebPlayer() {
+  const audio = byId("episode-audio");
+  if (audio.dataset.playerReady === "true") return;
   for (const id of ["load-older-episodes", "load-older-editions"]) {
     byId(id).addEventListener("click", loadOlderArchive);
   }
@@ -2733,64 +2854,38 @@ function setupWebPlayer() {
       appState.lastTranscriptSegment = null;
     }, { passive: true });
   }
-  const audio = byId("episode-audio");
-  const togglePlayback = async () => {
-    if (!appState.authorized || !audio.src) return;
-    appState.playbackStopped = false;
-    if (audio.paused) await audio.play(); else audio.pause();
-  };
-  const play = () => {
-    if (!appState.authorized || !audio.src) return;
-    appState.playbackStopped = false;
-    return audio.play().catch(() => showAlert("Playback could not start in this browser.", true));
-  };
-  const stop = () => {
-    appState.playbackStopped = true;
-    audio.pause(); audio.currentTime = 0; savePlaybackPosition(true); syncPlayer();
-  };
   byId("mini-levels-button").addEventListener("click", () => {
     const opened = byId("mini-player").classList.toggle("levels-open");
     byId("mini-levels-button").setAttribute("aria-expanded", String(opened));
   });
   byId("player-chapters").addEventListener("change", (event) => {
-    if (!audio.duration) return;
-    audio.currentTime = Math.min(audio.duration, Number(event.target.value) || 0);
-    savePlaybackPosition(true); syncPlayer();
+    seekEpisodeAudio(Number(event.target.value), true);
   });
   if (typeof navigator !== "undefined" && navigator.mediaSession) {
-    const actions = { play, pause: () => audio.pause(), stop,
+    const actions = { play: playEpisodeAudio, pause: pauseEpisodeAudio, stop: stopEpisodeAudio,
       previoustrack: () => selectRelativeEpisode(-1), nexttrack: () => selectRelativeEpisode(1),
-      seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 15)); syncPlayer(); },
-      seekforward: details => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 15)); syncPlayer(); },
-      seekto: details => { if (Number.isFinite(details.seekTime)) audio.currentTime = Math.min(audio.duration || 0, Math.max(0, details.seekTime)); syncPlayer(); },
+      seekbackward: details => seekEpisodeAudio(audio.currentTime - (Number.isFinite(details.seekOffset) && details.seekOffset > 0 ? details.seekOffset : 15), true),
+      seekforward: details => seekEpisodeAudio(audio.currentTime + (Number.isFinite(details.seekOffset) && details.seekOffset > 0 ? details.seekOffset : 15), true),
+      seekto: details => seekEpisodeAudio(details.seekTime, true),
     };
     appState.mediaActions = actions;
     // Installed on episode selection; sign-out removes every OS action handler.
   }
-  byId("player-play-button").addEventListener("click", play);
-  byId("player-pause-button").addEventListener("click", () => { togglePlayback().catch(() => showAlert("Playback could not start in this browser.", true)); });
-  byId("mini-play-button").addEventListener("click", play);
-  byId("mini-pause-button").addEventListener("click", () => { togglePlayback().catch(() => showAlert("Playback could not start in this browser.", true)); });
-  byId("player-stop-button").addEventListener("click", stop);
-  byId("mini-stop-button").addEventListener("click", stop);
-  byId("player-previous-button").addEventListener("click", () => selectRelativeEpisode(-1));
-  byId("player-next-button").addEventListener("click", () => selectRelativeEpisode(1));
-  byId("mini-previous-button").addEventListener("click", () => selectRelativeEpisode(-1));
-  byId("mini-next-button").addEventListener("click", () => selectRelativeEpisode(1));
+  for (const { prefix, progress } of PLAYER_SURFACES) {
+    for (const [action, handler] of Object.entries({ play: playEpisodeAudio, pause: toggleEpisodeAudio, stop: stopEpisodeAudio,
+      previous: () => selectRelativeEpisode(-1), next: () => selectRelativeEpisode(1) })) {
+      byId(`${prefix}-${action}-button`).addEventListener("click", handler);
+    }
+    for (const kind of ["volume", "speed"]) byId(`${prefix}-${kind}`).addEventListener("input", event => setPlaybackLevel(kind, event.target.value));
+    setupPlaybackProgress(byId(progress));
+  }
+  // Apply the displayed default; native audio otherwise starts at 100%, not 85%.
+  audio.volume = 0.85;
+  audio.playbackRate = 1;
   audio.preservesPitch = true;
   audio.webkitPreservesPitch = true;
-  for (const id of ["player-volume", "mini-volume"]) byId(id).addEventListener("input", (event) => {
-    audio.volume = Number(event.target.value) / 100;
-    for (const output of ["player-volume-value", "mini-volume-value"]) byId(output).textContent = `${event.target.value}%`;
-    for (const control of ["player-volume", "mini-volume"]) byId(control).value = event.target.value;
-  });
-  for (const id of ["player-speed", "mini-speed"]) byId(id).addEventListener("input", (event) => {
-    const speed = Number(event.target.value) / 100;
-    audio.playbackRate = speed;
-    const label = `${speed.toFixed(2).replace(/0$/, "")}x`;
-    for (const output of ["player-speed-value", "mini-speed-value"]) byId(output).textContent = label;
-    for (const control of ["player-speed", "mini-speed"]) byId(control).value = event.target.value;
-  });
+  syncPlaybackLevels();
+  for (const name of ["volumechange", "ratechange"]) audio.addEventListener(name, () => { syncPlaybackLevels(); syncMediaSession(); });
   for (const mode of ["references", "transcript"]) {
     byId(`show-${mode}`).addEventListener("click", () => {
       byId("show-references").classList.toggle("active", mode === "references");
@@ -2804,45 +2899,6 @@ function setupWebPlayer() {
   byId("edition-readable").addEventListener("click", () => setEditionMode("readable"));
   byId("edition-facsimile").addEventListener("click", () => setEditionMode("pages"));
   applyEditionZoom();
-  const seekFromPointer = (control, event) => {
-    if (!audio.duration) return;
-    const bounds = control.getBoundingClientRect();
-    if (!bounds.width) return;
-    const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const value = String(ratio * 100);
-    control.value = value;
-    setRangeProgress(control, value);
-    audio.currentTime = ratio * audio.duration;
-  };
-  for (const control of [byId("episode-progress"), byId("mini-player-progress")]) {
-    let dragPointerId = null;
-    control.addEventListener("input", () => {
-      setRangeProgress(control);
-      if (audio.duration) audio.currentTime = (Number(control.value) / 100) * audio.duration;
-    });
-    control.addEventListener("pointerdown", (event) => {
-      if (!audio.duration) return;
-      dragPointerId = event.pointerId;
-      control.setPointerCapture?.(event.pointerId);
-      seekFromPointer(control, event);
-    });
-    control.addEventListener("pointermove", (event) => {
-      if (!audio.duration) return;
-      const bounds = event.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-      event.currentTarget.title = `Seek to ${formatPlaybackTime(ratio * audio.duration)}`;
-      if (event.pointerId === dragPointerId) seekFromPointer(control, event);
-    });
-    for (const eventName of ["pointerup", "pointercancel"]) {
-      control.addEventListener(eventName, (event) => {
-        if (event.pointerId !== dragPointerId) return;
-        dragPointerId = null;
-        if (control.hasPointerCapture?.(event.pointerId)) {
-          control.releasePointerCapture(event.pointerId);
-        }
-      });
-    }
-  }
   for (const eventName of ["timeupdate", "loadedmetadata", "play", "pause", "ended"]) {
     audio.addEventListener(eventName, () => {
       if (eventName === "loadedmetadata") restorePlaybackPosition();
@@ -2850,6 +2906,7 @@ function setupWebPlayer() {
       syncPlayer();
     });
   }
+  audio.dataset.playerReady = "true";
 }
 
 function subscribeToPrivateData(uid) {

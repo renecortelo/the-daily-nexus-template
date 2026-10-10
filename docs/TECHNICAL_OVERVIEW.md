@@ -419,6 +419,24 @@ Synthetic browser checks confirm zero monitor DOM mutations for 20 identical
 100-row snapshots and text-only clock ticks; they do not measure generation
 runtime or certify real Safari/assistive-technology behavior.
 
+## Shared playback controls
+
+The 4.1.14 console binds the main and compact views to one transport, timeline
+and level controller for the existing audio element. Chapter and transcript
+navigation and supported Media Session commands use the same authorized,
+finite-duration, clamped seeking path. Both views synchronize progress, times,
+Pause/Resume accessibility labels, playing state, volume and speed, including
+native volume/rate events. The initial displayed 85% volume now matches the
+audio setting. Browser pitch-preservation flags remain enabled at 0.75–2.0x.
+
+Initialization does not duplicate listeners. Pointer capture loss/cancellation
+ends gestures; episode/source/session checks reject stale drags and late play
+errors after selection changes or logout. Existing fresh archive checks, bounded
+session bookmarks and logout cleanup are retained. This introduces no new
+provider/model/cloud operation, persistence, dependency, schedule, runtime cap
+or visual redesign. Synthetic browser coverage is not a real-device/media
+quality certification; Safari/iOS/PWA and assistive-technology checks remain open.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets
