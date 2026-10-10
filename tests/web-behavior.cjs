@@ -15,7 +15,7 @@ function harness(names) {
   function node() {
     return { children: [], options: [], textContent: '', className: '', hidden: false,
       classList: {toggle(){}, remove(){}}, parentElement: {classList: {remove(){}}},
-      style: {setProperty(){}}, setAttribute(){}, removeAttribute(name){delete this[name];},
+      attributes:{}, style: {setProperty(){}}, setAttribute(name,value){this.attributes[name]=value;}, removeAttribute(name){delete this[name];delete this.attributes[name];},
       replaceChildren(){this.children=[]; this.textContent='';}, append(child){this.children.push(child);},
       addEventListener(event,callback){this[event]=callback;}, remove(){},
       pause(){this.paused=true;}, load(){}, scrollTo(){this.scrolls=(this.scrolls||0)+1;},
@@ -30,7 +30,7 @@ function harness(names) {
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
     window: {clearTimeout(){}, matchMedia(){return {matches:false};}},
-    showAlert(){}, firebaseErrorMessage(){return 'safe error';},
+    showAlert(){}, dismissAlert(){}, firebaseErrorMessage(){return 'safe error';},
   };
   vm.createContext(context);
   vm.runInContext(names.map(extract).join('\n'),context);
@@ -209,18 +209,18 @@ test('late authentication response cannot reopen the console after logout', asyn
 });
 
 test('logout empties private generation and schedule controls and favorite labels', () => {
-  const {context}=harness(['clearPrivateForms']); const cleared=[];
+  const {context}=harness(['dismissAlert','clearPrivateForms']); const cleared=[];
   const form=()=>({elements:{requestedDate:{value:'2026-10-08',max:'2026-10-09'},runName:{value:'Synthetic private run'}},reset(){this.elements.runName.value='';}});
   context.generationForm=form(); context.scheduleForm=form();
   context.setSections=(f,sections)=>{cleared.push(sections.length);};
   context.syncHostControls=()=>{}; context.syncNewspaperControls=()=>{};
-  context.globalAlert=context.byId('global-alert'); context.globalAlert.textContent='Synthetic private message';
+  context.globalAlert=context.byId('global-alert'); context.byId('global-alert-message').textContent='Synthetic private message';
   context.byId('profile-name').value='Synthetic favorite';
   context.clearPrivateForms();
   assert.equal(context.generationForm.elements.runName.value,'');
   assert.equal(context.scheduleForm.elements.runName.value,'');
   assert.deepEqual(cleared,[0,0]); assert.equal(context.byId('profile-name').value,'');
-  assert.equal(context.globalAlert.textContent,''); assert.equal(context.globalAlert.hidden,true);
+  assert.equal(context.byId('global-alert-message').textContent,''); assert.equal(context.globalAlert.hidden,true);
 });
 
 test('new favorites are session-only; device retention is explicit and reversible', () => {
@@ -404,4 +404,134 @@ test('time estimates use observed completed runs and never failed attempts', () 
   range=context.runEstimateRange('Example'); assert.equal(range.observed,true);
   assert.equal(range.low,20*60000); assert.equal(range.high,40*60000);
   assert.equal(context.runEstimateRange('Other').observed,false);
+});
+
+function sectionHarness() {
+  const {context}=harness(['parseSections','sectionEditor','sectionValues','reorderSections',
+    'sectionDropBefore','moveSection','renderSectionTokens','setupSectionEditor','setSections']);
+  function dom(tag='',className='',text='') {
+    const node={tag,className,textContent:text,children:[],dataset:{},attributes:{},value:'',
+      append(child){this.children.push(child);},replaceChildren(){this.children=[];},
+      setAttribute(name,value){this.attributes[name]=value;},removeAttribute(name){delete this.attributes[name];},
+      addEventListener(name,callback){this[name]=callback;},focus(){context.focused=this;},
+      querySelector(selector){return this.querySelectorAll(selector)[0] || null;},
+      querySelectorAll(selector){
+        const descendants=this.children.flatMap(child=>[child,...child.querySelectorAll('*')]);
+        return descendants.filter(child=>selector==='*' || (selector==='button' && child.tag==='button')
+          || (selector==='textarea' && child.tag==='textarea')
+          || (selector.startsWith('.') && child.className.split(' ').includes(selector.slice(1).split(':')[0])
+              && (!selector.includes(':not') || !child.className.includes('dragging'))));
+      },
+    };
+    node.classList={add(name){if(!node.className.split(' ').includes(name)) node.className+=` ${name}`;},
+      remove(name){node.className=node.className.split(' ').filter(value=>value!==name).join(' ');},
+      toggle(name,on){if(on) this.add(name);else this.remove(name);}};
+    return node;
+  }
+  context.element=dom;
+  const editor=dom(), list=dom('div','section-token-list'), input=dom('input','section-token-input');
+  const textarea=dom('textarea'),status=dom('span','section-order-status');
+  editor.append(list);editor.append(input);editor.append(textarea);editor.append(status);
+  const form={querySelector:()=>editor};
+  const chips=()=>list.querySelectorAll('.section-chip');
+  const buttons=chip=>chip.querySelectorAll('button');
+  return {context,form,list,input,textarea,status,chips,buttons};
+}
+
+test('section ordering preserves membership and rejects foreign or unknown drop targets', () => {
+  const {context}=harness(['reorderSections']); const sections=['AI','Data','Cloud'];
+  assert.deepEqual([...context.reorderSections(sections,'AI')],['Data','Cloud','AI']);
+  assert.deepEqual([...context.reorderSections(sections,'Cloud','Data')],['AI','Cloud','Data']);
+  for(const [moved,before] of [['Foreign','AI'],['AI','Missing'],['AI','AI']]) {
+    assert.deepEqual([...context.reorderSections(sections,moved,before)],sections);
+  }
+  assert.deepEqual(sections,['AI','Data','Cloud']);
+});
+
+test('wrapped chip rows support drop at the beginning, middle and final position', () => {
+  const {context}=harness(['sectionDropBefore']);
+  const chip=(name,left,top)=>({dataset:{section:name},getBoundingClientRect:()=>({left,top,bottom:top+40,width:100})});
+  const chips=[chip('A',0,0),chip('B',110,0),chip('C',0,50),chip('D',110,50)];
+  assert.equal(context.sectionDropBefore(chips,10,20),chips[0]);
+  assert.equal(context.sectionDropBefore(chips,100,20),chips[1]);
+  assert.equal(context.sectionDropBefore(chips,250,20),chips[2]);
+  assert.equal(context.sectionDropBefore(chips,10,70),chips[2]);
+  assert.equal(context.sectionDropBefore(chips,250,70),null);
+  assert.equal(context.sectionDropBefore(chips,10,200),null);
+});
+
+test('click and keyboard section ordering keep values, focus and position feedback', () => {
+  const h=sectionHarness();h.textarea.value='AI\nData\nCloud';h.context.renderSectionTokens(h.form);
+  assert.equal(h.buttons(h.chips()[0])[0].disabled,true);
+  assert.equal(h.buttons(h.chips()[2])[1].disabled,true);
+  h.buttons(h.chips()[1])[0].click();
+  assert.equal(h.textarea.value,'Data\nAI\nCloud');
+  assert.match(h.status.textContent,/Data moved to position 1 of 3/);
+  assert.equal(h.context.focused,h.chips()[0]); // boundary: retain the group, not destructive Remove
+  let prevented=false;
+  h.chips()[0].keydown({altKey:true,key:'ArrowRight',preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);assert.equal(h.textarea.value,'AI\nData\nCloud');
+  assert.equal(h.context.focused,h.buttons(h.chips()[1])[1]);
+  h.context.moveSection(h.form,'AI',-1);h.context.moveSection(h.form,'Unknown',1);
+  assert.equal(h.textarea.value,'AI\nData\nCloud');
+});
+
+test('removing sections returns focus to the labelled input and invalid additions retain data', () => {
+  const h=sectionHarness(); const errors=[]; h.context.showAlert=(message,error)=>errors.push({message,error});
+  h.textarea.value='AI\nData';h.context.setupSectionEditor(h.form);
+  h.buttons(h.chips()[0])[2].click();assert.equal(h.textarea.value,'Data');
+  assert.equal(h.context.focused,h.input);assert.equal(h.status.textContent,'AI removed.');
+  h.input.value='Data';h.input.keydown({key:'Enter',preventDefault(){}});
+  assert.equal(h.textarea.value,'Data');assert.equal(h.input.attributes['aria-invalid'],'true');
+  assert.equal(errors[0].error,true);
+  h.input.value='Cloud';h.input.keydown({key:'Enter',preventDefault(){}});
+  assert.equal(h.textarea.value,'Data\nCloud');assert.equal(h.input.attributes['aria-invalid'],undefined);
+  h.list.dataset.dropBefore='';h.list.ondrop({preventDefault(){},dataTransfer:{getData:()=> 'Foreign'}});
+  assert.equal(h.textarea.value,'Data\nCloud');
+  h.context.setSections(h.form,[]);assert.equal(h.textarea.value,'');assert.equal(h.status.textContent,'');
+});
+
+test('errors persist, stale notice timers cannot hide them, dismissal clears private text', () => {
+  const {context}=harness(['showAlert','dismissAlert']);const callbacks=[];
+  context.globalAlert=context.byId('global-alert');context.window.setTimeout=callback=>{callbacks.push(callback);return callbacks.length;};
+  context.showAlert('A notice');assert.equal(callbacks.length,1);
+  context.showAlert('A synthetic error',true);callbacks[0]();
+  assert.equal(context.globalAlert.hidden,false);assert.equal(context.globalAlert.attributes.role,'alert');
+  assert.equal(context.byId('global-alert-message').textContent,'A synthetic error');
+  assert.equal(callbacks.length,1);context.dismissAlert();
+  assert.equal(context.byId('global-alert-message').textContent,'');assert.equal(context.globalAlert.hidden,true);
+});
+
+test('navigation identifies the active view and respects reduced motion', () => {
+  const {context}=harness(['setupNavigation']);const buttons=['gen','play'].map(view=>{
+    const node=context.byId(view);node.dataset={view};return node;});
+  const views=['gen','play'].map(view=>{const node=context.byId(`view-${view}`);node.id=`view-${view}`;return node;});
+  context.document.querySelectorAll=selector=>selector==='.mode-button'?buttons:views;
+  let scroll;context.window.scrollTo=options=>{scroll=options;};context.window.matchMedia=()=>({matches:true});
+  context.setupNavigation();buttons[1].click();assert.equal(scroll.behavior,'auto');
+  assert.equal(buttons[1].attributes['aria-current'],'page');assert.equal(buttons[0].attributes['aria-current'],undefined);
+});
+
+test('both progress controls announce time and paused compact playback offers Resume', () => {
+  const {context}=harness(['formatPlaybackTime','setRangeProgress','syncPlayer']);
+  Object.assign(context.byId('episode-audio'),{duration:90,currentTime:32,paused:true,ended:false});
+  context.syncPlayer();
+  for(const id of ['episode-progress','mini-player-progress']) assert.equal(context.byId(id).attributes['aria-valuetext'],'00:32 of 01:30');
+  for(const id of ['player-pause-button','mini-pause-button']) assert.equal(context.byId(id).attributes['aria-label'],'Resume');
+  context.byId('episode-audio').paused=false;context.syncPlayer();
+  assert.equal(context.byId('mini-pause-button').attributes['aria-label'],'Pause');
+});
+
+test('sticky focus insets follow wrapped navigation and a shown or hidden compact player', () => {
+  const {context}=harness(['setupStickyInsets']);let measure,navHeight=64,miniHeight=180;
+  const values={}; const observed=[];
+  context.document.querySelector=()=>({getBoundingClientRect:()=>({height:navHeight})});
+  context.document.documentElement={style:{setProperty:(key,value)=>{values[key]=value;}}};
+  context.byId('mini-player').getBoundingClientRect=()=>({height:miniHeight});
+  context.ResizeObserver=class{constructor(callback){measure=callback;}observe(node){observed.push(node);}};
+  context.window.addEventListener=()=>{};context.setupStickyInsets();
+  assert.equal(observed.length,2);assert.equal(values['--mode-nav-height'],'64px');
+  assert.equal(values['--mini-player-height'],'180px');
+  navHeight=72;miniHeight=0;measure();
+  assert.equal(values['--mode-nav-height'],'72px');assert.equal(values['--mini-player-height'],'0px');
 });

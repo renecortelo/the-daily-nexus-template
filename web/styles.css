@@ -69,6 +69,11 @@ body {
     linear-gradient(135deg, #090603, var(--background) 48%, #160c07);
 }
 
+html {
+  scroll-padding-top: calc(var(--safe-top) + var(--mode-nav-height) + var(--mini-player-height, 0px) + 1rem);
+  scroll-padding-bottom: 4rem;
+}
+
 body {
   min-height: 100dvh;
   padding-top: var(--safe-top);
@@ -84,6 +89,23 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+:where(button, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--bright);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .scanlines {
@@ -103,11 +125,18 @@ button {
 
 .fatal,
 .global-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.8rem 1rem;
   color: var(--cream);
   background: #4b160c;
   border: 1px solid var(--error);
 }
+
+#global-alert-message { min-width: 0; overflow-wrap: anywhere; }
+#dismiss-alert-button { flex: 0 0 auto; }
 
 .auth-screen {
   min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
@@ -433,6 +462,7 @@ textarea:focus-visible {
 
 .console-card {
   min-width: 0;
+  overflow-wrap: anywhere;
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 0.35rem;
@@ -573,6 +603,26 @@ textarea {
   border-radius: 50%;
   line-height: 1;
 }
+
+.section-field { display: grid; gap: 0.4rem; min-width: 0; }
+.section-chip-label { min-width: 0; overflow-wrap: anywhere; }
+.section-chip-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 0.15rem; }
+.section-chip-move,
+.section-chip-remove {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  min-height: 1.6rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--rust);
+  color: var(--cream);
+  background: var(--rust);
+}
+.section-chip-move:disabled { opacity: 0.4; cursor: default; }
+.section-order-icon { width: 0; height: 0; border-block: 0.25rem solid transparent; }
+.section-order-icon.earlier { border-right: 0.35rem solid currentColor; }
+.section-order-icon.later { border-left: 0.35rem solid currentColor; }
 
 .section-token-input {
   flex: 1 1 12rem;
@@ -749,6 +799,11 @@ textarea {
   color: var(--black);
   background: var(--amber);
   border-color: var(--bright);
+}
+
+.weekday-picker input:focus-visible + span {
+  outline: 2px solid var(--bright);
+  outline-offset: 3px;
 }
 
 .schedule-item,
@@ -1281,20 +1336,74 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 }
 
+/* Keep the visual progress track thin. A larger hit area belongs to the
+   control/track styles below, not to a large painted progress capsule. */
+@media (pointer: coarse), (max-width: 640px) {
+  button,
+  .primary-button,
+  .ghost-button,
+  .danger-button,
+  .icon-button,
+  .mode-button,
+  .profile-buttons button,
+  .item-actions button,
+  .requeue-button,
+  .mini-player .icon-action,
+  .edition-zoom-controls .icon-action,
+  .mini-player .mini-levels-button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+  .section-chip-move,
+  .section-chip-remove { width: 2.75rem; min-height: 2.75rem; }
+  .section-chip { gap: 0.3rem; padding: 0.25rem 0.3rem 0.25rem 0.5rem; }
+  .section-chip-actions { gap: 0.2rem; }
+  .toggle-row,
+  .favorite-retention,
+  .schedule-enable-toggle { min-height: 2.75rem; }
+  .weekday-picker span { min-height: 2.75rem; }
+  .global-alert { flex-wrap: wrap; }
+  .request-header { flex-wrap: wrap; }
+  .request-actions { flex-wrap: wrap; }
+  .compact-control { min-height: 2.75rem; }
+  .compact-control input { min-height: 2.75rem; height: 2.75rem; border: 0; background: transparent; }
+  .mini-player { flex-wrap: wrap; }
+  .mini-player-copy { grid-template-columns: minmax(0, 1fr); flex-basis: 20rem; }
+}
+
+@media (max-width: 640px) {
+  input, select, textarea,
+  input[type="date"], input[type="time"],
+  #schedule-form input[type="time"],
+  .section-token-input,
+  .profile-actions input, .profile-actions select,
+  .monitor-filters input, .monitor-filters select,
+  .archive-sort select { font-size: 1rem; }
+  .weekday-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .about-grid { grid-template-columns: minmax(0, 1fr); }
+  .progress-line { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .mini-transport { gap: 0.3rem; }
+}
+
 /* A fine visual track with a usable, invisible touch area. */
+#episode-progress,
 .mini-player-copy #mini-player-progress {
-  min-height: 1.75rem !important;
-  height: 1.75rem !important;
-  max-height: 1.75rem !important;
+  min-height: 2.75rem !important;
+  height: 2.75rem !important;
+  max-height: 2.75rem !important;
   background: transparent;
   border: none;
 }
 
+#episode-progress::-webkit-slider-runnable-track,
 .mini-player-copy #mini-player-progress::-webkit-slider-runnable-track {
+  height: 0.42rem;
   background: linear-gradient(90deg, var(--amber) 0 var(--progress), var(--black) var(--progress) 100%);
   border: 1px solid var(--line);
 }
+#episode-progress::-moz-range-track,
 .mini-player-copy #mini-player-progress::-moz-range-track {
+  height: 0.42rem;
   background: linear-gradient(90deg, var(--amber) 0 var(--progress), var(--black) var(--progress) 100%);
   border: 1px solid var(--line);
 }

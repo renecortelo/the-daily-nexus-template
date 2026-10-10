@@ -82,13 +82,26 @@ function setAuthStatus(message, isError = false) {
 }
 
 function showAlert(message, isError = false) {
-  globalAlert.textContent = message;
+  dismissAlert();
+  byId("global-alert-message").textContent = message;
+  globalAlert.setAttribute("role", isError ? "alert" : "status");
   globalAlert.style.background = isError ? "#4b160c" : "#2d190e";
   globalAlert.style.borderColor = isError ? "var(--error)" : "var(--line)";
   globalAlert.hidden = false;
-  window.setTimeout(() => {
-    globalAlert.hidden = true;
-  }, 7000);
+  if (!isError) {
+    const version = appState.alertVersion;
+    appState.alertTimer = window.setTimeout(() => {
+      if (version === appState.alertVersion) dismissAlert();
+    }, 7000);
+  }
+}
+
+function dismissAlert() {
+  window.clearTimeout(appState.alertTimer);
+  appState.alertTimer = null;
+  appState.alertVersion = (appState.alertVersion || 0) + 1;
+  byId("global-alert-message").textContent = "";
+  globalAlert.hidden = true;
 }
 
 function clearSubscriptions() {
@@ -184,8 +197,7 @@ function clearPrivateForms() {
   byId("update-profile-button").disabled = true;
   byId("delete-profile-button").disabled = true;
   byId("cancel-edit-button").hidden = true;
-  globalAlert.textContent = "";
-  globalAlert.hidden = true;
+  dismissAlert();
 }
 
 function clearConsoleSession() {
@@ -401,7 +413,47 @@ function sectionValues(form) {
   return parseSections(sectionEditor(form).querySelector("textarea").value);
 }
 
-function renderSectionTokens(form) {
+function reorderSections(sections, moved, before = "") {
+  if (!sections.includes(moved) || before === moved || (before && !sections.includes(before))) {
+    return [...sections];
+  }
+  const ordered = sections.filter((section) => section !== moved);
+  ordered.splice(before ? ordered.indexOf(before) : ordered.length, 0, moved);
+  return ordered;
+}
+
+function sectionDropBefore(chips, clientX, clientY) {
+  const rows = [];
+  for (const chip of chips) {
+    const rect = chip.getBoundingClientRect();
+    const row = rows.at(-1);
+    if (row && Math.abs(row.top - rect.top) < 8) {
+      row.chips.push({ chip, rect });
+      row.bottom = Math.max(row.bottom, rect.bottom);
+    } else {
+      rows.push({ top: rect.top, bottom: rect.bottom, chips: [{ chip, rect }] });
+    }
+  }
+  const rowIndex = rows.findIndex((row) => clientY <= row.bottom + 4);
+  if (rowIndex < 0) return null;
+  return rows[rowIndex].chips.find(({ rect }) => clientX < rect.left + rect.width / 2)?.chip
+    || rows[rowIndex + 1]?.chips[0].chip || null;
+}
+
+function moveSection(form, section, direction) {
+  if (direction !== -1 && direction !== 1) return;
+  const sections = sectionValues(form);
+  const index = sections.indexOf(section);
+  const destination = index + direction;
+  if (index < 0 || destination < 0 || destination >= sections.length) return;
+  [sections[index], sections[destination]] = [sections[destination], sections[index]];
+  sectionEditor(form).querySelector("textarea").value = sections.join("\n");
+  renderSectionTokens(form, section, direction < 0 ? "earlier" : "later");
+  sectionEditor(form).querySelector(".section-order-status").textContent =
+    `${section} moved to position ${destination + 1} of ${sections.length}.`;
+}
+
+function renderSectionTokens(form, focusSection = "", focusAction = "") {
   const editor = sectionEditor(form);
   if (!editor) return;
   const textarea = editor.querySelector("textarea");
@@ -417,7 +469,7 @@ function renderSectionTokens(form) {
   list.ondragover = (event) => {
     event.preventDefault();
     const chips = [...list.querySelectorAll(".section-chip:not(.dragging)")];
-    const next = chips.find((chip) => event.clientX < chip.getBoundingClientRect().left + chip.offsetWidth / 2);
+    const next = sectionDropBefore(chips, event.clientX, event.clientY);
     list.dataset.dropBefore = next?.dataset.section || "";
     for (const chip of chips) {
       chip.classList.toggle("drop-target", chip === next);
@@ -427,32 +479,55 @@ function renderSectionTokens(form) {
   list.ondrop = (event) => {
     event.preventDefault();
     const moved = event.dataTransfer.getData("text/plain");
-    const ordered = parseSections(textarea.value).filter((item) => item !== moved);
-    const before = list.dataset.dropBefore;
-    const destination = before ? ordered.indexOf(before) : ordered.length;
-    ordered.splice(Math.max(0, destination), 0, moved);
+    const ordered = reorderSections(parseSections(textarea.value), moved, list.dataset.dropBefore);
     textarea.value = ordered.join("\n");
     clearDropHint();
-    renderSectionTokens(form);
+    renderSectionTokens(form, moved, "earlier");
   };
   list.ondragleave = (event) => {
     if (event.relatedTarget && list.contains(event.relatedTarget)) return;
     clearDropHint();
   };
-  for (const section of sections) {
+  for (const [index, section] of sections.entries()) {
     const chip = element("span", "section-chip");
     chip.draggable = true;
     chip.dataset.section = section;
-    chip.append(document.createTextNode(section));
+    chip.tabIndex = -1;
+    chip.setAttribute("role", "group");
+    chip.setAttribute("aria-label", `${section}, position ${index + 1} of ${sections.length}`);
+    chip.append(element("span", "section-chip-label", section));
+    const actions = element("span", "section-chip-actions");
+    for (const [action, direction] of [["earlier", -1], ["later", 1]]) {
+      const button = element("button", "section-chip-move");
+      button.type = "button";
+      button.dataset.action = action;
+      button.setAttribute("aria-label", `Move ${section} ${action}`);
+      button.title = `Move ${action}`;
+      button.disabled = index + direction < 0 || index + direction >= sections.length;
+      const icon = element("span", `section-order-icon ${action}`);
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon);
+      button.addEventListener("click", () => moveSection(form, section, direction));
+      actions.append(button);
+    }
     const remove = element("button", "section-chip-remove", "x");
     remove.type = "button";
     remove.setAttribute("aria-label", `Remove ${section}`);
     remove.addEventListener("click", () => {
       textarea.value = parseSections(textarea.value).filter((item) => item !== section).join("\n");
       renderSectionTokens(form);
+      editor.querySelector(".section-token-input").focus();
+      editor.querySelector(".section-order-status").textContent = `${section} removed.`;
     });
-    chip.append(remove);
+    actions.append(remove);
+    chip.append(actions);
+    chip.addEventListener("keydown", (event) => {
+      if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      moveSection(form, section, event.key === "ArrowLeft" ? -1 : 1);
+    });
     chip.addEventListener("dragstart", (event) => {
+      if (event.target.closest("button")) { event.preventDefault(); return; }
       event.dataTransfer.setData("text/plain", section);
       event.dataTransfer.effectAllowed = "move";
       chip.classList.add("dragging");
@@ -462,8 +537,12 @@ function renderSectionTokens(form) {
       event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
       window.setTimeout(() => ghost.remove(), 0);
     });
-    chip.addEventListener("dragend", () => chip.classList.remove("dragging"));
+    chip.addEventListener("dragend", () => { chip.classList.remove("dragging"); clearDropHint(); });
     list.append(chip);
+    if (section === focusSection) {
+      const button = [...actions.querySelectorAll("button")].find((item) => item.dataset.action === focusAction);
+      (button && !button.disabled ? button : chip).focus();
+    }
   }
   const endDrop = element("span", "section-drop-end");
   endDrop.setAttribute("aria-hidden", "true");
@@ -477,10 +556,9 @@ function renderSectionTokens(form) {
     event.preventDefault();
     event.stopPropagation();
     const moved = event.dataTransfer.getData("text/plain");
-    const ordered = parseSections(textarea.value).filter((item) => item !== moved);
-    ordered.push(moved);
+    const ordered = reorderSections(parseSections(textarea.value), moved);
     textarea.value = ordered.join("\n");
-    renderSectionTokens(form);
+    renderSectionTokens(form, moved, "earlier");
   });
   list.append(endDrop);
 }
@@ -489,6 +567,7 @@ function setSections(form, sections) {
   const editor = sectionEditor(form);
   if (!editor) return;
   editor.querySelector("textarea").value = Array.isArray(sections) ? sections.join("\n") : "";
+  editor.querySelector(".section-order-status").textContent = "";
   renderSectionTokens(form);
 }
 
@@ -497,8 +576,9 @@ function setupSectionEditor(form) {
   if (!editor) return;
   const input = editor.querySelector(".section-token-input");
   const textarea = editor.querySelector("textarea");
+  input.addEventListener("input", () => input.removeAttribute("aria-invalid"));
   input.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
+    if (event.key !== "Enter" || event.isComposing) return;
     event.preventDefault();
     const candidate = input.value.trim();
     if (!candidate) return;
@@ -506,7 +586,10 @@ function setupSectionEditor(form) {
       textarea.value = parseSections([textarea.value, candidate].filter(Boolean).join("\n")).join("\n");
       input.value = "";
       renderSectionTokens(form);
+      input.removeAttribute("aria-invalid");
+      editor.querySelector(".section-order-status").textContent = `${candidate} added.`;
     } catch (error) {
+      input.setAttribute("aria-invalid", "true");
       showAlert(error.message, true);
     }
   });
@@ -2077,11 +2160,17 @@ function syncPlayer() {
   byId("player-total").textContent = formatPlaybackTime(duration);
   byId("player-pause-button").classList.toggle("active", !audio.paused && !audio.ended);
   byId("player-pause-button").setAttribute("aria-label", audio.paused ? "Resume" : "Pause");
+  byId("player-pause-button").title = audio.paused ? "Resume" : "Pause";
   byId("mini-player-progress").value = progress;
   setRangeProgress(byId("mini-player-progress"), progress);
   byId("mini-player-current").textContent = formatPlaybackTime(current);
   byId("mini-player-total").textContent = formatPlaybackTime(duration);
   byId("mini-pause-button").classList.toggle("active", !audio.paused && !audio.ended);
+  byId("mini-pause-button").setAttribute("aria-label", audio.paused ? "Resume" : "Pause");
+  byId("mini-pause-button").title = audio.paused ? "Resume" : "Pause";
+  for (const id of ["episode-progress", "mini-player-progress"]) {
+    byId(id).setAttribute("aria-valuetext", `${formatPlaybackTime(current)} of ${formatPlaybackTime(duration)}`);
+  }
   byId("web-player").classList.toggle("playing", !audio.paused && !audio.ended);
   byId("mini-player").classList.toggle("playing", !audio.paused && !audio.ended);
   byId("mini-player").hidden = !appState.activeEpisode || appState.playbackStopped === true || audio.ended;
@@ -2604,17 +2693,36 @@ function subscribeToPrivateData(uid) {
   );
 }
 
+function setupStickyInsets() {
+  const nav = document.querySelector(".mode-nav");
+  const mini = byId("mini-player");
+  const measure = () => {
+    const navHeight = nav.getBoundingClientRect().height;
+    if (navHeight > 0) document.documentElement.style.setProperty("--mode-nav-height", `${navHeight}px`);
+    document.documentElement.style.setProperty("--mini-player-height", `${mini.getBoundingClientRect().height}px`);
+  };
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    observer.observe(mini);
+  }
+  window.addEventListener("resize", measure, { passive: true });
+  measure();
+}
+
 function setupNavigation() {
   for (const button of document.querySelectorAll(".mode-button")) {
     button.addEventListener("click", () => {
       for (const item of document.querySelectorAll(".mode-button")) {
         item.classList.toggle("active", item === button);
+        if (item === button) item.setAttribute("aria-current", "page");
+        else item.removeAttribute("aria-current");
       }
       for (const view of document.querySelectorAll(".view")) {
         view.classList.toggle("active", view.id === `view-${button.dataset.view}`);
       }
       byId("mini-player").classList.toggle("context-hidden", button.dataset.view === "play");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   }
 }
@@ -2655,10 +2763,12 @@ function setupActivityTracking() {
 }
 
 async function initialize() {
+  setupStickyInsets();
   setupNavigation();
   setupInstall();
   setupActivityTracking();
   setupTimezonePicker();
+  byId("dismiss-alert-button").addEventListener("click", dismissAlert);
   byId("sign-in-button").addEventListener("click", signInUser);
   byId("sign-out-button").addEventListener("click", () => signOutUser());
   byId("refresh-monitor-button").addEventListener("click", refreshMonitor);

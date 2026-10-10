@@ -258,6 +258,36 @@ real future editions and accessibility/mobile UX remain to be evaluated.
 
 ## 6. Mobile accessibility, UX and maintainability
 
+Status: first interaction/accessibility increment implemented on 2026-10-10;
+semantic mobile reading, maintainability consolidation and real Safari/PWA,
+VoiceOver and software-keyboard testing remain open.
+
+Both section editors now offer earlier/later buttons and Alt+Left/Right,
+retain focus after moving, return focus to the input after removal and announce
+position changes without reannouncing the complete chip list. Wrapped-row drops
+support the middle and end; foreign dropped text cannot create a new section.
+The text entry has an explicit associated label; invalid additions retain existing
+values. Logout clears both private values and the last ordering announcement.
+
+Mobile/coarse-pointer buttons use 44-pixel minimum targets at the default font
+size. Progress hit areas are larger while painted tracks stay thin. Shared focus
+outlines include links and transcript/ordering controls; weekday focus is visible.
+Browser scroll insets follow the sticky navigation/player height. Small-screen
+pickers use 16-pixel text to avoid the usual input-focus zoom; narrow weekday
+and About layouts no longer depend on a wide minimum column. Compact Pause/Resume
+labels and both timeline value descriptions stay synchronized. Mode changes
+respect reduced motion. Errors persist until dismissed or replaced, obsolete
+notice timers cannot hide newer errors, and logout clears the message/timer.
+
+Twenty-nine existing behavior tests were supplemented with eight focused regressions
+in the browser suite (37 total); local synthetic Chromium checks cover 320, 390,
+768 and 1280 pixels across all five views, including keyboard reordering,
+touch sizes, overflow, real painted track height and reduced motion. These do
+not certify real iOS, assistive technology or every production archive state.
+No provider calls, generation, scheduler change, additional cloud read, private
+offline cache or new dependency is introduced. The static shell advances to
+4.1.10 / cache v4-40 and must be deployed preserving clock and media assets.
+
 Retain the retrofuturist identity; improve invisible touch targets, non-drag
 section ordering, focus, readable text and persistent errors. Add semantic mobile
 reading from approved issue data and exact, stable preview manifests. Share form
