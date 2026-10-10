@@ -24,6 +24,12 @@ verification and publication are unchanged. The choice is saved in favorites
 and schedules. Older saved records default to newspaper enabled until you
 change and save them. Unrequested papers show **skipped**, not failed.
 
+In READ, newly published ready papers also offer **READABLE**: complete editorial
+text that adapts to your phone, with text zoom and selectable paragraphs. **PAGES**
+keeps the original layout and visuals; **OPEN PDF** opens the unchanged document.
+Older editions without reading data keep their original pages. No additional AI
+request or historical regeneration is needed; reading data remains owner-only.
+
 ## How it works
 
 ![Eight stages run top to bottom: collect approved Gmail newsletters and optional daily research; enrich newsletter-first evidence from safe public pages; rank and deduplicate stories; draft and verify the host script; branch into an independently written newspaper and Kokoro audio with a timed transcript; then finalize locally or, when enabled, publish and remotely verify the Firebase-hosted private feed. An optional band shows the same pipeline running unattended after a Cloudflare alarm or GEN wake-up dispatches a private GitHub Actions job.](assets/diagram-pipeline.svg)

@@ -21,6 +21,7 @@ from audiodigest.web_scheduler import (
     run_web_runner_tick,
 )
 from tests.test_jobs import schedule_payload
+from tests.test_newspaper_reading import example_issue
 
 
 class _FakeWebClient:
@@ -77,6 +78,67 @@ class _FakeWebClient:
 
 
 class WebSchedulerTests(TestCase):
+    def test_ready_published_paper_exposes_owner_copy_and_exact_previews_without_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paper = root / "edition.pdf"
+            paper.write_bytes(b"synthetic-pdf")
+            previews = [root / f"edition-{page}.png" for page in (1, 2)]
+            for path in previews:
+                path.write_bytes(b"synthetic-preview")
+            (root / "newspaper.json").write_text(json.dumps(example_issue()), encoding="utf-8")
+            manifest = root / "manifest.json"
+            episode = {
+                "status": "published",
+                "title": "Example",
+                "guid": "synthetic-edition",
+                "duration_seconds": 300,
+                "manifest_path": str(manifest),
+                "newspaper_path": str(paper),
+                "show_notes": [],
+            }
+
+            class Database:
+                def episode_for_date(self, _day):
+                    return episode
+
+            for state, published in [
+                ("ready", True),
+                ("skipped", True),
+                ("failed", True),
+                ("ready", False),
+            ]:
+                episode["status"] = "published" if published else "staged"
+                manifest.write_text(
+                    json.dumps(
+                        {
+                            "newspaper_status": state,
+                            "newspaper": example_issue(),
+                            "newspaper_preview_paths": [str(p) for p in previews],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                _, metadata = _published_metadata(
+                    self._settings(root),
+                    Database(),
+                    episode_date=date(2026, 10, 7),
+                    execution_id="synthetic",
+                    publication_label="Example",
+                    publication_sequence=1,
+                )
+                self.assertEqual(
+                    state == "ready" and published, metadata["newspaperReading"] is not None
+                )
+                if published:
+                    self.assertEqual(
+                        [metadata["newspaperUrl"][:-4] + f"-{i}.png" for i in (1, 2)],
+                        metadata["newspaperPreviews"],
+                    )
+                else:
+                    self.assertEqual([], metadata["newspaperPreviews"])
+                self.assertEqual([], metadata["transcript"])
+
     def test_episode_budget_metadata_excludes_source_ids_and_transcript_marks_chapters(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
@@ -206,29 +268,45 @@ class WebSchedulerTests(TestCase):
 
             def run(self, **_kwargs):
                 self.__class__.calls += 1
-                return {"status": "published", "remote_verified": True,
-                        "retained_guids": ["synthetic-guid"]}
+                return {
+                    "status": "published",
+                    "remote_verified": True,
+                    "retained_guids": ["synthetic-guid"],
+                }
 
         with tempfile.TemporaryDirectory() as name:
             client = _FakeWebClient([])
             parameters = GenerationParameters.from_dict(schedule_payload()["parameters"])
-            with patch("audiodigest.web_scheduler._published_metadata",
-                       return_value=("edition", {"status": "published"})), patch(
-                "audiodigest.web_scheduler._reconcile_archive_lifecycle",
-                side_effect=WebRunnerError("Synthetic lifecycle synchronization failure"),
-            ) as reconcile:
+            with (
+                patch(
+                    "audiodigest.web_scheduler._published_metadata",
+                    return_value=("edition", {"status": "published"}),
+                ),
+                patch(
+                    "audiodigest.web_scheduler._reconcile_archive_lifecycle",
+                    side_effect=WebRunnerError("Synthetic lifecycle synchronization failure"),
+                ) as reconcile,
+            ):
                 result = _execute_generation(
-                    self._settings(Path(name)), client, execution_id="synthetic-execution",
-                    display_name="An edition", parameters=parameters,
-                    episode_date=date(2026, 10, 8), pipeline_factory=PublishedPipeline,
+                    self._settings(Path(name)),
+                    client,
+                    execution_id="synthetic-execution",
+                    display_name="An edition",
+                    parameters=parameters,
+                    episode_date=date(2026, 10, 8),
+                    pipeline_factory=PublishedPipeline,
                 )
             self.assertEqual(1, PublishedPipeline.calls)
             self.assertEqual("published", result["status"])
             self.assertTrue(result["synchronization_pending"])
             reconcile.assert_called_once()
-            self.assertEqual("completed", client.private_execution_status(
-                "synthetic-execution", "2026-10-08",
-            ))
+            self.assertEqual(
+                "completed",
+                client.private_execution_status(
+                    "synthetic-execution",
+                    "2026-10-08",
+                ),
+            )
 
     def setUp(self):
         remote = patch("audiodigest.web_scheduler.load_remote_publication", return_value=())

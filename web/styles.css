@@ -1091,6 +1091,21 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .edition-zoom-controls { display: flex; align-items: center; justify-content: flex-end; gap: 0.45rem; margin: -0.35rem 0 0.7rem; color: var(--amber); font: 0.66rem Consolas, monospace; }
 .edition-zoom-controls .icon-action { width: 2rem; min-height: 2rem; font-size: 1rem; }
 .edition-zoom-controls output { min-width: 3.35rem; color: var(--cream); text-align: center; }
+.edition-mode-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem; }
+.edition-mode-controls [aria-pressed="true"] { color: var(--black); background: var(--amber); }
+.edition-readable { display: block; background: var(--cream); color: #241509; }
+.readable-paper { max-width: 42em; margin: auto; font: calc(1rem * var(--reading-scale, 1))/1.65 Georgia, serif; overflow-wrap: anywhere; hyphens: auto; }
+.readable-paper .eyebrow { color: #8b380b; font-size: 0.78em; }
+.readable-paper h4 { margin: 0.35em 0 0.6em; font-size: 1.7em; line-height: 1.2; }
+.readable-paper h5 { margin: 0.3em 0 0.65em; font-size: 1.2em; line-height: 1.3; }
+.readable-deck { font-weight: bold; }
+.readable-story, .readable-brief { padding: 1em 0; border-top: 2px solid #cf5b10; }
+.readable-paper p, .readable-paper dd, .readable-paper li { margin: 0.5em 0; }
+.readable-paper ul { padding-left: 1.4em; }
+.readable-facts dt { font-weight: bold; color: #80380e; }
+.readable-facts dd { margin-left: 0; }
+.readable-caption { font-size: 0.9em; }
+.readable-paper blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid #cf5b10; }
 
 .mini-player {
   position: sticky;
