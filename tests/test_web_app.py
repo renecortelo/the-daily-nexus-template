@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.11', page)
-        self.assertIn('/styles.css?v=4.1.11', page)
-        self.assertIn('tdn-shell-v4-41', worker)
+        self.assertIn('/app.js?v=4.1.12', page)
+        self.assertIn('/styles.css?v=4.1.12', page)
+        self.assertIn('tdn-shell-v4-42', worker)
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
@@ -101,10 +101,12 @@ class WebAppSecurityTests(TestCase):
         page = Path("web/index.html").read_text(encoding="utf-8")
         rules = Path("firestore.rules").read_text(encoding="utf-8")
         self.assertEqual(2, page.count('name="includeNewspaper" type="checkbox" checked'))
-        self.assertIn('includeNewspaper: values.get("includeNewspaper") === "on"', source)
-        self.assertEqual(
-            2, source.count('includeNewspaper.checked = parameters.includeNewspaper !== false')
-        )
+        self.assertIn('includeTih: true, includeNewspaper: true', source)
+        self.assertIn('control ? control.checked : fallback', source)
+        self.assertIn('control.checked = value', source)
+        self.assertIn('setupParameterForm(form)', source)
+        self.assertIn('applyParametersToForm(generationForm, profile.parameters)', source)
+        self.assertIn('applyParametersToForm(scheduleForm, { ...parameters', source)
         self.assertIn("PODCAST ONLY // NEWSPAPER NOT REQUESTED", source)
         self.assertIn(
             "!('includeNewspaper' in parameters) || parameters.includeNewspaper is bool", rules

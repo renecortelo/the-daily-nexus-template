@@ -388,6 +388,19 @@ There is no additional model call, cloud read/subscription or provider; existing
 metadata writes/transfer/storage are slightly larger. Real iOS/PWA and VoiceOver
 testing, and adoption on normally generated papers, remain open.
 
+## Shared generation preferences
+
+The 4.1.12 console uses the same explicit parameter schema and control setup for
+GEN, SCHED and favorites. Serialization reads temporarily disabled controls so
+inactive voice, tone, dialogue and newspaper-scale preferences are retained.
+Hydration preflights supported fields and sections before replacing current
+edits; missing legacy values reset to defaults rather than inheriting another
+record's Gmail label or hosts. Invalid saved values produce persistent errors.
+Dates, schedule timing, weekdays, enabled state and identity remain separate.
+Existing host-appropriate voice constraints and automatic web publication stay
+in force. No saved record migration, additional provider/model/cloud operation,
+private offline persistence or UI redesign is introduced.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets
