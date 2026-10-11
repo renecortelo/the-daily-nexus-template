@@ -3025,7 +3025,7 @@ function setupCompactSelects() {
 function setupCompactInputs() {
   // Keep the original input, labels, values and events. No mirrored private
   // text or custom calendar: only its resting presentation is compact.
-  for (const control of document.querySelectorAll('.monitor-filters input, #profile-name, input[type="date"], input[type="time"]')) {
+  for (const control of document.querySelectorAll('input:not([type="checkbox"]):not([type="range"]):not([type="hidden"])')) {
     if (control.parentElement.classList.contains("compact-input-shell")) continue;
     const shell = element("span", "compact-input-shell");
     control.before(shell);

@@ -83,7 +83,7 @@ test('compact inputs keep native value, constraints, label identity and events w
   };
   context.setupCompactInputs();context.setupCompactInputs();
   assert.equal(images.length,4,'Initialization must be idempotent');
-  assert.equal(queried,'.monitor-filters input, #profile-name, input[type="date"], input[type="time"]');
+  assert.equal(queried,'input:not([type="checkbox"]):not([type="range"]):not([type="hidden"])');
   for(const control of controls){
     assert.equal(control.shell.children[0],control);
     assert.equal(control.value,'synthetic value');assert.equal(control.required,true);
@@ -1113,10 +1113,12 @@ test('home illustration loops locally without controls or JavaScript timers', ()
   assert.equal(page.includes('home-tour-pause'),false);
   assert.equal(page.includes('home-tour-replay'),false);
   assert.equal(source.includes('setupHomeTour'),false);
-  for(const part of ['mail','guide','packet','audio','paper']) {
-    const rule=styles.split(`.view.active .tour-${part} {`)[1].split('}')[0];
-    assert.match(rule,/8s ease-in-out infinite/);
+  for(const part of ['choose','review','deliver']) {
+    const rule=styles.split(`.view.active .tour-scene-${part} {`)[1].split('}')[0];
+    assert.match(rule,/4.8s linear infinite/);
+    assert.ok(page.includes(`class="tour-scene tour-scene-${part}"`));
   }
+  assert.match(styles,/\.tour-scene-deliver \{ display: block; opacity: 1; \}/);
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles,/animation: none !important/);
 });

@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.20', page)
-        self.assertIn('/styles.css?v=4.1.20', page)
-        self.assertIn('tdn-shell-v4-50', worker)
+        self.assertIn('/app.js?v=4.1.21', page)
+        self.assertIn('/styles.css?v=4.1.21', page)
+        self.assertIn('tdn-shell-v4-51', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -116,10 +116,27 @@ class WebAppSecurityTests(TestCase):
         self.assertNotIn('setupHomeTour', source)
         self.assertNotIn('<iframe', page)
         self.assertNotIn('youtube.com', page)
-        for part in ('mail', 'guide', 'packet', 'audio', 'paper'):
-            rule = styles.split(f'.view.active .tour-{part} {{', 1)[1].split('}', 1)[0]
+        for part in ('choose', 'review', 'deliver'):
+            rule = styles.split(f'.view.active .tour-scene-{part} {{', 1)[1].split('}', 1)[0]
             self.assertIn('infinite', rule)
         self.assertIn('prefers-reduced-motion: reduce', styles)
+
+    def test_every_native_text_field_and_layout_audit_use_complete_inventory(self):
+        source = Path('web/app.js').read_text(encoding='utf-8')
+        audit = Path('scripts/audit-web-layout.cjs').read_text(encoding='utf-8')
+        page = Path('web/index.html').read_text(encoding='utf-8')
+        self.assertIn(
+            'input:not([type="checkbox"]):not([type="range"]):not([type="hidden"])',
+            source,
+        )
+        self.assertIn("page.locator('input,select,textarea,button')", audit)
+        self.assertIn('item.wrapped&&Math.abs(item.paintedFont-13)', audit)
+        self.assertIn("['auth','home','gen','play','read','schedule','about']", audit)
+        self.assertIn('Mobile header too tall', audit)
+        self.assertIn('inventory-', audit)
+        self.assertEqual(page.count('id="signed-in-user"'), 1)
+        self.assertIn('aria-label="Sign out"', page)
+        self.assertIn('aria-label="Install app"', page)
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")

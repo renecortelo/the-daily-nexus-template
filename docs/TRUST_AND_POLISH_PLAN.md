@@ -584,6 +584,28 @@ their JavaScript. Repeat the original local-only illustration on an eight-second
 CSS cycle while HOME is active, returning gently to its initial state. Preserve
 the static reduced-motion view and all authentication, feed and clock settings.
 
+Complete-field and animated-story audit (4.1.21 / cache v4-51): compact every
+native text-like input, including untyped run/schedule names, Gmail labels and
+section-entry fields. Keep original values/events, 16px editing text and 44px
+touch areas; resting paint follows the 13px control scale. Align reader controls.
+Use one mobile header row for logo, account identity and accessible install/sign-
+out icons. Constrain the shell's minimum grid width instead of clipping overflow.
+Replace the diagram with three original cartoon scenes in a 4.8-second cycle:
+chosen newsletters, evidence review, then audio and optional paper. No external
+media or network; reduced motion shows the delivery scene and disables movement.
+
+Persist the synthetic browser audit in `scripts/audit-web-layout.cjs`. It inventories
+every visible input/select/textarea/button and tests typography, focus/resting
+paint, labels, touch targets, header alignment, viewport bounds and dynamic states
+across seven views, nine widths and collapsed/expanded playback. It is an optional
+local developer check, not added cloud compute or a production dependency.
+With Playwright and its browsers installed, run from the repository root:
+`node scripts/audit-web-layout.cjs` and `node scripts/audit-web-layout.cjs --webkit`.
+Reports/screenshots remain ignored under `tmp/web-layout`; only synthetic examples
+are used, without authentication or provider calls. `TDN_PLAYWRIGHT_MODULE` can
+select an existing developer installation; `TDN_CHROMIUM_CHANNEL` can select an
+installed Chromium browser. Real iPhone/PWA and assistive checks remain open.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its
