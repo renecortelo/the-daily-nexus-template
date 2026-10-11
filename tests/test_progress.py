@@ -33,7 +33,12 @@ class ProgressTests(TestCase):
             terminal = reporter.finish("failed", failure_code="verification_rejected")
             record_failure_code("json_invalid")
             clear_failure_code()
-            self.assertEqual(terminal, reporter.snapshot("finish"))
+            later = reporter.snapshot("finish")
+            # Each snapshot has its own wall-clock observation time. Compare
+            # terminal state, not the platform-dependent datetime resolution.
+            terminal.pop("at")
+            later.pop("at")
+            self.assertEqual(terminal, later)
         finally:
             reporter.close()
 
@@ -54,7 +59,10 @@ class ProgressTests(TestCase):
                 event = reporter.finish(status, reason=reason, failure_code=code)
                 self.assertEqual(expected, event.get("failure_code"))
                 # Finishing again cannot rewrite a terminal profile.
-                self.assertEqual(event, reporter.finish("failed", failure_code="json_invalid"))
+                later = reporter.finish("failed", failure_code="json_invalid")
+                event.pop("at")
+                later.pop("at")
+                self.assertEqual(event, later)
 
     def test_detailed_closing_codes_survive_without_exception_content(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
