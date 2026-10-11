@@ -38,9 +38,24 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.15', page)
-        self.assertIn('/styles.css?v=4.1.15', page)
-        self.assertIn('tdn-shell-v4-45', worker)
+        self.assertIn('/app.js?v=4.1.16', page)
+        self.assertIn('/styles.css?v=4.1.16', page)
+        self.assertIn('tdn-shell-v4-46', worker)
+
+    def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        self.assertIn('class="source-fields"', page)
+        self.assertEqual(2, page.count('class="editorial-fields"'))
+        for marker in (
+            ".monitor-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }",
+            ".host-layout > label:nth-child(8)",
+            "@keyframes console-enter", "@keyframes console-acquire",
+            "@media (prefers-reduced-motion: reduce)", "animation: none !important",
+            "font-size: 1rem; min-height: 2.75rem;",
+        ):
+            self.assertIn(marker, styles)
+        self.assertNotIn("user-scalable=no", page)
 
     def test_mobile_selects_do_not_expand_document_or_disable_zoom(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
