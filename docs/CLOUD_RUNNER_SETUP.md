@@ -139,14 +139,19 @@ The final timing profile totals the time spent in each stage and measures
 model calls, voice-model loading, speech synthesis, audio encoding and PDF
 rendering separately. Operation times are included within stage times; do
 not add both sets together. The filtered log also prints a readable final
-timing summary. Only the most recent profile is retained in the
-owner-only `runner/lastProfile` document. Timing updates use no extra service
+timing summary. The owner-only `runner/lastProfile` document holds the latest
+profile and up to 20 sanitized terminal samples. Timing updates use no extra service
 or paid API, and status-write failures cannot trigger a generation retry.
 
 GitHub may kill a job before its final summary can be written. In that case,
 use the last heartbeat: its stage and elapsed time locate the unfinished
 work, without requiring another episode generation. A last stage is an
 observation of where execution stopped, not proof that the stage was faulty.
+
+For an opt-in offline comparison of existing runs, see
+[RUNTIME_REVIEW.md](RUNTIME_REVIEW.md). It aggregates only allowlisted terminal
+metrics, including unsuccessful work, without storing raw logs or generating
+another episode. It does not calculate your remaining provider allowance.
 
 ## Rotation and removal
 

@@ -195,6 +195,21 @@ reviewed privately; generation dominated setup, so dependency changes were not
 made merely to claim a performance gain. Evaluate the next normal runs before
 making a separately tested optimization.
 
+Offline review increment implemented on 2026-10-11: the opt-in
+`audiodigest.runtime_report` tool aggregates up to 200 allowlisted terminal
+samples from existing log input. All-attempt and completed-only timing
+distributions are separate; failed/interrupted generation remains visible.
+Stage shares use measured stage totals, with per-stage sample counts; nested
+operations are not added to stage totals. No raw log, task identifier, account
+identity, URL, credential or individual timestamp is retained in the output.
+Malformed/missing data is omitted, and empty input is a non-successful review.
+This introduces no polling, cloud read, generation, dependency, provider token
+or production runtime change. Normal-run timing was reviewed read-only; the
+next optimization should target measured editorial/model or synthesis costs,
+not presume that runtime installation or PDF drawing is the main bottleneck.
+Provider balances, actual runtime improvement and matched-content production
+validation remain open. See [RUNTIME_REVIEW.md](RUNTIME_REVIEW.md).
+
 Diagnostic precision increment implemented on 2026-10-11: a model invocation
 clears its transient error code only after an accepted response. Retry and
 invalid-response counts remain; a fixed numeric model_validation_recoveries
