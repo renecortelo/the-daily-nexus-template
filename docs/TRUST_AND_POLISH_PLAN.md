@@ -223,6 +223,26 @@ migration, episode retry or static UI deployment is added. Three regressions
 and an expanded mocked CLI recovery check cover terminal outcomes, recovery,
 privacy and late updates; normal future runs must confirm production adoption.
 
+Source-grounded script repair increment implemented on 2026-10-11: the first
+source-backed podcast draft now receives the selected stories' deduplicated
+original passages and fact-support map, using the same bounded evidence packet
+as factual review. Original qualifiers and supported corrections take precedence
+over extracted candidates from the outset. Partial or oversized original evidence
+fails explicitly before the model call; it is not silently omitted or cropped.
+Legacy offline fixtures still cannot bypass the original-source verification gate.
+
+Each script repair now receives only the latest review's deduplicated issues and
+the latest script, not an accumulating list of superseded instructions. The draft
+is told to preserve valid earlier corrections; every replacement still undergoes
+a complete factual review. Six synthetic regressions cover first-draft evidence,
+privacy, selected-only/partial/oversized packets, current feedback and bounded rejection.
+No additional model call, paid service, static UI change or production retry is
+added. The larger initial prompt can increase latency and subscription usage;
+repair limits, protected execution budget and the one-hour workflow cap remain.
+These changes address demonstrated process weaknesses, not a claim to have
+recovered discarded historical rejection details or guaranteed future approval.
+Production adoption and outcome must be checked on normal subsequent runs.
+
 Draft-error prevention increment implemented on 2026-10-09: script JSON examples
 now use JSON-escaped disclosure text and actual configured hosts, including both
 introductions for a two-host edition. A deterministic request-local section plan
