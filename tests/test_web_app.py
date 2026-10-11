@@ -38,9 +38,23 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.14', page)
-        self.assertIn('/styles.css?v=4.1.14', page)
-        self.assertIn('tdn-shell-v4-44', worker)
+        self.assertIn('/app.js?v=4.1.15', page)
+        self.assertIn('/styles.css?v=4.1.15', page)
+        self.assertIn('tdn-shell-v4-45', worker)
+
+    def test_mobile_selects_do_not_expand_document_or_disable_zoom(self):
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        select_style = styles.split("\nselect {", 1)[1].split("}", 1)[0]
+        for rule in ("appearance: none", "min-inline-size: 0", "overflow: hidden",
+                     "text-overflow: ellipsis", "background-image:", "var(--amber)"):
+            self.assertIn(rule, select_style)
+        self.assertIn("select:not([multiple]) { padding-inline-end: 1.85rem; }", styles)
+        self.assertNotIn("user-scalable=no", page)
+        self.assertNotIn("maximum-scale=1", page)
+        # Reading pages, archives and navigation retain their internal scrolling.
+        self.assertIn("overflow-x: auto", styles)
+        self.assertIn(".edition-pages", styles)
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")

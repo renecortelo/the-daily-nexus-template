@@ -541,6 +541,19 @@ textarea {
 
 select {
   color-scheme: dark;
+  /* WebKit's native popup can contribute an option's intrinsic width to
+     the document even when the closed control fits its grid cell. */
+  -webkit-appearance: none;
+  appearance: none;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+    linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+  background-position: calc(100% - 0.95rem) center, calc(100% - 0.7rem) center;
+  background-size: 0.25rem 0.25rem;
+  background-repeat: no-repeat;
 }
 
 textarea {
@@ -1399,6 +1412,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .progress-line { grid-template-columns: auto minmax(0, 1fr) auto; }
   .mini-transport { gap: 0.3rem; }
 }
+
+/* Reserve the same arrow space after compact-control padding overrides.
+   The select still opens the platform picker; only its closed paint changes. */
+select:not([multiple]) { padding-inline-end: 1.85rem; }
 
 /* A fine visual track with a usable, invisible touch area. */
 #episode-progress,
