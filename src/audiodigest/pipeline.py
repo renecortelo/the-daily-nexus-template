@@ -803,14 +803,14 @@ class Pipeline:
                 {"stage": "script", **script_meta.to_dict()},
                 {"stage": "verify", **verify_meta.to_dict()},
             ]
-            repair_issues: list[str] = []
             repair_attempt = 0
             repair_limit = self.settings.podcast.max_script_repairs
             while not verification.approved and repair_attempt < repair_limit:
                 repair_attempt += 1
-                repair_issues.extend(
-                    issue for issue in verification.issues if issue not in repair_issues
-                )
+                # Repair the current review, not an accumulating list of obsolete
+                # instructions. The latest script retains already-valid corrections;
+                # every replacement still receives a complete factual review.
+                repair_issues = list(dict.fromkeys(verification.issues))
                 _stage(
                     5,
                     8,

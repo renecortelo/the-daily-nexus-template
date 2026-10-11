@@ -39,15 +39,21 @@ Each extracted fact cites one or two passage IDs from collected newsletters or
 retrieved pages. The runtime copies the actual source text and adjacent context,
 validates source/URL membership, and remaps supports when merging duplicates.
 The existing script and newspaper review calls receive deduplicated original
-passages plus a fact-to-passage map; repair drafts receive the same evidence.
+passages plus a fact-to-passage map. The first source-backed podcast draft and
+its repairs also receive the selected stories' original passages, rather than
+waiting for a rejection before supplying them. Repairs use only the latest
+review's issues and the latest script, preserving valid earlier corrections;
+every replacement still receives a complete factual review.
 Original-source factual approval must be explicit. This is a consistency check,
 not independent proof that a publisher is correct; translation, chronology,
 units, qualifications and attribution still require fallible model judgment.
-Sources are untrusted data, never instructions for the reviewer.
+Sources are untrusted data, never instructions for the writer or reviewer.
 
 Unique review excerpts are capped at 120,000 characters; oversized packets fail
 explicitly rather than silently removing evidence. Regular review-call count is
-unchanged, but the added source text can increase latency. Original excerpts and
+unchanged, but the added source text can increase latency and consume more of
+the existing subscription quota. Runtime and repair caps are unchanged. Original
+excerpts and
 integrity hashes are stored only in the private runtime manifest, not Firebase
 archive metadata or Hosting files. Hashes detect corruption, not authenticity
 against a malicious editor. Temporary input payloads are removed; saved manifest
