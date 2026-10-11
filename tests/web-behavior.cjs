@@ -92,6 +92,35 @@ test('compact inputs keep native value, constraints, label identity and events w
   }
 });
 
+test('scoped captions track live chapters without exposing unrelated private selections', () => {
+  const {context}=harness(['syncCompactSelects']);
+  const control={options:[{textContent:'Introduction'},{textContent:'Data engineering'}],selectedIndex:1};
+  const caption={textContent:''};
+  control.parentElement={querySelector:selector=>selector==='select'?control:caption};
+  context.document.querySelectorAll=()=>{throw new Error('Chapter tick must not scan every form');};
+  context.syncCompactSelects(control);
+  assert.equal(caption.textContent,'Data engineering');
+  control.options=[];control.selectedIndex=-1;context.syncCompactSelects(control);
+  assert.equal(caption.textContent,'');assert.equal(control.title,'');
+});
+
+test('native select events refresh captions using the control, never the event object', () => {
+  const {context}=harness(['syncCompactSelects','setupCompactSelects']);
+  const control={options:[{textContent:'Introduction'},{textContent:'Engineering'}],selectedIndex:0,
+    parentElement:{classList:{contains:()=>false}},before(shell){this.shell=shell;},
+    addEventListener(name,callback){this[name]=callback;}};
+  const shells=[];
+  context.element=(_tag,cls)=>({textContent:'',setAttribute(){},classList:{contains:name=>name===cls},
+    append(caption,input){this.caption=caption;this.control=input;input.parentElement=this;},
+    querySelector:selector=>selector==='select'?control:control.shell.caption});
+  context.document.querySelectorAll=selector=>selector==='select:not([multiple])'?[control]:shells;
+  context.setupCompactSelects();shells.push(control.shell);
+  control.selectedIndex=1;control.change({type:'change',target:control});
+  assert.equal(control.shell.caption.textContent,'Engineering');
+  control.options=[];control.selectedIndex=-1;control.input({type:'input',target:control});
+  assert.equal(control.shell.caption.textContent,'');assert.equal(control.title,'');
+});
+
 function playerHarness(extra=[]) {
   const h=harness(['playbackSelection','isPlaybackSelectionCurrent','playEpisodeAudio','pauseEpisodeAudio',
     'toggleEpisodeAudio','stopEpisodeAudio','seekEpisodeAudio','syncPlaybackLevels','setPlaybackLevel',
@@ -125,6 +154,18 @@ function playerHarness(extra=[]) {
   context.byId('player-volume').value='85';context.byId('player-speed').value='100';
   return {...h,audio,calls};
 }
+
+test('both volume and speed range fills reflect their actual levels and scale', () => {
+  const h=playerHarness(),{context}=h,values=new Map();
+  for(const prefix of ['player','mini'])for(const kind of ['volume','speed']){
+    const id=`${prefix}-${kind}`;context.byId(id).style.setProperty=(name,value)=>values.set(`${id}:${name}`,value);
+  }
+  Object.assign(context.byId('episode-audio'),{volume:0.45,playbackRate:2});context.syncPlaybackLevels();
+  for(const prefix of ['player','mini']){
+    assert.equal(values.get(`${prefix}-volume:--progress`),'45%');
+    assert.equal(values.get(`${prefix}-speed:--progress`),'100%');
+  }
+});
 
 test('player setup is idempotent and displayed defaults match actual audio and both level controls', () => {
   const {context,audio}=playerHarness();context.setupWebPlayer();context.setupWebPlayer();
@@ -924,6 +965,26 @@ test('chapters use explicit heading flags, not guessed prose', () => {
   context.renderPlayerChapters(); assert.equal(chapters.parentElement.hidden,true);
 });
 
+test('chapter hiding targets the original labelled row after native-select wrapping', () => {
+  const {context}=harness(['renderPlayerChapters']);
+  const control=context.byId('player-chapters'),label={hidden:true};
+  control.parentElement={hidden:false};control.closest=()=>label;
+  context.appState.activeEpisode={transcript:[{text:'Verified section',startMs:5000,isHeading:true}]};
+  context.renderPlayerChapters();assert.equal(label.hidden,false);
+  context.appState.activeEpisode={transcript:[]};
+  context.renderPlayerChapters();assert.equal(label.hidden,true);assert.equal(control.children.length,0);
+  assert.equal(control.parentElement.hidden,false,'Do not hide only the decorative shell');
+});
+
+test('playback logout clears the live chapter caption, tooltip and labelled row', () => {
+  const {context}=harness(['clearPlaybackSession','syncCompactSelects']);context.playbackSessionKey=()=>null;
+  const control=context.byId('player-chapters'),caption={textContent:'Private section'},label={hidden:false};
+  control.closest=()=>label;control.options=[{textContent:'Private section'}];control.selectedIndex=0;control.title='Private section';
+  control.replaceChildren=()=>{control.options=[];control.selectedIndex=-1;};
+  control.parentElement={querySelector:selector=>selector==='select'?control:caption};
+  context.clearPlaybackSession();assert.equal(caption.textContent,'');assert.equal(control.title,'');assert.equal(label.hidden,true);
+});
+
 test('time estimates use observed completed runs and never failed attempts', () => {
   const {context}=harness(['runEstimateRange']);
   context.SESSION_MAX_MS=3600000; context.dateValue=value=>value?new Date(value):null;
@@ -1032,14 +1093,32 @@ test('errors persist, stale notice timers cannot hide them, dismissal clears pri
   assert.equal(context.byId('global-alert-message').textContent,'');assert.equal(context.globalAlert.hidden,true);
 });
 
-test('navigation identifies the active view and respects reduced motion', () => {
-  const {context}=harness(['setupNavigation']);const buttons=['gen','play'].map(view=>{
+test('navigation and home actions identify the active view and respect reduced motion', () => {
+  const {context}=harness(['setupNavigation']);const buttons=['home','gen','play'].map(view=>{
     const node=context.byId(view);node.dataset={view};return node;});
-  const views=['gen','play'].map(view=>{const node=context.byId(`view-${view}`);node.id=`view-${view}`;return node;});
-  context.document.querySelectorAll=selector=>selector==='.mode-button'?buttons:views;
+  const action=context.byId('listen-action');action.dataset={openView:'play'};
+  const views=['home','gen','play'].map(view=>{const node=context.byId(`view-${view}`);node.id=`view-${view}`;return node;});
+  context.document.querySelectorAll=selector=>selector==='.mode-button'?buttons:selector.includes('data-open-view')?[...buttons,action]:views;
   let scroll;context.window.scrollTo=options=>{scroll=options;};context.window.matchMedia=()=>({matches:true});
   context.setupNavigation();buttons[1].click();assert.equal(scroll.behavior,'auto');
   assert.equal(buttons[1].attributes['aria-current'],'page');assert.equal(buttons[0].attributes['aria-current'],undefined);
+  action.click();assert.equal(buttons[2].attributes['aria-current'],'page');
+  assert.equal(buttons[1].attributes['aria-current'],undefined);assert.equal(action.attributes['aria-current'],undefined);
+});
+
+test('home explainer pause/replay is local, finite and respects changing motion preference', () => {
+  const {context}=harness(['setupHomeTour']);
+  const tour=context.byId('home-tour'),flags=new Set();tour.dataset={};
+  tour.classList={remove:name=>flags.delete(name),toggle:name=>{if(flags.has(name)){flags.delete(name);return false;}flags.add(name);return true;}};
+  const preference={matches:false,addEventListener(_name,callback){this.change=callback;}};
+  context.window.matchMedia=()=>preference;
+  let plays=0;const animation={currentTime:8,play(){plays++;}};
+  tour.getAnimations=()=>[animation];context.setupHomeTour();context.setupHomeTour();
+  const pause=context.byId('home-tour-pause'),replay=context.byId('home-tour-replay');
+  pause.click();assert.equal(flags.has('tour-paused'),true);assert.equal(pause.textContent,'CONTINUE');
+  replay.click();assert.equal(flags.has('tour-paused'),false);assert.equal(animation.currentTime,0);assert.equal(plays,1);
+  preference.matches=true;preference.change();assert.equal(pause.disabled,true);assert.equal(replay.disabled,true);
+  replay.click();assert.equal(plays,1);pause.click();assert.equal(flags.has('tour-paused'),false);
 });
 
 test('both progress controls announce time and paused compact playback offers Resume', () => {

@@ -793,6 +793,7 @@ function syncNewspaperControls(form) {
 function syncParameterControls(form) {
   syncHostControls(form);
   syncNewspaperControls(form);
+  syncCompactSelects();
 }
 
 function setupParameterForm(form) {
@@ -1220,6 +1221,7 @@ function setupTimezonePicker() {
     }),
   );
   control.value = browserTimezone;
+  syncCompactSelects(control);
 }
 
 function editSchedule(scheduleId) {
@@ -2257,6 +2259,7 @@ function syncPlayer() {
       if (Number(option.value) <= current) chapterIndex = index;
     }
     chapters.selectedIndex = chapterIndex;
+    syncCompactSelects(chapters);
   }
   if (appState.playerDetailMode === "transcript") {
     const currentMs = current * 1000;
@@ -2467,7 +2470,11 @@ function clearPlaybackSession() {
     }
   }
   const chapters = byId("player-chapters");
-  if (chapters) { chapters.replaceChildren(); chapters.parentElement.hidden = true; }
+  if (chapters) {
+    chapters.replaceChildren();
+    (chapters.closest?.(".chapter-control") || chapters.parentElement).hidden = true;
+    syncCompactSelects(chapters);
+  }
 }
 
 function renderPlayerChapters() {
@@ -2475,8 +2482,8 @@ function renderPlayerChapters() {
   control.replaceChildren();
   const headings = (appState.activeEpisode?.transcript || []).filter(segment =>
     segment.isHeading === true && Number.isFinite(segment.startMs) && segment.startMs >= 0);
-  control.parentElement.hidden = !headings.length;
-  if (!headings.length) return;
+  (control.closest?.(".chapter-control") || control.parentElement).hidden = !headings.length;
+  if (!headings.length) { syncCompactSelects(control); return; }
   const introduction = element("option", "", "Introduction");
   introduction.value = "0";
   control.append(introduction);
@@ -2485,6 +2492,7 @@ function renderPlayerChapters() {
     option.value = String(heading.startMs / 1000);
     control.append(option);
   }
+  syncCompactSelects(control);
 }
 
 function updateMediaMetadata() {
@@ -2782,9 +2790,11 @@ function syncPlaybackLevels() {
   const label = `${speed.toFixed(2).replace(/0$/, "")}x`;
   for (const { prefix } of PLAYER_SURFACES) {
     byId(`${prefix}-volume`).value = String(volume);
+    setRangeProgress(byId(`${prefix}-volume`), volume);
     byId(`${prefix}-volume-value`).textContent = `${volume}%`;
     byId(`${prefix}-volume`).setAttribute("aria-valuetext", `${volume}%`);
     byId(`${prefix}-speed`).value = String(speed * 100);
+    setRangeProgress(byId(`${prefix}-speed`), ((speed * 100 - 75) / 125) * 100);
     byId(`${prefix}-speed-value`).textContent = label;
     byId(`${prefix}-speed`).setAttribute("aria-valuetext", label);
   }
@@ -2860,6 +2870,8 @@ function setupWebPlayer() {
   byId("mini-levels-button").addEventListener("click", () => {
     const opened = byId("mini-player").classList.toggle("levels-open");
     byId("mini-levels-button").setAttribute("aria-expanded", String(opened));
+    byId("mini-levels-button").textContent = opened ? "LESS" : "MORE";
+    byId("mini-levels-button").setAttribute("aria-label", opened ? "Hide additional playback controls" : "More playback controls");
   });
   byId("player-chapters").addEventListener("change", (event) => {
     seekEpisodeAudio(Number(event.target.value), true);
@@ -2981,8 +2993,10 @@ function setupStickyInsets() {
   measure();
 }
 
-function syncCompactSelects() {
-  for (const shell of document.querySelectorAll(".select-shell")) {
+function syncCompactSelects(control = null) {
+  const shells = control ? [control.parentElement] : document.querySelectorAll(".select-shell");
+  for (const shell of shells) {
+    if (!shell?.querySelector) continue;
     const control = shell.querySelector("select");
     const caption = shell.querySelector(".select-caption");
     const selected = control.options[control.selectedIndex];
@@ -2995,15 +3009,15 @@ function setupCompactSelects() {
   // Keep the native select as the only interactive/announced control. Its
   // 16px input font prevents iOS focus zoom; the aria-hidden caption uses the
   // shared compact utility scale. No custom listbox or stored copy of data.
-  for (const control of document.querySelectorAll(".monitor-filters select, .archive-sort select, #profile-picker")) {
+  for (const control of document.querySelectorAll("select:not([multiple])")) {
     if (control.parentElement.classList.contains("select-shell")) continue;
     const shell = element("span", "select-shell");
     const caption = element("span", "select-caption");
     caption.setAttribute("aria-hidden", "true");
     control.before(shell);
     shell.append(caption, control);
-    control.addEventListener("input", syncCompactSelects);
-    control.addEventListener("change", syncCompactSelects);
+    control.addEventListener("input", () => syncCompactSelects(control));
+    control.addEventListener("change", () => syncCompactSelects(control));
   }
   syncCompactSelects();
 }
@@ -3020,20 +3034,53 @@ function setupCompactInputs() {
 }
 
 function setupNavigation() {
-  for (const button of document.querySelectorAll(".mode-button")) {
+  for (const button of document.querySelectorAll(".mode-button, [data-open-view]")) {
     button.addEventListener("click", () => {
+      const view = button.dataset.view || button.dataset.openView;
       for (const item of document.querySelectorAll(".mode-button")) {
-        item.classList.toggle("active", item === button);
-        if (item === button) item.setAttribute("aria-current", "page");
+        item.classList.toggle("active", item.dataset.view === view);
+        if (item.dataset.view === view) item.setAttribute("aria-current", "page");
         else item.removeAttribute("aria-current");
       }
-      for (const view of document.querySelectorAll(".view")) {
-        view.classList.toggle("active", view.id === `view-${button.dataset.view}`);
+      for (const panel of document.querySelectorAll(".view")) {
+        panel.classList.toggle("active", panel.id === `view-${view}`);
       }
-      byId("mini-player").classList.toggle("context-hidden", button.dataset.view === "play");
+      byId("mini-player").classList.toggle("context-hidden", view === "play");
       window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   }
+}
+
+function setupHomeTour() {
+  const tour = byId("home-tour");
+  if (tour.dataset.tourReady === "true") return;
+  const pause = byId("home-tour-pause"), replay = byId("home-tour-replay");
+  const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const syncMotion = () => {
+    pause.disabled = replay.disabled = preference.matches;
+    if (preference.matches) tour.classList.remove("tour-paused");
+    pause.textContent = "PAUSE";
+    pause.setAttribute("aria-pressed", "false");
+  };
+  pause.addEventListener("click", () => {
+    if (preference.matches) return;
+    const paused = tour.classList.toggle("tour-paused");
+    pause.textContent = paused ? "CONTINUE" : "PAUSE";
+    pause.setAttribute("aria-pressed", String(paused));
+  });
+  replay.addEventListener("click", () => {
+    if (preference.matches) return;
+    tour.classList.remove("tour-paused");
+    pause.textContent = "PAUSE";
+    pause.setAttribute("aria-pressed", "false");
+    for (const animation of tour.getAnimations?.({ subtree: true }) || []) {
+      animation.currentTime = 0;
+      animation.play();
+    }
+  });
+  preference.addEventListener?.("change", syncMotion);
+  syncMotion();
+  tour.dataset.tourReady = "true";
 }
 
 function setupInstall() {
@@ -3073,6 +3120,7 @@ function setupActivityTracking() {
 async function initialize() {
   setupCompactSelects();
   setupCompactInputs();
+  setupHomeTour();
   setupStickyInsets();
   setupNavigation();
   setupInstall();
