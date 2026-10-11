@@ -494,6 +494,18 @@ identity; public and private functionality synchronized with sanitized export.
 
 ## Release procedure for each increment
 
+Mobile viewport increment implemented on 2026-10-11: closed selects use a
+bounded CSS-painted amber arrow instead of WebKit's intrinsic native appearance,
+which could propagate long option widths into the document's scrollable area.
+Native selection behavior, mobile input font sizes, page zoom, archive strips,
+sticky navigation/player and internal newspaper pan/zoom remain enabled.
+No root overflow clipping or zoom suppression is used to hide the defect.
+The shell advances to 4.1.15 / cache v4-45. Local synthetic WebKit and Chromium
+layout checks cover all views, loaded archives, long labels and compact-player
+states across mobile/tablet/desktop widths. These are not physical iPhone/PWA
+certification; device adoption remains to be confirmed after Hosting deployment.
+No generation, provider, credential or schedule behavior changes.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its
