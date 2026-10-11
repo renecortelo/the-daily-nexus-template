@@ -551,6 +551,34 @@ Physical iPhone focus-zoom and assistive-technology confirmation remain open;
 desktop WebKit cannot certify them. No changes to production, accounts, schedules,
 provider calls, credentials or dependencies. Preserve clock/feed/media on deploy.
 
+Dynamic-control and home increment (4.1.19 / cache v4-49): include every native
+single-select in the compact display treatment, including live chapters, voices,
+tones and timezones. Synchronize captions after option replacement, hydration and
+voice restrictions; playback updates only the chapter shell, not every form.
+Hide the original labelled chapter row on missing headings and clear the selected
+caption/title during logout. The persistent player is 97px or less on small
+screens and 60px or less on larger screens when collapsed: title/wave, play/pause,
+More and a thin seek track with times at either end. More retains previous, play,
+stop, next, volume and speed; the pause toggle remains available when expanded.
+The title opens PLAY through the same navigation handler. Remove duplicate edition
+paint, align the main volume/speed controls into one mobile row and use explicit
+amber native-range styling on WebKit/Gecko. Named shell grid areas prevent hidden
+alerts/player states from turning the footer into an oversized flexible track.
+
+Add HOME behind the unchanged sign-in/owner gate. Its original inline vector
+illustration follows the broad educational-film/analogue motion idea in the user
+reference without copying footage, characters or sound. It explains the real
+chosen-newsletter, editorial-review and separately authored audio/optional-paper
+flow. Label it as an illustration, not live progress. Use finite animations with
+pause/replay and a static reduced-motion view; no embedded video, remote images,
+fonts, telemetry or new dependencies. Home actions navigate only, never dispatch.
+All six navigation buttons fit the mobile row. Review seven views and closed/open
+mini states across nine widths, including populated transcripts/chapters, voice
+restrictions, native focus, toolbar target sizes, footer height and motion controls
+in both WebKit and Chromium. These remain synthetic local checks, not physical
+iPhone/PWA, sound or assistive-technology certification. Public export is source
+only; keep the feed, clock, identity settings and media intact on deployment.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its

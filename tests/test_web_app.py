@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.18', page)
-        self.assertIn('/styles.css?v=4.1.18', page)
-        self.assertIn('tdn-shell-v4-48', worker)
+        self.assertIn('/app.js?v=4.1.19', page)
+        self.assertIn('/styles.css?v=4.1.19', page)
+        self.assertIn('tdn-shell-v4-49', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -95,6 +95,30 @@ class WebAppSecurityTests(TestCase):
                      '.terminal-list.empty-state', 'min-height: 6rem'):
             self.assertIn(rule, styles)
         self.assertNotIn('inputmode="none"', Path("web/index.html").read_text(encoding="utf-8"))
+
+    def test_home_and_dynamic_controls_keep_local_motion_and_native_semantics(self):
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        self.assertIn('id="view-home" class="view active"', page)
+        self.assertIn('data-view="home"', page)
+        self.assertIn('id="home-tour-pause"', page)
+        self.assertIn('id="home-tour-replay"', page)
+        self.assertIn('A short illustration, not a live generation.', page)
+        self.assertIn('select:not([multiple])', source)
+        self.assertIn('syncCompactSelects(chapters)', source)
+        self.assertIn(
+            'control.addEventListener("change", () => syncCompactSelects(control))', source
+        )
+        self.assertIn('control.closest?.(".chapter-control")', source)
+        self.assertIn('.chapter-control .select-shell', styles)
+        self.assertIn('.mini-player.levels-open .mini-transport', styles)
+        self.assertIn('tour.getAnimations?.({ subtree: true })', source)
+        self.assertNotIn('<iframe', page)
+        self.assertNotIn('youtube.com', page)
+        self.assertNotIn(
+            'infinite', styles.split('/* Original, local-only educational film.', 1)[1]
+        )
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
