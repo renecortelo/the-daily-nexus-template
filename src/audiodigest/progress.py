@@ -42,6 +42,7 @@ COUNTERS = {
     "word_count",
     "voice_blocks",
     "voice_total",
+    "speech_reused_blocks",
     "model_retries",
     "model_validation_failures",
     "model_validation_recoveries",

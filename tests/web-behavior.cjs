@@ -1113,12 +1113,13 @@ test('home illustration loops locally without controls or JavaScript timers', ()
   assert.equal(page.includes('home-tour-pause'),false);
   assert.equal(page.includes('home-tour-replay'),false);
   assert.equal(source.includes('setupHomeTour'),false);
-  for(const part of ['choose','review','deliver']) {
-    const rule=styles.split(`.view.active .tour-scene-${part} {`)[1].split('}')[0];
-    assert.match(rule,/4.8s linear infinite/);
-    assert.ok(page.includes(`class="tour-scene tour-scene-${part}"`));
+  assert.equal((page.match(/class="agent-workshop"/g)||[]).length,1);
+  assert.equal(page.includes('tour-scene'),false);
+  for(const part of ['head','eyes','left-arm','right-arm','job-sheet']) {
+    const rule=styles.split(`.view.active .agent-${part} {`)[1].split('}')[0];
+    assert.match(rule,/infinite/);
   }
-  assert.match(styles,/\.tour-scene-deliver \{ display: block; opacity: 1; \}/);
+  assert.match(styles,/\.agent-workshop \* \{ animation: none !important; \}/);
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles,/animation: none !important/);
 });

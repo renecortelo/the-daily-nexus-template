@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest?v=4.0.13">
     <link rel="apple-touch-icon" href="/assets/tdn-icon.png">
     <link rel="icon" href="/assets/tdn-icon.png">
-    <link rel="stylesheet" href="/styles.css?v=4.1.21">
+    <link rel="stylesheet" href="/styles.css?v=4.1.22">
   </head>
   <body>
     <div class="scanlines" aria-hidden="true"></div>
@@ -110,33 +110,47 @@
             </div>
           </div>
           <figure id="home-tour" class="console-card nexus-tour">
-            <div class="card-header"><span>FROM INBOX TO EDITION</span><span>ILLUSTRATION</span></div>
+            <div class="card-header"><span>YOUR EDITOR AT WORK</span><span>ILLUSTRATION</span></div>
             <div class="tour-display" aria-hidden="true">
-              <svg viewBox="0 0 600 260" focusable="false">
-                <defs><g id="nexus-tour-mascot"><path class="mascot-limbs" d="M-38 14q-25 2-34 22M38 14q25 2 34-10M-16 39l-7 28h-15M16 39l7 28h15"/><circle class="mascot-face" r="43"/><path class="mascot-horizon" d="M-48 5H48M-47 13H47"/><circle class="mascot-eye" cx="-14" cy="-12" r="3"/><circle class="mascot-eye" cx="14" cy="-12" r="3"/><path class="mascot-smile" d="M-13 23q13 13 26 0"/><path d="M0-55v-8M-39-39l-6-6M39-39l6-6"/></g></defs>
-                <path class="tour-floor" d="M35 225H565"/>
-                <g class="tour-scene tour-scene-choose">
-                  <path class="tour-track" d="M240 197H547M265 209h15m25 0h15m25 0h15m25 0h15m25 0h15m25 0h15"/>
-                  <g transform="translate(130 150)"><g class="tour-mascot-hop"><use href="#nexus-tour-mascot"/></g></g>
-                  <g class="tour-envelope-flight"><rect x="250" y="77" width="90" height="63" rx="4"/><path d="m250 77 45 33 45-33M250 140l31-28m59 28-31-28"/><rect x="343" y="97" width="90" height="63" rx="4"/><path d="m343 97 45 33 45-33"/><rect x="433" y="77" width="90" height="63" rx="4"/><path d="m433 77 45 33 45-33"/></g>
-                  <path class="tour-motion-lines" d="M61 139H33M65 151H42M64 163H31"/>
-                </g>
-                <g class="tour-scene tour-scene-review">
-                  <rect class="tour-board" x="48" y="42" width="310" height="157" rx="6"/><path d="M77 74h98M77 91h71M77 108h88M77 146h98M77 163h71M229 84l28 34 40-43M257 118l-17 42"/><circle cx="229" cy="84" r="9"/><circle cx="297" cy="75" r="9"/><circle cx="240" cy="160" r="9"/><circle cx="257" cy="118" r="9"/>
-                  <g transform="translate(454 147)"><g class="tour-mascot-hop"><use href="#nexus-tour-mascot"/></g></g>
-                  <g class="tour-check"><circle cx="352" cy="155" r="30"/><path d="m337 155 10 10 22-24"/></g>
-                  <path class="tour-pointer" d="m390 149-39-25"/>
-                </g>
-                <g class="tour-scene tour-scene-deliver">
-                  <g class="tour-output-audio"><rect x="62" y="72" width="135" height="111" rx="12"/><path d="M90 103v47m20-63v79m20-89v98m20-78v58m20-50v42"/></g>
-                  <g transform="translate(300 148)"><g class="tour-mascot-hop"><use href="#nexus-tour-mascot"/></g></g>
-                  <g class="tour-output-paper"><path d="M405 60h118l17 17v117H405ZM523 60v17h17M421 90h103M421 104h103M421 121h42m-42 14h42m-42 14h42m-42 14h42M481 121h43v42h-43Z"/></g>
-                  <path class="tour-celebrate" d="m43 71-12-9m164-17 8-15m203 13-8-15m161 44 13-8"/>
+              <svg viewBox="0 0 600 300" focusable="false">
+                <defs>
+                  <linearGradient id="agent-sun-fill" x2="0" y2="1"><stop stop-color="#ffca63"/><stop offset="1" stop-color="#f28c18"/></linearGradient>
+                  <g id="agent-envelope"><rect width="49" height="34" rx="3"/><path d="m0 0 24 19L49 0M0 34l17-13m32 13-17-13"/></g>
+                </defs>
+                <g class="agent-workshop">
+                  <path class="agent-floor" d="M18 268H582"/>
+                  <g class="agent-inbox"><path d="M23 163h91l-8 45H30ZM24 164l17-27h54l18 27"/><use href="#agent-envelope" x="37" y="85"/><use href="#agent-envelope" x="53" y="112"/></g>
+                  <path class="agent-belt" d="M25 220H571M25 242H571"/>
+                  <g class="agent-rollers"><path d="M35 231h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7"/></g>
+                  <g class="agent-job-sheet"><rect x="47" y="195" width="38" height="38" rx="3"/><path d="M55 203h22m-22 7h22m-22 7h14"/></g>
+                  <g class="agent-source-board"><rect x="147" y="59" width="105" height="87" rx="6"/><path d="M160 73h50m-50 13h36m-36 13h42"/><circle cx="228" cy="118" r="12"/><path class="agent-verified" d="m221 119 5 5 9-11"/><path d="M183 146v18m-15 0h38"/></g>
+                  <g transform="translate(312 105)">
+                    <g class="agent-head">
+                      <path class="agent-rays" d="M0-65v-8M-46-46l-7-7M46-46l7-7M-65 0h-8M65 0h8"/>
+                      <circle class="agent-face" r="51"/>
+                      <path class="agent-horizon" d="M-58 16H58M-55 23H55"/>
+                      <path class="agent-brows" d="M-29-21q10-7 20-2M10-23q10-5 20 2"/>
+                      <g class="agent-eyes"><ellipse cx="-19" cy="-7" rx="5" ry="7"/><ellipse cx="19" cy="-7" rx="5" ry="7"/></g>
+                      <path class="agent-smile" d="M-15 30q16 18 31-2"/>
+                      <path class="agent-cheek" d="m33 17 5-2"/>
+                    </g>
+                  </g>
+                  <path class="agent-body" d="M281 153h62l15 65h-92Z"/>
+                  <path class="agent-collar" d="m281 154 30 20 32-20m-31 21-6 27 8 8 7-8-8-27"/>
+                  <g class="agent-left-arm"><path d="M281 165q-33 5-50 24l-26 13"/><circle cx="205" cy="202" r="9"/></g>
+                  <g class="agent-right-arm"><path d="M342 165q34 10 48 32"/><circle cx="390" cy="197" r="9"/><path class="agent-stamp" d="M381 187h18v9h-18m-4 0h26v10h-26Z"/></g>
+                  <path class="agent-desk" d="M139 216h292v10H139Zm16 10-9 40m270-40 9 40"/>
+                  <g class="agent-keyboard"><path d="M251 203h104l12 12H240ZM255 208h6m9 0h6m9 0h6m9 0h6m9 0h6m9 0h6"/></g>
+                  <g class="agent-approved"><circle cx="408" cy="184" r="14"/><path d="m402 184 4 5 8-10"/></g>
+                  <path class="agent-wire" d="M430 217h13v-69h15"/>
+                  <g class="agent-audio-output"><rect x="461" y="99" width="83" height="93" rx="8"/><path d="M476 122h53"/><g class="agent-wave"><path d="M478 147v17m12-24v31m12-39v47m12-40v31m12-22v17"/></g></g>
+                  <g class="agent-paper-output"><path d="M515 202h47l13 13v48h-60ZM562 202v13h13M525 227h40m-40 9h23m-23 9h23"/><path class="agent-paper-chart" d="M553 251v-8m8 8v-17m8 17v-23"/></g>
+                  <g class="agent-spark"><path d="M551 71v14m-7-7h14M573 113v10m-5-5h10"/></g>
                 </g>
               </svg>
             </div>
-            <div class="tour-captions" aria-hidden="true"><span class="tour-scene-choose">01 // PICK YOUR NEWSLETTERS</span><span class="tour-scene-review">02 // CONNECT THE EVIDENCE</span><span class="tour-scene-deliver">03 // LISTEN OR READ</span></div>
-            <figcaption>A short illustration, not a live generation. The podcast and paper are written separately.</figcaption>
+            <p class="tour-caption">COLLECT → CHECK → WRITE → PRODUCE</p>
+            <figcaption>A short illustration, not a live generation. Your agent organizes reporting, checks the available evidence and prepares the podcast and optional paper.</figcaption>
           </figure>
         </div>
         <ol class="home-steps">
@@ -445,13 +459,13 @@
                 </label>
               </div>
               <div class="weekday-picker" aria-label="Run days">
-                <label><input type="checkbox" name="weekday" value="0" checked><span>M</span></label>
-                <label><input type="checkbox" name="weekday" value="1" checked><span>T</span></label>
-                <label><input type="checkbox" name="weekday" value="2" checked><span>W</span></label>
-                <label><input type="checkbox" name="weekday" value="3" checked><span>T</span></label>
-                <label><input type="checkbox" name="weekday" value="4" checked><span>F</span></label>
-                <label><input type="checkbox" name="weekday" value="5"><span>S</span></label>
-                <label><input type="checkbox" name="weekday" value="6"><span>S</span></label>
+                <label><input type="checkbox" name="weekday" value="0" aria-label="Monday" checked><span aria-hidden="true">M</span></label>
+                <label><input type="checkbox" name="weekday" value="1" aria-label="Tuesday" checked><span aria-hidden="true">T</span></label>
+                <label><input type="checkbox" name="weekday" value="2" aria-label="Wednesday" checked><span aria-hidden="true">W</span></label>
+                <label><input type="checkbox" name="weekday" value="3" aria-label="Thursday" checked><span aria-hidden="true">T</span></label>
+                <label><input type="checkbox" name="weekday" value="4" aria-label="Friday" checked><span aria-hidden="true">F</span></label>
+                <label><input type="checkbox" name="weekday" value="5" aria-label="Saturday"><span aria-hidden="true">S</span></label>
+                <label><input type="checkbox" name="weekday" value="6" aria-label="Sunday"><span aria-hidden="true">S</span></label>
               </div>
             </fieldset>
 
@@ -662,6 +676,6 @@
     </div>
 
     <script src="/cloud-clock-config.js?v=4.1.3"></script>
-  <script type="module" src="/app.js?v=4.1.21"></script>
+  <script type="module" src="/app.js?v=4.1.22"></script>
   </body>
 </html>

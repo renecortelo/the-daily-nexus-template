@@ -621,6 +621,34 @@ are used, without authentication or provider calls. `TDN_PLAYWRIGHT_MODULE` can
 select an existing developer installation; `TDN_CHROMIUM_CHANNEL` can select an
 installed Chromium browser. Real iPhone/PWA and assistive checks remain open.
 
+Bounded-efficiency and agent-workshop increment (4.1.22 / cache v4-52): correct
+the invalid-draft retry instruction that could request expansion after exceeding
+an upper word limit. Supply a constraint-specific plan for compression, trusted
+missing-story placement and optional closing-comment repair. Malformed JSON
+still requires a complete valid response. Existing retries, original evidence,
+structural/factual gates, no-spend controls and protected deadlines remain.
+Extract deterministic script-contract and trusted closing helpers into their
+own module without changing normalization or adding a review call.
+
+Reuse up to 64 exact prepared-text/voice/language speech chunks only inside a
+single temporary render; preserve every ordered transcript turn and actual
+duration. Record a numeric reuse count, never source text. Stop synthesis early
+when retained speech alone exceeds the existing 30-minute ceiling; final gap,
+encoding and quality checks remain. Do not crop audio or claim measured production
+savings from synthetic repeated-input tests. Matched normal-run adoption is open.
+
+Seven native weekday checkboxes now share one bounded row, with full accessible
+day names, visible focus and touch-height controls; no timing semantics change.
+HOME uses one original continuous agent workshop rather than scene transitions.
+The sun-faced editor sorts, looks/blinks, types and stamps approval while its
+conveyor, audio and paper outputs move. It is explicitly an illustration, not
+live progress or a guarantee of perfect reporting. CSS loops only while HOME is
+active; reduced motion keeps a static view. No remote asset, timer, dependency,
+tracking, provider request or extra test episode is introduced. Synthetic
+Chromium/WebKit audits cover all seven views and 306 layout cases; physical
+iPhone/PWA and assistive-technology confirmation remain open. Preserve clock,
+feed, accounts and historical media during static deployment.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its

@@ -47,6 +47,9 @@ an allowlisted metric reader, **not a general-purpose log redaction utility**.
 - Retry counts and fixed terminal codes help locate instability; they do not
   isolate retry duration or establish which factual claim was rejected.
   Historical codes reflect the diagnostic implementation used at that time.
+- `speech_reused_blocks` counts exact voice/language/text matches reused within
+  one temporary episode render. It is not a count of removed transcript turns
+  or a duration saving. Older runs without this counter remain unknown.
 - Median and nearest-rank p90 describe the supplied samples, not a guaranteed
   duration or an account-wide forecast. A small sample's p90 may be its maximum.
 - Logs normally contain generation timings, not the enriched owner document's

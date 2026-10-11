@@ -284,8 +284,13 @@ class KokoroAudioRenderer:
             timeline_ms = 0
             spoken_blocks = self._delivery_blocks(script)
             rendered: list[tuple[Path, int, int, int]] = []
+            # Exact reuse is confined to this private temporary render. No cache
+            # survives an episode, host/voice change or failed render.
+            speech_cache: dict[tuple[str, str, str], tuple[Path, int, int, int]] = {}
+            speech_total_ms = 0
+            reused_blocks = 0
             total_blocks = len(spoken_blocks)
-            counts(voice_blocks=0, voice_total=total_blocks)
+            counts(voice_blocks=0, voice_total=total_blocks, speech_reused_blocks=0)
             print(f"Synthesizing {total_blocks} audio dialogue blocks...", flush=True)
 
             for index, block in enumerate(spoken_blocks):
@@ -303,25 +308,41 @@ class KokoroAudioRenderer:
                 if language_code not in pipelines:
                     with timed_operation("voice_model"):
                         pipelines[language_code] = self._pipeline(language_code)
-                chunk = temp / f"speech-{index:04d}.wav"
-                with timed_operation("speech"):
-                    self._write_speech_chunk(
-                        pipelines[language_code],
-                        prepare_speech(
-                            turn.text,
-                            is_heading=is_section_heading,
-                            pronunciations=self.settings.pronunciations,
-                        ),
-                        chunk,
-                        voice=voice,
-                    )
+                prepared = prepare_speech(
+                    turn.text, is_heading=is_section_heading,
+                    pronunciations=self.settings.pronunciations,
+                )
+                cache_key = (voice, language_code, prepared)
+                cached = speech_cache.get(cache_key)
+                if cached is None:
+                    chunk = temp / f"speech-{index:04d}.wav"
+                    with timed_operation("speech"):
+                        self._write_speech_chunk(
+                            pipelines[language_code], prepared, chunk, voice=voice,
+                        )
+                    with wave.open(str(chunk), "rb") as speech:
+                        speech_ms = round(
+                            (speech.getnframes() / max(1, speech.getframerate())) * 1000
+                        )
+                    if speech_ms <= 0:
+                        raise AudioGenerationError("Kokoro returned an empty speech chunk")
+                    leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
+                    cached = (chunk, speech_ms, leading_ms, trailing_ms)
+                    if len(speech_cache) < 64:
+                        speech_cache[cache_key] = cached
+                else:
+                    reused_blocks += 1
+                    counts(speech_reused_blocks=reused_blocks)
                 counts(voice_blocks=index + 1)
-                with wave.open(str(chunk), "rb") as speech:
-                    speech_ms = round((speech.getnframes() / max(1, speech.getframerate())) * 1000)
-                leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
-                if speech_ms <= 0:
-                    raise AudioGenerationError("Kokoro returned an empty speech chunk")
-                rendered.append((chunk, speech_ms, leading_ms, trailing_ms))
+                speech_total_ms += cached[1]
+                # Added gaps cannot reduce the duration of retained speech. Stop
+                # before rendering remaining blocks if speech alone cannot fit.
+                if speech_total_ms > MAX_EPISODE_SECONDS * 1000:
+                    raise AudioGenerationError(
+                        "Complete speech exceeds the 30-minute delivery ceiling; "
+                        "audio was not cut or published"
+                    )
+                rendered.append(cached)
 
             # Both neighbouring waveforms are available now, so existing model
             # pauses count toward the gap. Transcript timing follows actual files.

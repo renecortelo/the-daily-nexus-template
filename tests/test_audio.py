@@ -105,7 +105,7 @@ class AudioHostTests(TestCase):
                 renderer,
                 "_write_speech_chunk",
                 side_effect=lambda _p, _t, path, **_kw: self._write_test_wav(path),
-            ),
+            ) as speech,
             patch.object(
                 renderer, "_write_silence", side_effect=lambda path, _ms: self._write_test_wav(path)
             ),
@@ -113,7 +113,55 @@ class AudioHostTests(TestCase):
         ):
             with self.assertRaisesRegex(AudioGenerationError, "not cut or published"):
                 renderer.render(script, Path(name) / "episode.mp3")
+            self.assertEqual(2, speech.call_count)
             encode.assert_not_called()
+
+    def test_exact_chunk_reuse_is_voice_scoped_ephemeral_and_keeps_all_transcript_turns(self):
+        script = EpisodeScript.from_dict({
+            "title": "The Daily Nexus", "hosts": ["Dalia", "Nox"],
+            "introduction": [{"host": "Dalia", "text": "A supported observation."},
+                             {"host": "Nox", "text": "A supported observation."}],
+            "sections": [{"name": "AI", "story_ids": ["one"], "dialogue": [
+                {"host": "Dalia", "text": "A supported observation."}]}],
+            "conclusion": [{"host": "Dalia", "text": "A supported observation."}],
+            "sign_off": [{"host": "Nox", "text": "An approved quotation."}],
+            "show_notes": [],
+        })
+        renderer = KokoroAudioRenderer(AudioSettings(min_duration_seconds=1), HostSettings())
+        with tempfile.TemporaryDirectory() as name:
+            paths = []
+            transcripts = []
+
+            def speech(_pipeline, _text, path, **_kwargs):
+                paths.append(path)
+                self._write_test_wav(path)
+
+            def run(command, **_kwargs):
+                if "-show_entries" in command:
+                    # Seven retained turns at 20 seconds; existing edges cover all gaps.
+                    return subprocess.CompletedProcess(
+                        command, 0, '{"format":{"duration":"140"}}', ""
+                    )
+                Path(command[-1]).write_bytes(b"x" * 1100)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                patch("audiodigest.audio._require_binary", side_effect=lambda value: value),
+                patch.object(renderer, "_pipeline", return_value=object()),
+                patch.object(renderer, "_write_speech_chunk", side_effect=speech) as synth,
+                patch("audiodigest.audio._wav_edge_silence_ms", return_value=(600, 600)),
+                patch("audiodigest.audio.subprocess.run", side_effect=run),
+                patch("audiodigest.audio.measure_encoded_audio", return_value=AudioQuality()),
+            ):
+                for iteration in range(2):
+                    result = renderer.render(script, Path(name) / f"episode-{iteration}.mp3")
+                    transcripts.append(result.transcript_segments)
+                self.assertEqual(10, synth.call_count)  # Five unique voice/text pairs per render.
+            self.assertEqual(transcripts[0], transcripts[1])
+            self.assertEqual(7, len(transcripts[0]))
+            self.assertEqual(140000, transcripts[0][-1].end_ms)
+            self.assertEqual(2, len({path.parent for path in paths}))
+            self.assertTrue(all(not path.exists() for path in paths))
 
     def test_full_duration_check_rejects_truncation_and_invalid_values(self):
         for duration in (180, 900, 1500, float("nan"), float("inf")):

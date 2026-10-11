@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.21', page)
-        self.assertIn('/styles.css?v=4.1.21', page)
-        self.assertIn('tdn-shell-v4-51', worker)
+        self.assertIn('/app.js?v=4.1.22', page)
+        self.assertIn('/styles.css?v=4.1.22', page)
+        self.assertIn('tdn-shell-v4-52', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -116,10 +116,20 @@ class WebAppSecurityTests(TestCase):
         self.assertNotIn('setupHomeTour', source)
         self.assertNotIn('<iframe', page)
         self.assertNotIn('youtube.com', page)
-        for part in ('choose', 'review', 'deliver'):
-            rule = styles.split(f'.view.active .tour-scene-{part} {{', 1)[1].split('}', 1)[0]
+        self.assertEqual(1, page.count('class="agent-workshop"'))
+        self.assertNotIn('tour-scene', page)
+        for part in ('head', 'eyes', 'left-arm', 'right-arm', 'job-sheet'):
+            rule = styles.split(f'.view.active .agent-{part} {{', 1)[1].split('}', 1)[0]
             self.assertIn('infinite', rule)
         self.assertIn('prefers-reduced-motion: reduce', styles)
+
+    def test_weekdays_keep_one_row_and_unambiguous_native_labels(self):
+        page = Path('web/index.html').read_text(encoding='utf-8')
+        styles = Path('web/styles.css').read_text(encoding='utf-8')
+        self.assertIn('.weekday-picker { grid-template-columns: repeat(7,', styles)
+        self.assertNotIn('.weekday-picker { grid-template-columns: repeat(4,', styles)
+        for day in ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'):
+            self.assertIn(f'aria-label="{day}"', page)
 
     def test_every_native_text_field_and_layout_audit_use_complete_inventory(self):
         source = Path('web/app.js').read_text(encoding='utf-8')

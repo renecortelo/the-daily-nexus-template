@@ -461,6 +461,27 @@ discarded error text cannot be reconstructed; normal future runs must validate
 adoption. No additional model call, provider, saved report or static UI change is
 introduced by this diagnostic correction.
 
+## Bounded repair and audio-work efficiency
+
+Already-budgeted invalid-draft retries receive a local repair plan. Overlong
+scripts request compression, not expansion toward a minimum; missing coverage
+is mapped from the trusted section contract, not the rejected draft's headings.
+An invalid optional closing comment requests that field's correction only.
+Malformed JSON still requires a complete valid response, never guessed text.
+These instructions do not bypass structural/factual validation or add model calls.
+The deterministic section/closing helpers live in `script_contract.py`, separate
+from model orchestration, with their existing validation behavior preserved.
+
+Audio rendering reuses at most 64 exact prepared-text/voice/language matches
+inside that render's temporary directory. No speech cache survives an episode;
+all original turns and their ordered timings remain. Retained speech alone over
+30 minutes fails before remaining synthesis; the final speech-plus-gaps and
+encoded-audio checks still apply. Audio is not cut to pass a ceiling. The numeric
+`speech_reused_blocks` counter measures reuse, not seconds saved. Synthetic tests
+verify fewer synthesis calls on repeated inputs, not a production speed claim.
+Review equivalent normal runs with [RUNTIME_REVIEW.md](RUNTIME_REVIEW.md) before
+claiming a real duration improvement. Runner caps and protected reserve remain.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets

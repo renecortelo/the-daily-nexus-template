@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from audiodigest.config import AntigravitySettings
+from audiodigest.draft_repairs import draft_repair_plan
 from audiodigest.execution_budget import operation_timeout
 from audiodigest.models import AntigravityMetadata, DataValidationError
 from audiodigest.private_store import (
@@ -50,7 +51,7 @@ def _validation_code(exc: Exception) -> str:
         (("omits required",), "script_coverage"),
         (("host", "conversation turn"), "script_hosts"),
         (("quotation", "sign-off", "credit editor"), "script_closing"),
-        (("the maximum", "word count"), "script_length"),
+        (("the maximum", "maximum is", "word count"), "script_length"),
     ):
         if any(term in text for term in terms):
             return code
@@ -467,7 +468,8 @@ class AntigravityCLI:
             ) as exc:
                 validation_failed = True
                 increment("model_validation_failures")
-                record_failure_code(_validation_code(exc))
+                failure_code = _validation_code(exc)
+                record_failure_code(failure_code)
                 last_error = exc
                 if attempt < retries:
                     print(
@@ -479,14 +481,15 @@ class AntigravityCLI:
                         **payload,
                         "previous_response": rejected_response,
                         "validation_error": str(exc),
+                        "repair_plan": draft_repair_plan(payload, rejected_response, failure_code),
                         "repair_instruction": (
                             "Return corrected JSON only. Preserve valid supported "
                             "material from the rejected response. Change only the rejected "
                             "fields or sections; keep valid story coverage and attribution. "
                             "Never guess missing text in a truncated JSON response. "
-                            "If a word target "
-                            "failed, improve useful evidence coverage rather than "
-                            "padding or repeating text."
+                            "Follow repair_plan for the rejected constraint. Respect "
+                            "upper word limits; never expand merely to reach a minimum "
+                            "or pad, repeat or remove required supported coverage."
                         ),
                     }
         raise AntigravityCLIError(

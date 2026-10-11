@@ -390,3 +390,5 @@ class AntigravitySafetyTests(TestCase):
                 {"approved": False, "issues": ["too short"]},
                 payloads[1]["previous_response"],
             )
+            self.assertTrue(payloads[1]["repair_plan"]["validation_still_required"])
+            self.assertTrue(payloads[1]["repair_plan"]["never_expand_to_reach_a_minimum"])

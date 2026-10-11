@@ -214,7 +214,15 @@ document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCo
    await page.locator('[data-view="home"]').click();
    assert.equal(await page.locator('#home-tour-pause,#home-tour-replay').count(),0);
    const looping=await page.locator('#home-tour').evaluate(el=>el.getAnimations({subtree:true}).filter(a=>a.effect.getTiming().iterations===Infinity).length);
-   assert.ok(looping>=6,'The three scenes, captions and mascot loop while HOME is visible');
+   assert.ok(looping>=10,'A single working agent loops its gestures and production line');
+   assert.equal(await page.locator('#home-tour .agent-workshop').count(),1);
+   await page.locator('[data-view="schedule"]').click();
+   const days=await page.locator('.weekday-picker label').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {y:r.y,width:r.width,height:r.height};}));
+   assert.equal(new Set(days.map(day=>Math.round(day.y))).size,1,'All seven weekdays must share one row');
+   assert.ok(days.every(day=>day.width>=24&&day.height>=(width<=900?44:39)),'Weekday targets need 24px minimum width and touch-friendly height');
+   const monday=page.locator('input[name="weekday"][value="0"]');
+   const before=await monday.isChecked();await monday.click();assert.equal(await monday.isChecked(),!before);
+   await page.locator('[data-view="home"]').click();
    await page.locator('#view-home [data-open-view="play"]').click();
    assert.equal(await page.locator('[data-view="play"]').getAttribute('aria-current'),'page');
    assert.equal(await page.locator('#home-tour').evaluate(el=>el.getAnimations({subtree:true}).length),0,'Hidden HOME must not animate');
