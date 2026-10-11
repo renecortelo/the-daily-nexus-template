@@ -494,6 +494,20 @@ identity; public and private functionality synchronized with sanitized export.
 
 ## Release procedure for each increment
 
+Compact console increment (4.1.16 / cache v4-46): reduce header, heading,
+secondary-button and decorative-wave scale; group source/editorial controls,
+favorites and monitor filters into responsive rows. Host choices retain their
+logical order, with voice/tone pairs using the available width. Small screens
+keep 16px form values and 44px touch targets instead of shrinking interaction
+areas. References wrap and use readable body typography; newspaper reading
+size/zoom is unchanged. A single short amber acquisition line and subtle entrance
+animate section changes, with both disabled by the existing reduced-motion rule.
+Validate all views, long synthetic option labels and archives, compact-player
+states, touch targets, field sizes and reduced motion in WebKit and Chromium.
+This is not physical iPhone or assistive-technology certification. No new
+dependency, external resource, tracking, credential, generation or scheduler
+change is introduced; clock/feed/media are preserved during deployment.
+
 Mobile viewport increment implemented on 2026-10-11: closed selects use a
 bounded CSS-painted amber arrow instead of WebKit's intrinsic native appearance,
 which could propagate long option widths into the document's scrollable area.

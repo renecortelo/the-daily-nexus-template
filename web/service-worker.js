@@ -1,4 +1,4 @@
-const CACHE_NAME = "tdn-shell-v4-45";
+const CACHE_NAME = "tdn-shell-v4-46";
 const STATIC_ASSETS = new Set([
   "/",
   "/index.html",
