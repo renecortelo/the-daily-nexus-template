@@ -9,6 +9,7 @@ from audiodigest.progress import (
     FAILURE_CODES,
     PREFIX,
     ProgressReporter,
+    clear_failure_code,
     counts,
     filter_stream,
     record_failure_code,
@@ -19,6 +20,50 @@ from audiodigest.progress import (
 
 
 class ProgressTests(TestCase):
+    def test_recovered_attempt_clears_code_but_retains_measurements(self):
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        reporter.start()
+        try:
+            record_failure_code("script_coverage")
+            counts(model_validation_failures=2, model_retries=1)
+            clear_failure_code()
+            self.assertNotIn("failure_code", reporter.snapshot())
+            self.assertEqual(2, reporter.snapshot()["counters"]["model_validation_failures"])
+            self.assertEqual(1, reporter.snapshot()["counters"]["model_retries"])
+            terminal = reporter.finish("failed", failure_code="verification_rejected")
+            record_failure_code("json_invalid")
+            clear_failure_code()
+            later = reporter.snapshot("finish")
+            # Each snapshot has its own wall-clock observation time. Compare
+            # terminal state, not the platform-dependent datetime resolution.
+            terminal.pop("at")
+            later.pop("at")
+            self.assertEqual(terminal, later)
+        finally:
+            reporter.close()
+
+    def test_terminal_code_is_explicit_not_a_recovered_or_unrelated_attempt(self):
+        for status, reason, code, expected in (
+            ("completed", "", "script_coverage", None),
+            ("completed", "sync_pending", "script_coverage", None),
+            ("interrupted", "interrupted", "script_coverage", None),
+            ("failed", "verification_failure", "", None),
+            ("failed", "verification_failure", "verification_rejected", "verification_rejected"),
+            ("failed", "model_failure", "script_hosts", "script_hosts"),
+            ("failed", "other", "sensitive arbitrary text", None),
+            ("failed", "other", [], None),
+        ):
+            with self.subTest(status=status, reason=reason, code=code):
+                reporter = ProgressReporter(interval=0, stream=io.StringIO())
+                reporter.failure_code = "script_coverage"
+                event = reporter.finish(status, reason=reason, failure_code=code)
+                self.assertEqual(expected, event.get("failure_code"))
+                # Finishing again cannot rewrite a terminal profile.
+                later = reporter.finish("failed", failure_code="json_invalid")
+                event.pop("at")
+                later.pop("at")
+                self.assertEqual(event, later)
+
     def test_detailed_closing_codes_survive_without_exception_content(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         for code in ("script_editor_credit", "script_quote_text", "script_quote_author",
@@ -35,6 +80,7 @@ class ProgressTests(TestCase):
         try:
             record_failure_code("json_invalid")
             record_failure_code("sensitive arbitrary text")
+            record_failure_code([])
             self.assertEqual("json_invalid", reporter.snapshot()["failure_code"])
             for value in ("sensitive arbitrary text", {}, []):
                 event = reporter.snapshot()

@@ -44,6 +44,7 @@ COUNTERS = {
     "voice_total",
     "model_retries",
     "model_validation_failures",
+    "model_validation_recoveries",
     "progress_updates_failed",
 }
 OPERATIONS = {"model", "voice_model", "speech", "audio_encode", "paper_render"}
@@ -79,6 +80,7 @@ FAILURE_CODES = {
     "script_closing_comment",
     "script_length",
     "model_structure",
+    "verification_rejected",
 }
 _CURRENT: ContextVar[ProgressReporter | None] = ContextVar("generation_progress", default=None)
 
@@ -249,7 +251,9 @@ class ProgressReporter:
             entry["seconds"] += seconds
             self.emit("operation")
 
-    def finish(self, status: str, *, reason: str = "") -> dict[str, Any]:
+    def finish(
+        self, status: str, *, reason: str = "", failure_code: str = "",
+    ) -> dict[str, Any]:
         self.stop.set()
         self.changed.set()
         with self.lock:
@@ -261,6 +265,12 @@ class ProgressReporter:
                 )
                 self.status = status if status in STATES else "failed"
                 self.reason = reason if reason in REASONS else ""
+                # A rejected attempt is not the terminal cause. Callers must
+                # supply the actual final exception's fixed code explicitly.
+                self.failure_code = (
+                    failure_code if self.status == "failed"
+                    and isinstance(failure_code, str) and failure_code in FAILURE_CODES else ""
+                )
                 self.emit("finish")
             return self.snapshot("finish")
 
@@ -285,10 +295,21 @@ def counts(**values: int) -> None:
 
 
 def record_failure_code(code: str) -> None:
-    if code in FAILURE_CODES and (reporter := _CURRENT.get()):
+    if isinstance(code, str) and code in FAILURE_CODES and (reporter := _CURRENT.get()):
         with reporter.lock:
+            if reporter.finished is not None:
+                return
             reporter.failure_code = code
             reporter.emit("counts")
+
+
+def clear_failure_code() -> None:
+    """Clear a recovered attempt without erasing retry/failure measurements."""
+    if reporter := _CURRENT.get():
+        with reporter.lock:
+            if reporter.finished is None and reporter.failure_code:
+                reporter.failure_code = ""
+                reporter.emit("counts")
 
 
 def increment(name: str) -> None:
