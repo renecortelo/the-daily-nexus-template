@@ -494,6 +494,22 @@ identity; public and private functionality synchronized with sanitized export.
 
 ## Release procedure for each increment
 
+Harmonized console increment (4.1.17 / cache v4-47): consolidate 48 repeated
+top-level rules into their base component definitions; normalize UI/meta/body
+typography with shared tokens, common page gutters and panel/header insets.
+Keep browser text adjustment at 100% without disabling pinch zoom. Loaded mobile
+archive cards align to their content instead of stretching to the row height.
+Auxiliary filter/sort/favorite selects retain their native interactive element
+and labels with a 16px touch font; a 13px aria-hidden caption provides consistent
+closed-control paint. Input/change and favorite/reset/logout paths synchronize
+captions using textContent; no extra storage, polling or custom listbox is added.
+Focused browser regressions check caption changes and private-favorite clearing;
+synthetic WebKit/Chromium cover loaded monitor records, card heights, UI font
+scale, editable font sizes, touch targets, overflow and reduced-motion startup.
+Keep the newspaper's reading zoom independent from compact console typography.
+Real iPhone/Safari and screen-reader confirmation remain open. No provider,
+generation, credential, cloud scheduler or paid-service change is introduced.
+
 Compact console increment (4.1.16 / cache v4-46): reduce header, heading,
 secondary-button and decorative-wave scale; group source/editorial controls,
 favorites and monitor filters into responsive rows. Host choices retain their

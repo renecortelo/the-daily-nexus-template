@@ -28,6 +28,7 @@ function harness(names) {
     element(_tag,_class,text){const image=node(); if(text!==undefined) image.textContent=text; images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearEditionControls(){},
+    syncCompactSelects(){},
     syncParameterControls(form){context.syncHostControls?.(form);context.syncNewspaperControls?.(form);},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
@@ -45,6 +46,24 @@ function storageFixture() {
   return {data, getItem:key=>data.get(key) ?? null,
     setItem:(key,value)=>data.set(key,value), removeItem:key=>data.delete(key)};
 }
+
+test('compact native select captions follow selection and clear private favorites safely', () => {
+  const {context} = harness(['syncCompactSelects']);
+  const control = {options:[{textContent:'NEWEST'}, {textContent:'<private favorite>'}], selectedIndex:0, value:'newest'};
+  const caption = {textContent:''};
+  context.document.querySelectorAll = () => [{querySelector:selector=>selector==='select'?control:caption}];
+  context.syncCompactSelects();
+  assert.equal(caption.textContent,'NEWEST');
+  assert.equal(control.value,'newest');
+  control.selectedIndex=1;
+  context.syncCompactSelects();
+  assert.equal(caption.textContent,'<private favorite>');
+  assert.equal(control.title,'<private favorite>');
+  control.options=[{textContent:'LOAD FAVORITE…'}];control.selectedIndex=0;
+  context.syncCompactSelects();
+  assert.equal(caption.textContent,'LOAD FAVORITE…');
+  assert.equal(control.title,'LOAD FAVORITE…');
+});
 
 function playerHarness(extra=[]) {
   const h=harness(['playbackSelection','isPlaybackSelectionCurrent','playEpisodeAudio','pauseEpisodeAudio',
