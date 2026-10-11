@@ -52,6 +52,8 @@ WEB_APP_ASSETS = (
     "tdn-icon.png",
     "tdn-icon-transparent.png",
     "google-g.png",
+    "nexus-editor-film-v1.mp4",
+    "nexus-editor-poster-v1.webp",
 )
 
 
@@ -171,7 +173,7 @@ def _copy_static_web_app(project_dir: Path, public_dir: Path) -> None:
     for name in WEB_APP_ASSETS:
         source = asset_source / name
         if not source.is_file() or source.is_symlink():
-            raise PublishError(f"missing or unsafe V4 image asset: assets/{name}")
+            raise PublishError(f"missing or unsafe V4 static asset: assets/{name}")
         shutil.copy2(source, public_assets / name)
 
 

@@ -131,6 +131,7 @@ function clearPrivateInterface() {
   clearConsoleSession();
   clearPrivateForms();
   appState.authorized = false;
+  syncHomeFilm();
   clearSubscriptions();
   const audio = byId("episode-audio");
   audio.pause();
@@ -261,6 +262,7 @@ function showApp(user, session) {
   appState.authorized = true;
   authScreen.hidden = true;
   appShell.hidden = false;
+  syncHomeFilm();
   byId("signed-in-user").textContent = user.email || "Verified Google account";
   persistConsoleSession();
   restoreFavoritePreference();
@@ -3033,6 +3035,57 @@ function setupCompactInputs() {
   }
 }
 
+function syncHomeFilm() {
+  const film = byId("home-film");
+  const poster = byId("home-film-poster");
+  if (!film || !poster) return;
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches || appState.homeFilmFailed;
+  const active = appState.authorized && !byId("app-shell").hidden
+    && document.visibilityState !== "hidden"
+    && byId("view-home").classList.contains("active")
+    && appState.homeFilmInView !== false;
+  if (!active || still) {
+    film.pause();
+    film.hidden = true;
+    poster.hidden = false;
+    return;
+  }
+  // The public illustration is requested only in the visible, signed-in HOME.
+  // It has no audio track and is never connected to the podcast controls.
+  if (!film.getAttribute("src")) film.setAttribute("src", film.dataset.src);
+  film.muted = true;
+  film.hidden = false;
+  poster.hidden = true;
+  film.play()?.catch((error) => {
+    if (error?.name === "AbortError") return; // Navigation can cancel an in-flight play.
+    film.hidden = true;
+    poster.hidden = false; // Autoplay/network restrictions must not break the console.
+  });
+}
+
+function setupHomeFilm() {
+  const film = byId("home-film");
+  if (!film) return;
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  motion.addEventListener?.("change", syncHomeFilm);
+  document.addEventListener("visibilitychange", syncHomeFilm);
+  window.addEventListener("pagehide", () => film.pause());
+  window.addEventListener("pageshow", syncHomeFilm);
+  film.addEventListener("error", () => {
+    appState.homeFilmFailed = true;
+    syncHomeFilm();
+  });
+  if ("IntersectionObserver" in window) {
+    appState.homeFilmInView = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      appState.homeFilmInView = entry.isIntersecting;
+      syncHomeFilm();
+    }, { threshold: 0.02 });
+    observer.observe(byId("home-tour"));
+  }
+  syncHomeFilm();
+}
+
 function setupNavigation() {
   for (const button of document.querySelectorAll(".mode-button, [data-open-view]")) {
     button.addEventListener("click", () => {
@@ -3046,6 +3099,7 @@ function setupNavigation() {
         panel.classList.toggle("active", panel.id === `view-${view}`);
       }
       byId("mini-player").classList.toggle("context-hidden", view === "play");
+      syncHomeFilm();
       window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   }
@@ -3090,6 +3144,7 @@ async function initialize() {
   setupCompactInputs();
   setupStickyInsets();
   setupNavigation();
+  setupHomeFilm();
   setupInstall();
   setupActivityTracking();
   setupTimezonePicker();

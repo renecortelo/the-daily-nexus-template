@@ -11,6 +11,7 @@ let html = fs.readFileSync('web/index.html','utf8')
 html = html.replace(/src="(\/assets\/[A-Za-z0-9_-]+\.png)"/g, (_match,path) => {
   return `src="data:image/png;base64,${fs.readFileSync(path.slice(1)).toString('base64')}"`;
 });
+html=html.replaceAll('/assets/nexus-editor-poster-v1.webp',`data:image/webp;base64,${fs.readFileSync('assets/nexus-editor-poster-v1.webp').toString('base64')}`);
 const production=fs.readFileSync('web/app.js','utf8');
 function extract(name){
  const start=production.indexOf(`function ${name}(`);
@@ -20,7 +21,8 @@ function extract(name){
 html=html.replace('</body>',`<script>
 function element(tag,cls,text){const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;}
 const byId=id=>document.getElementById(id);
-const appState={activeEpisode:{transcript:[{text:'Data engineering and architecture',startMs:60000,isHeading:true},{text:'Cloud and software',startMs:120000,isHeading:true}]}};
+const appState={authorized:true,activeEpisode:{transcript:[{text:'Data engineering and architecture',startMs:60000,isHeading:true},{text:'Cloud and software',startMs:120000,isHeading:true}]}};
+function syncHomeFilm(){} // Layout-only fixture; real video lifecycle has its own offline audit.
 ${['syncCompactSelects','setupCompactSelects','setupCompactInputs','setupNavigation','renderPlayerChapters','syncHostControls','syncNewspaperControls','syncParameterControls'].map(extract).join('\n')}
 setupCompactSelects();setupCompactInputs();setupNavigation();renderPlayerChapters();
 document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCount.value='1';form.elements.soloName.value='Dalia';syncParameterControls(form);});
@@ -213,9 +215,10 @@ document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCo
    });
    await page.locator('[data-view="home"]').click();
    assert.equal(await page.locator('#home-tour-pause,#home-tour-replay').count(),0);
-   const looping=await page.locator('#home-tour').evaluate(el=>el.getAnimations({subtree:true}).filter(a=>a.effect.getTiming().iterations===Infinity).length);
-   assert.ok(looping>=10,'A single working agent loops its gestures and production line');
-   assert.equal(await page.locator('#home-tour .agent-workshop').count(),1);
+   assert.equal(await page.locator('#home-film').count(),1);
+   const film=await page.locator('#home-film').evaluate(el=>({loop:el.loop,muted:el.muted,inline:el.playsInline,preload:el.preload,src:el.getAttribute('src')}));
+   assert.equal(film.loop,true);assert.equal(film.muted,true);assert.equal(film.inline,true);assert.equal(film.preload,'none');assert.equal(film.src,null);
+   assert.equal(await page.locator('#home-film-poster').evaluate(el=>el.naturalWidth),1280);
    await page.locator('[data-view="schedule"]').click();
    const days=await page.locator('.weekday-picker label').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {y:r.y,width:r.width,height:r.height};}));
    assert.equal(new Set(days.map(day=>Math.round(day.y))).size,1,'All seven weekdays must share one row');

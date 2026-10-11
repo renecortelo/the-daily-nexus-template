@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest?v=4.0.13">
     <link rel="apple-touch-icon" href="/assets/tdn-icon.png">
     <link rel="icon" href="/assets/tdn-icon.png">
-    <link rel="stylesheet" href="/styles.css?v=4.1.22">
+    <link rel="stylesheet" href="/styles.css?v=4.1.23">
   </head>
   <body>
     <div class="scanlines" aria-hidden="true"></div>
@@ -112,42 +112,8 @@
           <figure id="home-tour" class="console-card nexus-tour">
             <div class="card-header"><span>YOUR EDITOR AT WORK</span><span>ILLUSTRATION</span></div>
             <div class="tour-display" aria-hidden="true">
-              <svg viewBox="0 0 600 300" focusable="false">
-                <defs>
-                  <linearGradient id="agent-sun-fill" x2="0" y2="1"><stop stop-color="#ffca63"/><stop offset="1" stop-color="#f28c18"/></linearGradient>
-                  <g id="agent-envelope"><rect width="49" height="34" rx="3"/><path d="m0 0 24 19L49 0M0 34l17-13m32 13-17-13"/></g>
-                </defs>
-                <g class="agent-workshop">
-                  <path class="agent-floor" d="M18 268H582"/>
-                  <g class="agent-inbox"><path d="M23 163h91l-8 45H30ZM24 164l17-27h54l18 27"/><use href="#agent-envelope" x="37" y="85"/><use href="#agent-envelope" x="53" y="112"/></g>
-                  <path class="agent-belt" d="M25 220H571M25 242H571"/>
-                  <g class="agent-rollers"><path d="M35 231h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7m20 0h7"/></g>
-                  <g class="agent-job-sheet"><rect x="47" y="195" width="38" height="38" rx="3"/><path d="M55 203h22m-22 7h22m-22 7h14"/></g>
-                  <g class="agent-source-board"><rect x="147" y="59" width="105" height="87" rx="6"/><path d="M160 73h50m-50 13h36m-36 13h42"/><circle cx="228" cy="118" r="12"/><path class="agent-verified" d="m221 119 5 5 9-11"/><path d="M183 146v18m-15 0h38"/></g>
-                  <g transform="translate(312 105)">
-                    <g class="agent-head">
-                      <path class="agent-rays" d="M0-65v-8M-46-46l-7-7M46-46l7-7M-65 0h-8M65 0h8"/>
-                      <circle class="agent-face" r="51"/>
-                      <path class="agent-horizon" d="M-58 16H58M-55 23H55"/>
-                      <path class="agent-brows" d="M-29-21q10-7 20-2M10-23q10-5 20 2"/>
-                      <g class="agent-eyes"><ellipse cx="-19" cy="-7" rx="5" ry="7"/><ellipse cx="19" cy="-7" rx="5" ry="7"/></g>
-                      <path class="agent-smile" d="M-15 30q16 18 31-2"/>
-                      <path class="agent-cheek" d="m33 17 5-2"/>
-                    </g>
-                  </g>
-                  <path class="agent-body" d="M281 153h62l15 65h-92Z"/>
-                  <path class="agent-collar" d="m281 154 30 20 32-20m-31 21-6 27 8 8 7-8-8-27"/>
-                  <g class="agent-left-arm"><path d="M281 165q-33 5-50 24l-26 13"/><circle cx="205" cy="202" r="9"/></g>
-                  <g class="agent-right-arm"><path d="M342 165q34 10 48 32"/><circle cx="390" cy="197" r="9"/><path class="agent-stamp" d="M381 187h18v9h-18m-4 0h26v10h-26Z"/></g>
-                  <path class="agent-desk" d="M139 216h292v10H139Zm16 10-9 40m270-40 9 40"/>
-                  <g class="agent-keyboard"><path d="M251 203h104l12 12H240ZM255 208h6m9 0h6m9 0h6m9 0h6m9 0h6m9 0h6"/></g>
-                  <g class="agent-approved"><circle cx="408" cy="184" r="14"/><path d="m402 184 4 5 8-10"/></g>
-                  <path class="agent-wire" d="M430 217h13v-69h15"/>
-                  <g class="agent-audio-output"><rect x="461" y="99" width="83" height="93" rx="8"/><path d="M476 122h53"/><g class="agent-wave"><path d="M478 147v17m12-24v31m12-39v47m12-40v31m12-22v17"/></g></g>
-                  <g class="agent-paper-output"><path d="M515 202h47l13 13v48h-60ZM562 202v13h13M525 227h40m-40 9h23m-23 9h23"/><path class="agent-paper-chart" d="M553 251v-8m8 8v-17m8 17v-23"/></g>
-                  <g class="agent-spark"><path d="M551 71v14m-7-7h14M573 113v10m-5-5h10"/></g>
-                </g>
-              </svg>
+              <img id="home-film-poster" class="home-film" src="/assets/nexus-editor-poster-v1.webp" alt="" width="1280" height="720">
+              <video id="home-film" class="home-film" data-src="/assets/nexus-editor-film-v1.mp4" poster="/assets/nexus-editor-poster-v1.webp" width="1280" height="720" preload="none" autoplay muted loop playsinline disablepictureinpicture tabindex="-1" hidden></video>
             </div>
             <p class="tour-caption">COLLECT → CHECK → WRITE → PRODUCE</p>
             <figcaption>A short illustration, not a live generation. Your agent organizes reporting, checks the available evidence and prepares the podcast and optional paper.</figcaption>
@@ -676,6 +642,6 @@
     </div>
 
     <script src="/cloud-clock-config.js?v=4.1.3"></script>
-  <script type="module" src="/app.js?v=4.1.22"></script>
+  <script type="module" src="/app.js?v=4.1.23"></script>
   </body>
 </html>

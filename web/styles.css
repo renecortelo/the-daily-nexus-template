@@ -1700,57 +1700,14 @@ select:not([multiple]) { padding-inline-end: 1.85rem; }
 .home-copy p:not(.eyebrow) { max-width: 45ch; font-size: var(--font-body); color: var(--muted); line-height: 1.65; }
 .nexus-tour { margin: 0; }
 .tour-display { background: var(--black); border-radius: 0.2rem; padding: 0.25rem; }
-.tour-display svg { display: block; width: 100%; max-height: 18rem; stroke: var(--amber); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.agent-face { fill: url(#agent-sun-fill); stroke: var(--bright); }
-.agent-eyes { fill: var(--black); stroke: none; }
-.agent-horizon, .agent-brows, .agent-smile, .agent-cheek { stroke: var(--black); }
-.agent-body { fill: var(--rust); stroke: var(--bright); }
-.agent-collar { fill: var(--cream); stroke: var(--black); stroke-width: 2; }
-.agent-left-arm, .agent-right-arm { stroke: var(--cream); stroke-width: 5; }
-.agent-stamp { fill: var(--amber); stroke: var(--black); stroke-width: 2; }
-.agent-floor, .agent-belt, .agent-rollers, .agent-wire { stroke: var(--line); }
-#agent-envelope rect, .agent-source-board rect, .agent-audio-output rect, .agent-paper-output > path { fill: var(--panel-alt); }
-.agent-job-sheet rect, .agent-approved circle { fill: var(--amber); }
-.agent-job-sheet path, .agent-approved path { stroke: var(--black); stroke-width: 2; }
-.agent-desk, .agent-keyboard { fill: var(--panel-alt); }
+.home-film { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 0.2rem; }
+.home-film[hidden] { display: none; }
 .tour-caption { margin: 0.55rem 0; text-align: center; font: var(--font-xs)/1.5 Consolas, monospace; color: var(--amber); }
 .nexus-tour figcaption { font-size: var(--font-sm); line-height: 1.5; color: var(--muted); }
 .home-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; padding: 0; margin: 1.25rem 0 0; list-style: none; }
 .home-steps li { border-top: 1px solid var(--line); padding-top: 0.6rem; }
 .home-steps span { color: var(--amber); font: var(--font-sm)/1.4 Consolas, monospace; }
 .home-steps p { color: var(--muted); font-size: var(--font-ui); line-height: 1.55; margin: 0.4rem 0 0; }
-.agent-head { transform-origin: 0 48px; }
-.agent-eyes, .agent-brows, .agent-approved, .agent-wave { transform-box: fill-box; transform-origin: center; }
-.agent-left-arm { transform-origin: 281px 165px; }
-.agent-right-arm { transform-origin: 342px 165px; }
-.view.active .agent-head { animation: agent-focus 4.8s ease-in-out infinite; }
-.view.active .agent-eyes { animation: agent-look 4.8s ease-in-out infinite; }
-.view.active .agent-brows { animation: agent-confidence 4.8s ease-in-out infinite; }
-.view.active .agent-left-arm { animation: agent-sort 1.2s ease-in-out infinite; }
-.view.active .agent-right-arm { animation: agent-stamp 2.4s ease-in-out infinite; }
-.view.active .agent-inbox { animation: agent-mail 1.2s ease-in-out infinite; }
-.view.active .agent-job-sheet { animation: agent-process 4.8s linear infinite; }
-.view.active .agent-rollers { animation: agent-conveyor 600ms linear infinite; }
-.view.active .agent-approved { animation: agent-approve 2.4s ease-in-out infinite; }
-.view.active .agent-wave { animation: agent-broadcast 900ms ease-in-out infinite alternate; }
-.view.active .agent-paper-output { animation: agent-paper 2.4s ease-in-out infinite; }
-.view.active .agent-spark { animation: agent-spark 2.4s ease-in-out infinite; }
-@keyframes agent-focus { 0%, 100% { transform: rotate(-7deg); } 25% { transform: rotate(-2deg) translateY(3px); } 50% { transform: rotate(5deg); } 70% { transform: rotate(0) translateY(2px); } 85% { transform: rotate(7deg) translateY(-2px); } }
-@keyframes agent-look { 0%, 30%, 100% { transform: translateX(-3px); } 32%, 34% { transform: scaleY(0.12); } 40%, 66% { transform: translateX(0); } 75%, 92% { transform: translateX(3px); } }
-@keyframes agent-confidence { 0%, 50%, 100% { transform: translateY(0); } 70%, 90% { transform: translateY(-4px) rotate(-4deg); } }
-@keyframes agent-sort { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(12deg); } 65% { transform: rotate(-7deg); } }
-@keyframes agent-stamp { 0%, 100% { transform: rotate(-10deg); } 45% { transform: rotate(-18deg); } 60%, 70% { transform: rotate(8deg); } }
-@keyframes agent-mail { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px) rotate(-1deg); } }
-@keyframes agent-process { 0% { transform: translateX(0); } 100% { transform: translateX(485px); } }
-@keyframes agent-conveyor { from { transform: translateX(0); } to { transform: translateX(27px); } }
-@keyframes agent-approve { 0%, 40%, 100% { transform: scale(0.8); opacity: 0.6; } 65%, 80% { transform: scale(1); opacity: 1; } }
-@keyframes agent-broadcast { from { transform: scaleY(0.6); } to { transform: scaleY(1); } }
-@keyframes agent-paper { 0%, 100% { transform: translateY(0); } 65% { transform: translateY(-6px); } }
-@keyframes agent-spark { 0%, 50%, 100% { opacity: 0.3; } 70%, 85% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .agent-workshop * { animation: none !important; }
-  .agent-job-sheet { transform: translateX(145px); }
-}
 @media (max-width: 640px) {
   .topbar { display: flex; align-items: center; gap: 0.45rem; padding-block: 0.5rem; min-height: 0; }
   .brand { flex: 1; gap: 0.35rem; }

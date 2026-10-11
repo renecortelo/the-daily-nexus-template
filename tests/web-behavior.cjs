@@ -29,6 +29,7 @@ function harness(names) {
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearEditionControls(){},
     syncCompactSelects(){},
+    syncHomeFilm(){},
     syncParameterControls(form){context.syncHostControls?.(form);context.syncNewspaperControls?.(form);},
     clearPlaybackSession(){}, syncMediaSession(){}, savePlaybackPosition(){},
     clearConsoleSession(){}, clearPrivateForms(){}, clearFavoriteSession(){}, persistConsoleSession(){},
@@ -1106,22 +1107,72 @@ test('navigation and home actions identify the active view and respect reduced m
   assert.equal(buttons[1].attributes['aria-current'],undefined);assert.equal(action.attributes['aria-current'],undefined);
 });
 
-test('home illustration loops locally without controls or JavaScript timers', () => {
+test('home film is original local media, lazy and silent, with no external player', () => {
   const page=fs.readFileSync('web/index.html','utf8');
   const styles=fs.readFileSync('web/styles.css','utf8');
   const source=fs.readFileSync('web/app.js','utf8');
   assert.equal(page.includes('home-tour-pause'),false);
   assert.equal(page.includes('home-tour-replay'),false);
-  assert.equal(source.includes('setupHomeTour'),false);
-  assert.equal((page.match(/class="agent-workshop"/g)||[]).length,1);
+  assert.equal(source.includes('setupHomeFilm'),true);
+  assert.equal((page.match(/id="home-film"/g)||[]).length,1);
+  assert.match(page,/preload="none" autoplay muted loop playsinline/);
+  assert.match(page,/data-src="\/assets\/nexus-editor-film-v1.mp4"/);
+  assert.equal(page.includes('class="agent-workshop"'),false);
   assert.equal(page.includes('tour-scene'),false);
-  for(const part of ['head','eyes','left-arm','right-arm','job-sheet']) {
-    const rule=styles.split(`.view.active .agent-${part} {`)[1].split('}')[0];
-    assert.match(rule,/infinite/);
-  }
-  assert.match(styles,/\.agent-workshop \* \{ animation: none !important; \}/);
+  assert.match(styles,/aspect-ratio: 16 \/ 9/);
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles,/animation: none !important/);
+});
+
+function filmHarness() {
+  const h=harness(['syncHomeFilm','setupHomeFilm']);const ctx=h.context;
+  const film=ctx.byId('home-film');film.dataset={src:'/assets/nexus-editor-film-v1.mp4'};
+  film.getAttribute=key=>film.attributes[key];film.play=()=>{film.plays=(film.plays||0)+1;film.paused=false;return Promise.resolve();};
+  film.pause=()=>{film.pauses=(film.pauses||0)+1;film.paused=true;};
+  ctx.byId('view-home').classList.contains=()=>true;
+  ctx.document.visibilityState='visible';ctx.document.addEventListener=(event,fn)=>{ctx.document[event]=fn;};
+  ctx.window.addEventListener=(event,fn)=>{ctx.window[event]=fn;};
+  return {...h,film,poster:ctx.byId('home-film-poster')};
+}
+
+test('film loads only in authorized visible HOME, and never changes podcast state', () => {
+  const {context:c,film,poster}=filmHarness();
+  const audio=c.byId('episode-audio');audio.paused=false;audio.currentTime=88;
+  c.appState.authorized=false;c.syncHomeFilm();assert.equal(film.attributes.src,undefined);
+  c.appState.authorized=true;c.byId('app-shell').hidden=true;c.syncHomeFilm();assert.equal(film.attributes.src,undefined);
+  c.byId('app-shell').hidden=false;c.appState.homeFilmInView=false;c.syncHomeFilm();assert.equal(film.attributes.src,undefined);
+  c.appState.homeFilmInView=true;c.syncHomeFilm();
+  assert.equal(film.attributes.src,film.dataset.src);assert.equal(film.muted,true);assert.equal(film.hidden,false);assert.equal(poster.hidden,true);
+  c.byId('view-home').classList.contains=()=>false;c.syncHomeFilm();assert.equal(film.paused,true);assert.equal(film.hidden,true);
+  assert.equal(audio.paused,false);assert.equal(audio.currentTime,88);
+  c.byId('view-home').classList.contains=()=>true;c.syncHomeFilm();assert.equal(film.paused,false);
+  c.document.visibilityState='hidden';c.syncHomeFilm();assert.equal(film.paused,true);
+  c.document.visibilityState='visible';c.appState.authorized=false;c.syncHomeFilm();assert.equal(film.paused,true);
+});
+
+test('film keeps a static poster for reduced motion, media failure and denied autoplay', async () => {
+  const {context:c,film,poster}=filmHarness();
+  c.window.matchMedia=()=>({matches:true});c.syncHomeFilm();assert.equal(film.attributes.src,undefined);assert.equal(poster.hidden,false);
+  c.window.matchMedia=()=>({matches:false});film.play=()=>Promise.reject({name:'NotAllowedError'});c.syncHomeFilm();await Promise.resolve();
+  assert.equal(film.hidden,true);assert.equal(poster.hidden,false);
+  film.play=()=>Promise.reject({name:'AbortError'});c.syncHomeFilm();await Promise.resolve();assert.equal(film.hidden,false);
+  c.appState.homeFilmFailed=true;c.syncHomeFilm();assert.equal(film.paused,true);assert.equal(poster.hidden,false);
+});
+
+test('film lifecycle follows viewport, visibility, page restore, and preference changes without timers', () => {
+  const {context:c,film,poster}=filmHarness();let changed,observe,callback;
+  c.window.matchMedia=()=>({matches:false,addEventListener:(_event,fn)=>{changed=fn;}});
+  c.window.IntersectionObserver=true;
+  c.IntersectionObserver=class{constructor(fn){callback=fn;}observe(target){observe=target;}};
+  c.setupHomeFilm();assert.equal(observe,c.byId('home-tour'));assert.equal(film.attributes.src,undefined);
+  callback([{isIntersecting:true}]);assert.equal(film.paused,false);
+  callback([{isIntersecting:false}]);assert.equal(film.paused,true);
+  callback([{isIntersecting:true}]);c.window.pagehide();assert.equal(film.paused,true);
+  c.window.pageshow();assert.equal(film.paused,false);
+  c.document.visibilityState='hidden';c.document.visibilitychange();assert.equal(film.paused,true);
+  c.document.visibilityState='visible';c.document.visibilitychange();assert.equal(film.paused,false);
+  c.window.matchMedia=()=>({matches:true});changed();assert.equal(poster.hidden,false);assert.equal(film.paused,true);
+  film.error();assert.equal(c.appState.homeFilmFailed,true);
 });
 
 test('both progress controls announce time and paused compact playback offers Resume', () => {

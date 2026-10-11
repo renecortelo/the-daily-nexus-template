@@ -11,7 +11,8 @@ const WEB_FILES = [
   "manifest.webmanifest",
   "service-worker.js",
 ];
-const ASSET_FILES = ["tdn-icon.png", "tdn-icon-transparent.png", "google-g.png"];
+const ASSET_FILES = ["tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
+  "nexus-editor-film-v1.mp4", "nexus-editor-poster-v1.webp"];
 
 function fail(message) {
   throw new Error(message);

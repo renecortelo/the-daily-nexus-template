@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.22', page)
-        self.assertIn('/styles.css?v=4.1.22', page)
-        self.assertIn('tdn-shell-v4-52', worker)
+        self.assertIn('/app.js?v=4.1.23', page)
+        self.assertIn('/styles.css?v=4.1.23', page)
+        self.assertIn('tdn-shell-v4-53', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -113,15 +113,16 @@ class WebAppSecurityTests(TestCase):
         self.assertIn('control.closest?.(".chapter-control")', source)
         self.assertIn('.chapter-control .select-shell', styles)
         self.assertIn('.mini-player.levels-open .mini-transport', styles)
-        self.assertNotIn('setupHomeTour', source)
+        self.assertIn('setupHomeFilm', source)
         self.assertNotIn('<iframe', page)
         self.assertNotIn('youtube.com', page)
-        self.assertEqual(1, page.count('class="agent-workshop"'))
+        self.assertEqual(1, page.count('id="home-film"'))
+        self.assertIn('preload="none" autoplay muted loop playsinline', page)
+        self.assertIn('data-src="/assets/nexus-editor-film-v1.mp4"', page)
+        self.assertNotIn('class="agent-workshop"', page)
         self.assertNotIn('tour-scene', page)
-        for part in ('head', 'eyes', 'left-arm', 'right-arm', 'job-sheet'):
-            rule = styles.split(f'.view.active .agent-{part} {{', 1)[1].split('}', 1)[0]
-            self.assertIn('infinite', rule)
-        self.assertIn('prefers-reduced-motion: reduce', styles)
+        self.assertIn('prefers-reduced-motion: reduce', source)
+        self.assertIn('aspect-ratio: 16 / 9', styles)
 
     def test_weekdays_keep_one_row_and_unambiguous_native_labels(self):
         page = Path('web/index.html').read_text(encoding='utf-8')
@@ -282,7 +283,8 @@ class WebAppSecurityTests(TestCase):
             ):
                 (project / "web" / filename).write_text(filename, encoding="utf-8")
             (project / "web" / "private.txt").write_text("do not copy", encoding="utf-8")
-            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png"):
+            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
+                             "nexus-editor-film-v1.mp4", "nexus-editor-poster-v1.webp"):
                 (project / "assets" / filename).write_bytes(b"image")
 
             _copy_static_web_app(project, public)
@@ -291,6 +293,8 @@ class WebAppSecurityTests(TestCase):
             self.assertTrue((public / "cloud-clock-config.js").is_file())
             self.assertTrue((public / "assets" / "tdn-icon.png").is_file())
             self.assertTrue((public / "assets" / "tdn-icon-transparent.png").is_file())
+            self.assertTrue((public / "assets" / "nexus-editor-film-v1.mp4").is_file())
+            self.assertTrue((public / "assets" / "nexus-editor-poster-v1.webp").is_file())
             self.assertFalse((public / "private.txt").exists())
 
     def test_publisher_writes_cloud_clock_endpoint_only_from_environment(self):
@@ -304,7 +308,8 @@ class WebAppSecurityTests(TestCase):
                 "manifest.webmanifest", "service-worker.js",
             ):
                 (project / "web" / filename).write_text(filename, encoding="utf-8")
-            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png"):
+            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
+                             "nexus-editor-film-v1.mp4", "nexus-editor-poster-v1.webp"):
                 (project / "assets" / filename).write_bytes(b"image")
             with patch.dict(
                 os.environ,

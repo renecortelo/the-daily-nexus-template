@@ -144,7 +144,8 @@ class PublisherTests(TestCase):
                 "service-worker.js",
             ):
                 shutil.copy2(Path("web") / filename, root / "web" / filename)
-            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png"):
+            for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
+                             "nexus-editor-film-v1.mp4", "nexus-editor-poster-v1.webp"):
                 shutil.copy2(Path("assets") / filename, root / "assets" / filename)
             shutil.copy2(
                 Path("assets") / settings.podcast.cover_filename,

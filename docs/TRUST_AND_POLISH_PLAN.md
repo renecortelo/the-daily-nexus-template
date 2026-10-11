@@ -649,6 +649,14 @@ Chromium/WebKit audits cover all seven views and 306 layout cases; physical
 iPhone/PWA and assistive-technology confirmation remain open. Preserve clock,
 feed, accounts and historical media during static deployment.
 
+Approved film increment (4.1.23 / cache v4-53): replace the earlier SVG workshop
+with a local original 24-second limited-cel illustration and lightweight poster.
+Lazy playback is gated by authorization, active HOME, visible tab and viewport;
+navigation/sign-out suspend it, and reduced motion or errors show a still.
+There is no audio track or connection to podcast controls. Both publishing paths
+allowlist the same assets. See `HOME_FILM.md` for the scope, cost and QA limits.
+This release does not change generation, schedules, retry limits or billing.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its
