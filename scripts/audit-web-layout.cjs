@@ -4,11 +4,11 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const {chromium,webkit} = require(process.env.TDN_PLAYWRIGHT_MODULE || 'playwright');
 fs.mkdirSync('tmp/web-layout', {recursive:true});
+// Trusted repository fixture, not an HTML sanitizer. Keep original tags;
+// every context aborts all network requests, including SDK scripts/styles.
 let html = fs.readFileSync('web/index.html','utf8')
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'')
-  .replace(/<link\b[^>]*>/gi,'')
   .replace('</head>', `<style>${fs.readFileSync('web/styles.css','utf8')}</style></head>`);
-html = html.replace(/src="(\/assets\/[^"?]+)"/g, (_match,path) => {
+html = html.replace(/src="(\/assets\/[A-Za-z0-9_-]+\.png)"/g, (_match,path) => {
   return `src="data:image/png;base64,${fs.readFileSync(path.slice(1)).toString('base64')}"`;
 });
 const production=fs.readFileSync('web/app.js','utf8');
