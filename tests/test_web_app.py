@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.17', page)
-        self.assertIn('/styles.css?v=4.1.17', page)
-        self.assertIn('tdn-shell-v4-47', worker)
+        self.assertIn('/app.js?v=4.1.18', page)
+        self.assertIn('/styles.css?v=4.1.18', page)
+        self.assertIn('tdn-shell-v4-48', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -83,6 +83,18 @@ class WebAppSecurityTests(TestCase):
         # Reading pages, archives and navigation retain their internal scrolling.
         self.assertIn("overflow-x: auto", styles)
         self.assertIn(".edition-pages", styles)
+
+    def test_native_utility_inputs_have_compact_resting_and_readable_edit_states(self):
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        self.assertIn('function setupCompactInputs()', source)
+        self.assertIn('  setupCompactInputs();', source)
+        for rule in ('.compact-input-shell input:focus', 'scale(0.8125)',
+                     'width: calc(100% * 16 / 13)', 'transform: none',
+                     '.compact-input-shell:focus-within',
+                     '.terminal-list.empty-state', 'min-height: 6rem'):
+            self.assertIn(rule, styles)
+        self.assertNotIn('inputmode="none"', Path("web/index.html").read_text(encoding="utf-8"))
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")

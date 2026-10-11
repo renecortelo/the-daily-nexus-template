@@ -536,6 +536,21 @@ states across mobile/tablet/desktop widths. These are not physical iPhone/PWA
 certification; device adoption remains to be confirmed after Hosting deployment.
 No generation, provider, credential or schedule behavior changes.
 
+Utility-input audit increment (4.1.18 / cache v4-48): the mobile 16px input
+rule still painted dates, search filters and favorite names larger than adjacent
+13px utility selects. Keep each original native control (including its label,
+form identity, constraints, events and calendar/clock) inside a bounded shell.
+Resting paint uses a compensated 13/16 scale; focus restores the unscaled 16px
+field for editing without changing the shell's size. This does not mirror private
+values, add storage, install a custom picker or suppress pinch zoom. All date/time
+fields and utility inputs share the same treatment; primary content fields retain
+their readable mobile size. Empty archive/monitor states use the shared 13px scale
+and a shorter frame. Verify resting/focus/reset behavior, 44px shells, original
+form membership and document widths in WebKit/Chromium across every view.
+Physical iPhone focus-zoom and assistive-technology confirmation remain open;
+desktop WebKit cannot certify them. No changes to production, accounts, schedules,
+provider calls, credentials or dependencies. Preserve clock/feed/media on deploy.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its
