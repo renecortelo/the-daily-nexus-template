@@ -579,6 +579,11 @@ in both WebKit and Chromium. These remain synthetic local checks, not physical
 iPhone/PWA, sound or assistive-technology certification. Public export is source
 only; keep the feed, clock, identity settings and media intact on deployment.
 
+Home loop refinement (4.1.20 / cache v4-50): remove pause/replay controls and
+their JavaScript. Repeat the original local-only illustration on an eight-second
+CSS cycle while HOME is active, returning gently to its initial state. Preserve
+the static reduced-motion view and all authentication, feed and clock settings.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its

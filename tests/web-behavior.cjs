@@ -1106,19 +1106,19 @@ test('navigation and home actions identify the active view and respect reduced m
   assert.equal(buttons[1].attributes['aria-current'],undefined);assert.equal(action.attributes['aria-current'],undefined);
 });
 
-test('home explainer pause/replay is local, finite and respects changing motion preference', () => {
-  const {context}=harness(['setupHomeTour']);
-  const tour=context.byId('home-tour'),flags=new Set();tour.dataset={};
-  tour.classList={remove:name=>flags.delete(name),toggle:name=>{if(flags.has(name)){flags.delete(name);return false;}flags.add(name);return true;}};
-  const preference={matches:false,addEventListener(_name,callback){this.change=callback;}};
-  context.window.matchMedia=()=>preference;
-  let plays=0;const animation={currentTime:8,play(){plays++;}};
-  tour.getAnimations=()=>[animation];context.setupHomeTour();context.setupHomeTour();
-  const pause=context.byId('home-tour-pause'),replay=context.byId('home-tour-replay');
-  pause.click();assert.equal(flags.has('tour-paused'),true);assert.equal(pause.textContent,'CONTINUE');
-  replay.click();assert.equal(flags.has('tour-paused'),false);assert.equal(animation.currentTime,0);assert.equal(plays,1);
-  preference.matches=true;preference.change();assert.equal(pause.disabled,true);assert.equal(replay.disabled,true);
-  replay.click();assert.equal(plays,1);pause.click();assert.equal(flags.has('tour-paused'),false);
+test('home illustration loops locally without controls or JavaScript timers', () => {
+  const page=fs.readFileSync('web/index.html','utf8');
+  const styles=fs.readFileSync('web/styles.css','utf8');
+  const source=fs.readFileSync('web/app.js','utf8');
+  assert.equal(page.includes('home-tour-pause'),false);
+  assert.equal(page.includes('home-tour-replay'),false);
+  assert.equal(source.includes('setupHomeTour'),false);
+  for(const part of ['mail','guide','packet','audio','paper']) {
+    const rule=styles.split(`.view.active .tour-${part} {`)[1].split('}')[0];
+    assert.match(rule,/8s ease-in-out infinite/);
+  }
+  assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(styles,/animation: none !important/);
 });
 
 test('both progress controls announce time and paused compact playback offers Resume', () => {
