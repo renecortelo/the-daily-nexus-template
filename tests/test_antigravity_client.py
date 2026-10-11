@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import subprocess
@@ -18,6 +19,7 @@ from audiodigest.antigravity_client import (
     enforce_safe_antigravity_settings,
 )
 from audiodigest.config import AntigravitySettings
+from audiodigest.progress import ProgressReporter
 
 
 class AntigravityParsingTests(TestCase):
@@ -364,18 +366,26 @@ class AntigravitySafetyTests(TestCase):
                 return value
 
             client = AntigravityCLI(settings)
+            reporter = ProgressReporter(interval=0, stream=io.StringIO())
+            reporter.start()
             with patch(
                 "audiodigest.antigravity_client.subprocess.run",
                 side_effect=fake_run,
             ):
-                result, _ = client.invoke(
-                    "Return verification JSON.",
-                    {"source": "fixture"},
-                    validator,
-                    retries=1,
-                )
+                try:
+                    result, _ = client.invoke(
+                        "Return verification JSON.",
+                        {"source": "fixture"},
+                        validator,
+                        retries=1,
+                    )
+                finally:
+                    reporter.close()
 
             self.assertTrue(result["approved"])
+            self.assertNotIn("failure_code", reporter.snapshot())
+            self.assertEqual(1, reporter.snapshot()["counters"]["model_validation_failures"])
+            self.assertEqual(1, reporter.snapshot()["counters"]["model_validation_recoveries"])
             self.assertEqual(
                 {"approved": False, "issues": ["too short"]},
                 payloads[1]["previous_response"],

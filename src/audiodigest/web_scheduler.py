@@ -842,13 +842,17 @@ def _execute_generation(
         profile = reporter.finish(
             "interrupted" if isinstance(exc, GenerationInterrupted) else "failed",
             reason=reason,
+            failure_code=(
+                "verification_rejected" if reason == "verification_failure" else
+                getattr(exc, "failure_code", "") if reason == "model_failure" else ""
+            ),
         )
         _save_timing_profile(client, profile, resources=resources, **timing_context)
         local_detail = f"{error_name}: {exc}"[:4000]
         remote_detail = (
             f"Generation stopped at stage {profile['stage']}/8 ({profile['label']}) "
             f"after {profile['elapsed_seconds']:.0f} seconds ({reason}); "
-            "inspect the private local runner log."
+            "No automatic retry. Private source/error text is not retained in the cloud log."
         )
         if profile.get("failure_code"):
             remote_detail += f" Diagnostic: {profile['failure_code']}."

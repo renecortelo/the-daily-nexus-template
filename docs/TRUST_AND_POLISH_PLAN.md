@@ -195,6 +195,34 @@ reviewed privately; generation dominated setup, so dependency changes were not
 made merely to claim a performance gain. Evaluate the next normal runs before
 making a separately tested optimization.
 
+Diagnostic precision increment implemented on 2026-10-11: a model invocation
+clears its transient error code only after an accepted response. Retry and
+invalid-response counts remain; a fixed numeric model_validation_recoveries
+counter measures calls accepted after one or more invalid-response retries,
+not facts independently approved. Terminal profiles now receive their code
+explicitly from the final exception, rather than inheriting an earlier draft
+error. A final VerificationError uses verification_rejected; it does not imply
+a particular unsupported claim or missing story. Successful deliveries and
+interrupted/unrelated failures cannot retain a stale draft diagnostic. Finished
+profiles cannot have their diagnostic changed by late record/clear operations.
+
+The monitor no longer tells operators to inspect an unavailable private local
+cloud-runner log. It states terminal status/no automatic retry and retains only
+fixed diagnostic strings and numeric timing/counts. Raw source/error text remains
+excluded from Actions logs; no private historical log is recovered or exported.
+Recent normal production runs confirmed that a final verifier rejection could
+inherit a corrected draft's coverage code. The historical factual repair details
+were deliberately discarded, so neither that specific claim nor the cause of an
+older generic closing code can be reconstructed from these logs. This increment
+fixes attribution of diagnostics, not those editorial rejection causes.
+
+All factual/structural gates, retry limits, quotation rules, optional-paper
+behavior, schedule/queue semantics and protected runtime/publishing reserve
+remain. No model call, provider, persistent report, subscription, credential
+migration, episode retry or static UI deployment is added. Three regressions
+and an expanded mocked CLI recovery check cover terminal outcomes, recovery,
+privacy and late updates; normal future runs must confirm production adoption.
+
 Draft-error prevention increment implemented on 2026-10-09: script JSON examples
 now use JSON-escaped disclosure text and actual configured hosts, including both
 introductions for a two-host edition. A deterministic request-local section plan

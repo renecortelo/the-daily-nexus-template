@@ -6,10 +6,12 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
+from audiodigest.antigravity_client import AntigravityCLIError
 from audiodigest.closing_quotes import load_closing_quotes
 from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
-from audiodigest.progress import stage
+from audiodigest.pipeline import VerificationError
+from audiodigest.progress import record_failure_code, stage
 from audiodigest.web_runner import WebRunnerError
 from audiodigest.web_scheduler import (
     GenerationInterrupted,
@@ -784,6 +786,47 @@ class WebSchedulerTests(TestCase):
             ]
             self.assertEqual("expired", expiry[0]["status"])
 
+    def test_terminal_diagnostics_use_final_exception_not_previous_draft_failure(self):
+        for error, expected in (
+            (VerificationError("synthetic-sensitive evidence rejection"), "verification_rejected"),
+            (AntigravityCLIError("synthetic-sensitive draft", failure_code="script_hosts"),
+             "script_hosts"),
+            (AntigravityCLIError("synthetic-sensitive draft", failure_code="arbitrary secret"),
+             None),
+            (RuntimeError("synthetic-sensitive infrastructure error"), None),
+        ):
+            with self.subTest(error=type(error).__name__, code=expected):
+                class FailingPipeline:
+                    def __init__(self, _settings, failure=error):
+                        self.failure = failure
+
+                    def run(self, **_kwargs):
+                        stage(5)
+                        record_failure_code("script_coverage")
+                        raise self.failure
+
+                with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+                    request = {
+                        "document_id": "synthetic-request",
+                        "requestedDate": "2026-07-27",
+                        "requestedAt": "2026-07-27T02:00:00Z",
+                        "status": "queued",
+                        "parameters": schedule_payload()["parameters"],
+                    }
+                    client = _FakeWebClient([], [request])
+                    with self.assertRaises(TerminalTaskFailure):
+                        run_web_runner_tick(
+                            self._settings(Path(name)),
+                            now=datetime(2026, 7, 27, 3, 0, tzinfo=UTC),
+                            client=client,
+                            pipeline_factory=FailingPipeline,
+                        )
+                    profile = next(item[2] for item in client.writes
+                                   if item[0] == "runner" and item[1] == "lastProfile")
+                    self.assertEqual(expected, profile.get("failure_code"))
+                    self.assertNotIn("synthetic-sensitive", str(client.writes))
+                    self.assertNotIn("script_coverage", str(profile))
+
     def test_cloud_failure_detail_does_not_include_local_exception_text(self):
         class FailingPipeline:
             def __init__(self, _settings):
@@ -816,7 +859,7 @@ class WebSchedulerTests(TestCase):
                 for item in client.writes
                 if item[0] in {"runRequests", "runner"}
             ]
-            self.assertTrue(any("inspect the private local runner log" in item for item in details))
+            self.assertTrue(any("No automatic retry" in item for item in details))
             self.assertTrue(all("C:\\secret" not in item for item in details))
 
     def test_interrupted_generation_is_recorded_as_terminal_failure(self):

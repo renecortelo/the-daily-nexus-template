@@ -19,7 +19,12 @@ from audiodigest.private_store import (
     delete_private_value,
     write_private_value,
 )
-from audiodigest.progress import increment, record_failure_code, timed_operation
+from audiodigest.progress import (
+    clear_failure_code,
+    increment,
+    record_failure_code,
+    timed_operation,
+)
 
 T = TypeVar("T")
 
@@ -393,6 +398,7 @@ class AntigravityCLI:
 
         current_payload = payload
         last_error: Exception | None = None
+        validation_failed = False
         for attempt in range(retries + 1):
             if attempt:
                 increment("model_retries")
@@ -445,7 +451,12 @@ class AntigravityCLI:
                     elapsed_ms=elapsed_ms,
                 )
                 rejected_response = _json_from_response(response)
-                return validator(rejected_response), metadata
+                result = validator(rejected_response)
+                if validation_failed:
+                    # Count recovered calls, not a guarantee of factual approval.
+                    increment("model_validation_recoveries")
+                clear_failure_code()
+                return result, metadata
             except AntigravityPaymentRiskError:
                 raise
             except (
@@ -454,6 +465,7 @@ class AntigravityCLI:
                 AntigravityCLIError,
                 ValueError,
             ) as exc:
+                validation_failed = True
                 increment("model_validation_failures")
                 record_failure_code(_validation_code(exc))
                 last_error = exc

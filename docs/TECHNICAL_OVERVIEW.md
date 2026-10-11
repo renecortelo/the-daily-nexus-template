@@ -437,6 +437,24 @@ provider/model/cloud operation, persistence, dependency, schedule, runtime cap
 or visual redesign. Synthetic browser coverage is not a real-device/media
 quality certification; Safari/iOS/PWA and assistive-technology checks remain open.
 
+## Terminal diagnostics and recovered drafts
+
+The runner keeps fixed, allowlisted codes and numeric counts, never raw source
+text or exception messages in Actions logs. Accepted model responses clear the
+transient code of a rejected attempt; retry/failure counts remain, and the
+model_validation_recoveries counter counts calls accepted after invalid-response
+retries. This is structural response acceptance, not factual approval.
+
+A terminal code comes explicitly from the final exception. VerificationError is
+reported as verification_rejected without guessing the rejected claim. Published,
+interrupted and unrelated terminal results do not inherit old draft codes; late
+diagnostic updates cannot alter a finished profile. The monitor does not promise
+an accessible private local log for ephemeral cloud runs. Existing factual gates,
+repair limits and no-automatic-retry behavior remain unchanged. Historically
+discarded error text cannot be reconstructed; normal future runs must validate
+adoption. No additional model call, provider, saved report or static UI change is
+introduced by this diagnostic correction.
+
 ## Adoption requirements and limitations
 
 The local application currently targets Windows. The unattended runner targets
