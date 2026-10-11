@@ -3051,38 +3051,6 @@ function setupNavigation() {
   }
 }
 
-function setupHomeTour() {
-  const tour = byId("home-tour");
-  if (tour.dataset.tourReady === "true") return;
-  const pause = byId("home-tour-pause"), replay = byId("home-tour-replay");
-  const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const syncMotion = () => {
-    pause.disabled = replay.disabled = preference.matches;
-    if (preference.matches) tour.classList.remove("tour-paused");
-    pause.textContent = "PAUSE";
-    pause.setAttribute("aria-pressed", "false");
-  };
-  pause.addEventListener("click", () => {
-    if (preference.matches) return;
-    const paused = tour.classList.toggle("tour-paused");
-    pause.textContent = paused ? "CONTINUE" : "PAUSE";
-    pause.setAttribute("aria-pressed", String(paused));
-  });
-  replay.addEventListener("click", () => {
-    if (preference.matches) return;
-    tour.classList.remove("tour-paused");
-    pause.textContent = "PAUSE";
-    pause.setAttribute("aria-pressed", "false");
-    for (const animation of tour.getAnimations?.({ subtree: true }) || []) {
-      animation.currentTime = 0;
-      animation.play();
-    }
-  });
-  preference.addEventListener?.("change", syncMotion);
-  syncMotion();
-  tour.dataset.tourReady = "true";
-}
-
 function setupInstall() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
@@ -3120,7 +3088,6 @@ function setupActivityTracking() {
 async function initialize() {
   setupCompactSelects();
   setupCompactInputs();
-  setupHomeTour();
   setupStickyInsets();
   setupNavigation();
   setupInstall();

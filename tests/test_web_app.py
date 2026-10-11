@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.19', page)
-        self.assertIn('/styles.css?v=4.1.19', page)
-        self.assertIn('tdn-shell-v4-49', worker)
+        self.assertIn('/app.js?v=4.1.20', page)
+        self.assertIn('/styles.css?v=4.1.20', page)
+        self.assertIn('tdn-shell-v4-50', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -102,8 +102,8 @@ class WebAppSecurityTests(TestCase):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
         self.assertIn('id="view-home" class="view active"', page)
         self.assertIn('data-view="home"', page)
-        self.assertIn('id="home-tour-pause"', page)
-        self.assertIn('id="home-tour-replay"', page)
+        self.assertNotIn('id="home-tour-pause"', page)
+        self.assertNotIn('id="home-tour-replay"', page)
         self.assertIn('A short illustration, not a live generation.', page)
         self.assertIn('select:not([multiple])', source)
         self.assertIn('syncCompactSelects(chapters)', source)
@@ -113,12 +113,13 @@ class WebAppSecurityTests(TestCase):
         self.assertIn('control.closest?.(".chapter-control")', source)
         self.assertIn('.chapter-control .select-shell', styles)
         self.assertIn('.mini-player.levels-open .mini-transport', styles)
-        self.assertIn('tour.getAnimations?.({ subtree: true })', source)
+        self.assertNotIn('setupHomeTour', source)
         self.assertNotIn('<iframe', page)
         self.assertNotIn('youtube.com', page)
-        self.assertNotIn(
-            'infinite', styles.split('/* Original, local-only educational film.', 1)[1]
-        )
+        for part in ('mail', 'guide', 'packet', 'audio', 'paper'):
+            rule = styles.split(f'.view.active .tour-{part} {{', 1)[1].split('}', 1)[0]
+            self.assertIn('infinite', rule)
+        self.assertIn('prefers-reduced-motion: reduce', styles)
 
     def test_publication_titles_accept_legacy_and_four_or_more_digit_numbers(self):
         source = Path("web/app.js").read_text(encoding="utf-8")
