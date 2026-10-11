@@ -624,6 +624,10 @@ select {
 .archive-sort .select-shell { width: 9rem; }
 .profile-actions > .select-shell { grid-column: 2; grid-row: 1; }
 
+.compact-input-shell { display: block; position: relative; min-width: 0; max-width: 100%; width: 100%; }
+.compact-input-shell input { font-family: Consolas, "Courier New", monospace; }
+.compact-input-shell input::placeholder { opacity: 1; color: var(--muted); }
+
 .runner-detail { font-size: var(--font-ui); line-height: 1.5; margin-block: 0.65rem; overflow-wrap: anywhere; }
 .monitor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
 .request-item .request-detail, .request-item .request-timeline { font-size: var(--font-sm); line-height: 1.5; }
@@ -861,7 +865,15 @@ textarea {
   color: var(--muted);
   border: 1px dashed rgba(112, 64, 31, 0.65);
   text-align: center;
+  font-size: var(--font-ui);
+  line-height: 1.5;
+  padding: 1rem;
 }
+
+.terminal-list.empty-state,
+.schedule-list.empty-state,
+.episode-list.empty-state,
+.edition-list.empty-state { min-height: 6rem; }
 
 .privacy-note {
   margin-top: 1rem;
@@ -1676,5 +1688,42 @@ select:not([multiple]) { padding-inline-end: 1.85rem; }
   .section-chip-move, .section-chip-remove {
     background: radial-gradient(circle at center, var(--rust) 0 0.8rem, transparent 0.85rem);
     border: 0;
+  }
+  /* Render a 13px resting value from a native 16px field. Compensate the
+     entire geometry so the painted field and its hit area remain 44px high.
+     Focus uses the unscaled native field for readable editing and selection;
+     the shell's size is unchanged. Do not suppress user zoom. */
+  .compact-input-shell {
+    height: 2.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.2rem;
+    background: var(--black);
+  }
+  .compact-input-shell input {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: calc(100% * 16 / 13);
+    max-width: none;
+    height: calc((2.75rem - 2px) * 16 / 13);
+    min-height: 0;
+    margin: 0;
+    padding: 0.4rem calc(0.6rem * 16 / 13);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: var(--font-input);
+    line-height: 1.4;
+    transform-origin: left center;
+    transform: translateY(-50%) scale(0.8125);
+  }
+  .compact-input-shell:focus-within { outline: 2px solid var(--bright); outline-offset: 3px; }
+  .compact-input-shell input:focus {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding-inline: 0.6rem;
+    transform: none;
+    outline: none;
   }
 }

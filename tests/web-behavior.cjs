@@ -65,6 +65,33 @@ test('compact native select captions follow selection and clear private favorite
   assert.equal(control.title,'LOAD FAVORITE…');
 });
 
+test('compact inputs keep native value, constraints, label identity and events without private mirrors', () => {
+  const {context,images} = harness(['setupCompactInputs']);
+  const controls = ['date', 'search', 'time', 'text'].map(type => ({
+    type, id:`synthetic-${type}`, value:'synthetic value', required:true,
+    parentElement:{classList:{contains:()=>false}}, events:[],
+    before(shell){this.shell=shell;},
+  }));
+  let queried='';
+  context.document.querySelectorAll = selector => {queried=selector;return controls;};
+  const create=context.element;
+  context.element=(...args)=>{
+    const shell=create(...args);
+    shell.classList.contains=name=>name==='compact-input-shell';
+    shell.append=control=>{shell.children.push(control);control.parentElement=shell;};
+    return shell;
+  };
+  context.setupCompactInputs();context.setupCompactInputs();
+  assert.equal(images.length,4,'Initialization must be idempotent');
+  assert.equal(queried,'.monitor-filters input, #profile-name, input[type="date"], input[type="time"]');
+  for(const control of controls){
+    assert.equal(control.shell.children[0],control);
+    assert.equal(control.value,'synthetic value');assert.equal(control.required,true);
+    assert.deepEqual(control.events,[]);assert.equal(control.shell.textContent,'');
+    assert.equal(control.shell.children.length,1,'No cloned data or calendar');
+  }
+});
+
 function playerHarness(extra=[]) {
   const h=harness(['playbackSelection','isPlaybackSelectionCurrent','playEpisodeAudio','pauseEpisodeAudio',
     'toggleEpisodeAudio','stopEpisodeAudio','seekEpisodeAudio','syncPlaybackLevels','setPlaybackLevel',
