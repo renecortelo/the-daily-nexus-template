@@ -192,6 +192,7 @@ function clearPrivateInterface() {
   appState.clockProjectionSignature = "";
   appState.clockStatus = "";
   updateCloudClockStatus();
+  syncCompactSelects();
 }
 
 function showAuth() {
@@ -210,6 +211,7 @@ function clearPrivateForms() {
   generationForm.elements.requestedDate.value = generationForm.elements.requestedDate.max;
   byId("profile-name").value = "";
   byId("profile-picker").replaceChildren(element("option", "", "LOAD FAVORITE…"));
+  syncCompactSelects();
   byId("remember-favorites").checked = false;
   byId("update-profile-button").disabled = true;
   byId("delete-profile-button").disabled = true;
@@ -776,6 +778,7 @@ function selectedFavorite() {
 }
 
 function syncFavoriteActions() {
+  syncCompactSelects();
   const selected = Boolean(selectedFavorite());
   const update = byId("update-profile-button");
   const remove = byId("delete-profile-button");
@@ -2978,6 +2981,33 @@ function setupStickyInsets() {
   measure();
 }
 
+function syncCompactSelects() {
+  for (const shell of document.querySelectorAll(".select-shell")) {
+    const control = shell.querySelector("select");
+    const caption = shell.querySelector(".select-caption");
+    const selected = control.options[control.selectedIndex];
+    caption.textContent = selected?.textContent || "";
+    control.title = caption.textContent;
+  }
+}
+
+function setupCompactSelects() {
+  // Keep the native select as the only interactive/announced control. Its
+  // 16px input font prevents iOS focus zoom; the aria-hidden caption uses the
+  // shared compact utility scale. No custom listbox or stored copy of data.
+  for (const control of document.querySelectorAll(".monitor-filters select, .archive-sort select, #profile-picker")) {
+    if (control.parentElement.classList.contains("select-shell")) continue;
+    const shell = element("span", "select-shell");
+    const caption = element("span", "select-caption");
+    caption.setAttribute("aria-hidden", "true");
+    control.before(shell);
+    shell.append(caption, control);
+    control.addEventListener("input", syncCompactSelects);
+    control.addEventListener("change", syncCompactSelects);
+  }
+  syncCompactSelects();
+}
+
 function setupNavigation() {
   for (const button of document.querySelectorAll(".mode-button")) {
     button.addEventListener("click", () => {
@@ -3030,6 +3060,7 @@ function setupActivityTracking() {
 }
 
 async function initialize() {
+  setupCompactSelects();
   setupStickyInsets();
   setupNavigation();
   setupInstall();

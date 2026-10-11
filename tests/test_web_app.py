@@ -38,9 +38,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.16', page)
-        self.assertIn('/styles.css?v=4.1.16', page)
-        self.assertIn('tdn-shell-v4-46', worker)
+        self.assertIn('/app.js?v=4.1.17', page)
+        self.assertIn('/styles.css?v=4.1.17', page)
+        self.assertIn('tdn-shell-v4-47', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -52,10 +52,23 @@ class WebAppSecurityTests(TestCase):
             ".host-layout > label:nth-child(8)",
             "@keyframes console-enter", "@keyframes console-acquire",
             "@media (prefers-reduced-motion: reduce)", "animation: none !important",
-            "font-size: 1rem; min-height: 2.75rem;",
+            "font-size: var(--font-input); min-height: 2.75rem;",
         ):
             self.assertIn(marker, styles)
         self.assertNotIn("user-scalable=no", page)
+
+    def test_harmonized_console_uses_shared_scales_and_native_utility_selects(self):
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        for token in ("--font-xs:", "--font-sm:", "--font-ui:", "--font-body:",
+                      "--font-input:", "--page-gutter:", "--card-inset:"):
+            self.assertIn(token, styles)
+        self.assertIn("text-size-adjust: 100%", styles)
+        self.assertIn("align-items: start", styles)
+        self.assertIn(".select-shell:focus-within", styles)
+        self.assertIn('caption.setAttribute("aria-hidden", "true")', source)
+        self.assertIn('caption.textContent = selected?.textContent || ""', source)
+        self.assertIn("function setupCompactSelects()", source)
 
     def test_mobile_selects_do_not_expand_document_or_disable_zoom(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
