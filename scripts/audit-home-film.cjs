@@ -10,8 +10,8 @@ function extract(name){const start=source.indexOf(`function ${name}(`);const nex
 const figure=pageSource.slice(pageSource.indexOf('<figure id="home-tour"'),pageSource.indexOf('</figure>')+9);
 const fixture=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>${fs.readFileSync('web/styles.css','utf8')}#app-shell{padding:16px}.nexus-tour{max-width:960px}.test-space{height:1600px}</style><div id="app-shell" hidden><nav><button class="mode-button" data-view="home">HOME</button><button class="mode-button" data-view="gen">GEN</button></nav><div id="mini-player" hidden></div><section id="view-home" class="view active">${figure}<div class="test-space"></div></section><section id="view-gen" class="view"><p>Synthetic view</p></section></div><script>const byId=id=>document.getElementById(id);const appState={authorized:false};${['syncHomeFilm','setupHomeFilm','setupNavigation'].map(extract).join('\n')}setupNavigation();setupHomeFilm();window.authorize=()=>{appState.authorized=true;byId('app-shell').hidden=false;syncHomeFilm();};window.lock=()=>{appState.authorized=false;syncHomeFilm();};</script>`;
 const media=new Map([
- ['/assets/nexus-editor-film-v1.mp4',{type:'video/mp4',body:fs.readFileSync('assets/nexus-editor-film-v1.mp4')}],
- ['/assets/nexus-editor-poster-v1.webp',{type:'image/webp',body:fs.readFileSync('assets/nexus-editor-poster-v1.webp')}],
+ ['/assets/nexus-editor-film-v2.mp4',{type:'video/mp4',body:fs.readFileSync('assets/nexus-editor-film-v2.mp4')}],
+ ['/assets/nexus-editor-poster-v2.webp',{type:'image/webp',body:fs.readFileSync('assets/nexus-editor-poster-v2.webp')}],
 ]);
 const server=http.createServer((req,res)=>{
  if(req.url==='/'){res.writeHead(200,{'Content-Type':'text/html;charset=utf-8'});res.end(fixture);return;}
@@ -39,10 +39,10 @@ const server=http.createServer((req,res)=>{
    await page.waitForFunction(()=>{const v=document.querySelector('#home-film');return !v.paused&&v.currentTime>.1;});
    const video=await page.locator('#home-film').evaluate(el=>({duration:el.duration,width:el.videoWidth,height:el.videoHeight,muted:el.muted,inline:el.playsInline,loop:el.loop,controls:el.controls}));
    // The encoded size is checked separately; some media backends report scaled frames.
-   assert.equal(video.duration,24);assert.ok(video.width>0&&video.height>0);assert.ok(Math.abs(video.width/video.height-16/9)<.03);assert.equal(video.muted,true);assert.equal(video.inline,true);assert.equal(video.loop,true);assert.equal(video.controls,false);
+   assert.equal(video.duration,16);assert.ok(video.width>0&&video.height>0);assert.ok(Math.abs(video.width/video.height-16/9)<.03);assert.equal(video.muted,true);assert.equal(video.inline,true);assert.equal(video.loop,true);assert.equal(video.controls,false);
    await page.locator('#home-tour').screenshot({path:`tmp/home-film-audit/${safari?'webkit':'chromium'}-${width}-playing.png`});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-   await page.locator('#home-film').evaluate(el=>{el.currentTime=23.8;});await page.waitForFunction(()=>document.querySelector('#home-film').currentTime<1);
+   await page.locator('#home-film').evaluate(el=>{el.currentTime=15.8;});await page.waitForFunction(()=>document.querySelector('#home-film').currentTime<1);
    await page.evaluate(()=>scrollTo({top:1800,behavior:'instant'}));await page.waitForFunction(()=>document.querySelector('#home-film').paused);
    await page.evaluate(()=>scrollTo({top:0,behavior:'instant'}));await page.waitForFunction(()=>!document.querySelector('#home-film').paused);
    await page.locator('[data-view="gen"]').click();assert.equal(await page.locator('#home-film').evaluate(el=>el.paused),true);

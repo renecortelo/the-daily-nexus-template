@@ -11,7 +11,7 @@ let html = fs.readFileSync('web/index.html','utf8')
 html = html.replace(/src="(\/assets\/[A-Za-z0-9_-]+\.png)"/g, (_match,path) => {
   return `src="data:image/png;base64,${fs.readFileSync(path.slice(1)).toString('base64')}"`;
 });
-html=html.replaceAll('/assets/nexus-editor-poster-v1.webp',`data:image/webp;base64,${fs.readFileSync('assets/nexus-editor-poster-v1.webp').toString('base64')}`);
+html=html.replaceAll('/assets/nexus-editor-poster-v2.webp',`data:image/webp;base64,${fs.readFileSync('assets/nexus-editor-poster-v2.webp').toString('base64')}`);
 const production=fs.readFileSync('web/app.js','utf8');
 function extract(name){
  const start=production.indexOf(`function ${name}(`);
