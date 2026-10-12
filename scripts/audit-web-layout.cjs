@@ -12,6 +12,7 @@ html = html.replace(/src="(\/assets\/[A-Za-z0-9_-]+\.png)"/g, (_match,path) => {
   return `src="data:image/png;base64,${fs.readFileSync(path.slice(1)).toString('base64')}"`;
 });
 html=html.replaceAll('/assets/nexus-editor-poster-v3.webp',`data:image/webp;base64,${fs.readFileSync('assets/nexus-editor-poster-v3.webp').toString('base64')}`);
+html=html.replaceAll('/assets/google-g.png',`data:image/png;base64,${fs.readFileSync('assets/google-g.png').toString('base64')}`);
 const production=fs.readFileSync('web/app.js','utf8');
 function extract(name){
  const start=production.indexOf(`function ${name}(`);
@@ -110,6 +111,24 @@ document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCo
      if(view!=='auth'){
       const footerHeight=await page.locator('.statusbar').evaluate(el=>el.getBoundingClientRect().height);
       assert.ok(footerHeight<75,`Footer must not stretch into a vacant grid track: ${footerHeight}`);
+     }else{
+      const entry=await page.locator('#sign-in-button').evaluate(el=>{
+       const s=getComputedStyle(el),r=el.getBoundingClientRect(),logo=el.querySelector('.google-button-mark'),label=el.lastElementChild.getBoundingClientRect();
+       return {type:el.type,text:el.textContent.trim(),height:r.height,width:r.width,
+        font:parseFloat(s.fontSize),background:s.backgroundImage,color:s.color,
+        markColor:getComputedStyle(logo).backgroundColor,logo:logo.getBoundingClientRect().width,
+        mask:getComputedStyle(logo).maskImage||getComputedStyle(logo).webkitMaskImage,labelInside:label.left>=r.left&&label.right<=r.right};
+      });
+      assert.equal(entry.type,'button');assert.equal(entry.text,'Sign in with Google');
+      assert.ok(entry.height>=44&&entry.height<=52&&entry.width>=44,JSON.stringify(entry));
+      assert.equal(entry.font,14);assert.ok(entry.background.includes('rgb(255, 180, 59)')&&entry.background.includes('rgb(242, 140, 24)'));
+      assert.equal(entry.color,'rgb(33, 19, 12)');assert.equal(entry.markColor,entry.color);
+      assert.equal(entry.logo,22);assert.ok(entry.mask.includes('data:image/png;base64,'));assert.ok(entry.labelInside);
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator('#sign-in-button').evaluate(el=>el===document.activeElement&&el.matches(':focus-visible')&&parseFloat(getComputedStyle(el).outlineWidth)>=2),true);
+      const locked=await page.locator('#sign-in-button').evaluate(el=>{el.disabled=true;const s=getComputedStyle(el);return{opacity:s.opacity,transform:s.transform,cursor:s.cursor};});
+      assert.deepEqual(locked,{opacity:'0.65',transform:'none',cursor:'wait'});
+      await page.locator('#sign-in-button').evaluate(el=>{el.disabled=false;el.blur();});
      }
      checks++;
      if(metrics.scroll>width+1||metrics.body>width+1){

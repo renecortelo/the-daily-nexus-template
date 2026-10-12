@@ -25,6 +25,19 @@ def temporary_test_directory():
 
 
 class WebAppSecurityTests(TestCase):
+    def test_google_entry_uses_compact_nexus_colors_without_changing_authentication(self):
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        styles = Path("web/styles.css").read_text(encoding="utf-8")
+        self.assertIn('id="sign-in-button" class="google-button" type="button"', page)
+        self.assertIn('<span class="google-button-mark" aria-hidden="true">', page)
+        self.assertIn('<span>Sign in with Google</span>', page)
+        for rule in ("background: linear-gradient(115deg, var(--bright), var(--amber));",
+                     "color: var(--panel);", "background: currentColor;",
+                     'mask: url("/assets/google-g.png") center / contain no-repeat;',
+                     ".google-button:not(:disabled):hover", ".google-button:disabled",
+                     "flex: 0 0 1.375rem;", "width: 1.375rem;"):
+            self.assertIn(rule, styles)
+
     def test_end_user_copy_is_concise_without_hiding_privacy_or_action_constraints(self):
         page = Path("web/index.html").read_text(encoding="utf-8")
         source = Path("web/app.js").read_text(encoding="utf-8")
@@ -62,9 +75,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.26', page)
-        self.assertIn('/styles.css?v=4.1.26', page)
-        self.assertIn('tdn-shell-v4-56', worker)
+        self.assertIn('/app.js?v=4.1.27', page)
+        self.assertIn('/styles.css?v=4.1.27', page)
+        self.assertIn('tdn-shell-v4-57', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
