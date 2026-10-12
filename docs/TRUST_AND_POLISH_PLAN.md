@@ -94,6 +94,22 @@ and production adoption of these file controls remain open.
 
 ## 2. Original-source verification and source lineage
 
+Optional enrichment hardening implemented/tested on 2026-10-12: robots 404/410
+allow articles, 401/403 deny them, and network/rate-limit/server uncertainty skips
+only enrichment. Bounded public-HTTPS robots redirects are followed; their rules
+apply to the original article. HTML, truncated or oversized rule files fail
+closed. A bounded in-memory policy cache belongs to one enrichment run and still
+evaluates each article path; it stores no newsletter text or persistent data.
+
+Article and robots connections now validate all returned destination addresses
+and connect directly to a validated socket address, retaining the original
+hostname for TLS verification and SNI. Environment proxies and tunnels cannot
+bypass this path. Tests simulate DNS changes, mixed/private/empty address sets,
+certificate failures, redirects, missing rules and unavailable servers. This is
+targeted hardening, not a penetration test or a full RFC parser replacement.
+Newsletter evidence, factual gates, runner deadlines and no-spend controls remain.
+Normal future runs must confirm the effect on enrichment coverage and timing.
+
 Status: implemented on 2026-10-09; production adoption is evaluated on subsequent
 runs, without generating extra editions for testing.
 

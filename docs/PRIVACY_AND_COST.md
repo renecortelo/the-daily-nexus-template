@@ -11,6 +11,13 @@
    to direct public URLs, while opaque trackers and utility pages are ignored. HTTPS,
    public-address, size, timeout, and robots checks apply to the original request and every
    redirect destination.
+   Robots 404/410 mean no rules are available; 401/403 deny enrichment. Timeouts,
+   rate limits, server errors and unreadable rules skip the article. Policies are
+   cached only in memory within one enrichment run, with a bounded origin count.
+   HTTPS connects directly to a checked public address while validating the
+   original TLS hostname; environment proxies and tunnels are disabled for this
+   optional fetcher. See [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)
+   for the protocol; this app chooses a conservative policy for uncertain access.
 4. Selected newsletter/article/research text is placed briefly in an isolated request file and
    processed through the Antigravity CLI using the existing Google AI Pro account. On an
    unattended run, that file and its output exist temporarily on a GitHub-hosted machine.
