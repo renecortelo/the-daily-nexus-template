@@ -14,12 +14,12 @@
     <link rel="manifest" href="/manifest.webmanifest?v=4.0.13">
     <link rel="apple-touch-icon" href="/assets/tdn-icon.png">
     <link rel="icon" href="/assets/tdn-icon.png">
-    <link rel="stylesheet" href="/styles.css?v=4.1.23">
+    <link rel="stylesheet" href="/styles.css?v=4.1.24">
   </head>
   <body>
     <div class="scanlines" aria-hidden="true"></div>
     <noscript>
-      <div class="fatal">JavaScript is required. No private data was loaded.</div>
+      <div class="fatal">Enable JavaScript to use The Daily Nexus.</div>
     </noscript>
 
     <main id="auth-screen" class="auth-screen">
@@ -36,7 +36,7 @@
           <span>Sign in with Google</span>
         </button>
         <p id="auth-status" class="status-copy" role="status">
-          Sign in to open your console. Automatic lock: 15 minutes idle or one hour after sign-in.
+          Auto sign-out: 15 minutes idle or one hour after sign-in.
         </p>
         <div class="security-strip">
           <span>AUTO LOCK</span>
@@ -102,35 +102,33 @@
           <div class="home-copy">
             <p class="eyebrow">HOME // THE DAILY NEXUS</p>
             <h2 id="home-heading">Your inbox. A clearer signal.</h2>
-            <p>Good newsletters deserve more than an unread count. Turn the reporting you choose into a podcast you can listen to, with an optional newspaper to read.</p>
+            <p>Turn your chosen newsletters into a podcast and an optional newspaper.</p>
             <div class="button-row">
               <button class="primary-button" type="button" data-open-view="gen">GENERATE</button>
               <button class="ghost-button" type="button" data-open-view="play">LISTEN</button>
               <button class="ghost-button" type="button" data-open-view="schedule">AUTOMATE</button>
             </div>
           </div>
-          <figure id="home-tour" class="console-card nexus-tour">
+          <figure id="home-tour" class="console-card nexus-tour" aria-label="Your editor at work">
             <div class="card-header"><span>YOUR EDITOR AT WORK</span><span>ILLUSTRATION</span></div>
             <div class="tour-display" aria-hidden="true">
               <img id="home-film-poster" class="home-film" src="/assets/nexus-editor-poster-v1.webp" alt="" width="1280" height="720">
               <video id="home-film" class="home-film" data-src="/assets/nexus-editor-film-v1.mp4" poster="/assets/nexus-editor-poster-v1.webp" width="1280" height="720" preload="none" autoplay muted loop playsinline disablepictureinpicture tabindex="-1" hidden></video>
             </div>
-            <p class="tour-caption">COLLECT → CHECK → WRITE → PRODUCE</p>
-            <figcaption>A short illustration, not a live generation. Your agent organizes reporting, checks the available evidence and prepares the podcast and optional paper.</figcaption>
           </figure>
         </div>
         <ol class="home-steps">
-          <li><span>01 // CHOOSE</span><p>Pick a Gmail label, your hosts and the sections that matter to you.</p></li>
-          <li><span>02 // REVIEW</span><p>Relevant stories are selected and checked against the available evidence.</p></li>
-          <li><span>03 // LISTEN OR READ</span><p>Play the episode, follow its transcript, or open the optional newspaper.</p></li>
-          <li><span>04 // SET YOUR RHYTHM</span><p>Generate on demand or schedule an edition. The cloud runner works independently of this screen.</p></li>
+          <li><span>01 // CHOOSE</span><p>Pick your Gmail label, hosts and sections.</p></li>
+          <li><span>02 // REVIEW</span><p>Stories are selected and checked against the available evidence.</p></li>
+          <li><span>03 // LISTEN OR READ</span><p>Listen, follow the transcript or read the newspaper.</p></li>
+          <li><span>04 // SET YOUR RHYTHM</span><p>Generate on demand or schedule an edition.</p></li>
         </ol>
       </section>
 
       <section id="view-gen" class="view" aria-labelledby="gen-heading">
         <div class="view-heading">
           <div>
-            <p class="eyebrow">GEN // PRIVATE CLOUD RUNNER</p>
+            <p class="eyebrow">GEN // YOUR EDITION</p>
             <h2 id="gen-heading">Generate a Podcast + Paper</h2>
           </div>
           <div class="runner-chip">
@@ -166,7 +164,7 @@
                   <textarea name="sections" hidden></textarea>
                   <span class="section-order-status visually-hidden" role="status" aria-live="polite" aria-atomic="true"></span>
                 </div>
-                <p id="gen-section-help" class="field-note">Use the arrow buttons or drag to reorder. Keyboard: Alt + Left or Right on a section control.</p>
+                <p id="gen-section-help" class="field-note">Reorder by dragging or using arrows. Keyboard: Alt + Left or Right.</p>
               </div>
               <label class="toggle-row">
                 <input name="includeTih" type="checkbox" checked>
@@ -176,26 +174,23 @@
                 <input name="includeNewspaper" type="checkbox" checked>
                 <span>Generate newspaper too</span>
               </label>
-              <p class="field-note">Turn off for podcast only; skips newspaper writing, review and rendering.</p>
               <label>
                 Evidence mode
                 <select name="evidenceMode">
-                  <option value="newsletter_first" selected>Newsletter first — safe links enrich when available</option>
-                  <option value="newsletter_only">Newsletter only — no web retrieval</option>
+                  <option value="newsletter_first" selected>Newsletters + available articles</option>
+                  <option value="newsletter_only">Newsletters only</option>
                 </select>
               </label>
               <label>
-                Edition scale
+                Newspaper coverage
                 <select name="editionScale">
-                  <option value="focused">Focused — specialized or lower-volume label</option>
-                  <option value="standard" selected>Standard — balanced executive edition</option>
-                  <option value="comprehensive">Comprehensive — broad daily-news label</option>
+                  <option value="focused">Focused</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="comprehensive">Comprehensive</option>
                 </select>
               </label>
               <p class="field-note">
-                Choose up to 10 sections. TIH is optional and does not use one of those 10.
-                Scale sets the Read-edition article range; all newsletter evidence is still ranked.
-                Newsletter only requires TIH to be off.
+                Up to 10 sections, plus optional TIH. TIH requires web research.
               </p>
             </fieldset>
 
@@ -279,7 +274,7 @@
             </div>
             <label class="favorite-retention"><input id="remember-favorites" type="checkbox"> Remember favorites on this device after sign-out (settings only)</label>
 
-            <p class="field-note publish-note">Verified cloud runs publish automatically.</p>
+            <p class="field-note publish-note">Automatically published to your feed.</p>
             <button class="primary-button" type="submit">GENERATE</button>
           </form>
 
@@ -298,15 +293,15 @@
               <select id="monitor-sort-filter" aria-label="Sort process requests"><option value="newest">NEWEST FIRST</option><option value="oldest">OLDEST FIRST</option><option value="status">STATUS</option><option value="name">RUN NAME</option></select>
             </div>
             <p id="runner-detail" class="runner-detail" aria-live="polite">
-              Awaiting the private cloud runner status.
+              Runner status unavailable.
             </p>
-            <p id="monitor-scope" class="item-meta" aria-live="polite">LATEST 100 REQUEST WINDOW</p>
+            <p id="monitor-scope" class="item-meta" aria-live="polite">LATEST 100 REQUESTS</p>
             <details class="resource-breakdown">
               <summary>RUN TIME AND RESOURCES</summary>
-              <div id="resource-summary" aria-live="polite">Measurements arrive after normal generations.</div>
+              <div id="resource-summary" aria-live="polite">No measurements yet.</div>
             </details>
             <div id="run-request-list" class="terminal-list empty-state">
-              No queued tasks for this session.
+              No requests yet.
             </div>
           </aside>
         </div>
@@ -323,7 +318,7 @@
         </div>
         <div class="play-layout">
           <aside id="episode-list" class="episode-list empty-state">
-            No synchronized episodes are available yet.
+            No episodes yet.
           </aside>
           <section id="web-player" class="console-card web-player">
             <p class="eyebrow">AUDIO TERMINAL</p>
@@ -350,7 +345,7 @@
               <button id="show-transcript" class="ghost-button" type="button">TRANSCRIPT</button>
             </div>
             <label class="chapter-control" hidden>CHAPTER <select id="player-chapters" aria-label="Jump to a podcast section"></select></label>
-            <div id="player-details" class="player-details empty-state">Load an episode to view references.</div>
+            <div id="player-details" class="player-details empty-state">Select an episode.</div>
           </section>
         </div>
       </section>
@@ -366,7 +361,7 @@
         </div>
         <div class="read-layout">
           <aside id="edition-list" class="edition-list empty-state">
-            No synchronized editions are available yet.
+            No newspapers yet.
           </aside>
           <section class="console-card edition-viewer">
             <p class="eyebrow">PRIVATE NEWSPAPER</p>
@@ -382,7 +377,7 @@
               <output id="edition-zoom-value" aria-live="polite">100%</output>
               <button id="edition-zoom-in" class="ghost-button icon-action" type="button" aria-label="Zoom in" title="Zoom in">+</button>
             </div>
-            <div id="edition-pages" class="edition-pages empty-state" tabindex="0" role="region" aria-label="Selected newspaper">Select an edition to read it here.</div>
+            <div id="edition-pages" class="edition-pages empty-state" tabindex="0" role="region" aria-label="Selected newspaper">Select a newspaper.</div>
             <a id="edition-pdf-link" class="ghost-button edition-pdf-link" href="#" target="_blank" rel="noopener noreferrer" hidden>OPEN PDF</a>
           </section>
         </div>
@@ -453,7 +448,7 @@
                   <textarea name="sections" hidden></textarea>
                   <span class="section-order-status visually-hidden" role="status" aria-live="polite" aria-atomic="true"></span>
                 </div>
-                <p id="schedule-section-help" class="field-note">Use the arrow buttons or drag to reorder. Keyboard: Alt + Left or Right on a section control.</p>
+                <p id="schedule-section-help" class="field-note">Up to 10 sections, plus optional TIH. Reorder by dragging or using arrows. Keyboard: Alt + Left or Right.</p>
               </div>
               <label class="toggle-row">
                 <input name="includeTih" type="checkbox" checked>
@@ -463,20 +458,19 @@
                 <input name="includeNewspaper" type="checkbox" checked>
                 <span>Generate newspaper too</span>
               </label>
-              <p class="field-note">Turn off for podcast only; skips newspaper writing, review and rendering.</p>
               <label>
                 Evidence mode
                 <select name="evidenceMode">
-                  <option value="newsletter_first" selected>Newsletter first — safe links enrich when available</option>
-                  <option value="newsletter_only">Newsletter only — no web retrieval</option>
+                  <option value="newsletter_first" selected>Newsletters + available articles</option>
+                  <option value="newsletter_only">Newsletters only</option>
                 </select>
               </label>
               <label>
-                Edition scale
+                Newspaper coverage
                 <select name="editionScale">
-                  <option value="focused">Focused — specialized or lower-volume label</option>
-                  <option value="standard" selected>Standard — balanced executive edition</option>
-                  <option value="comprehensive">Comprehensive — broad daily-news label</option>
+                  <option value="focused">Focused</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="comprehensive">Comprehensive</option>
                 </select>
               </label>
               <div class="host-layout" data-host-controls>
@@ -559,7 +553,7 @@
                 <span>Schedule enabled</span>
               </label>
             </div>
-            <p class="field-note publish-note">Verified cloud runs publish automatically.</p>
+            <p class="field-note publish-note">Automatically published to your feed.</p>
             <div class="button-row">
               <button class="primary-button" type="submit">SAVE SCHEDULE</button>
               <button id="cancel-edit-button" class="ghost-button" type="button" hidden>
@@ -584,52 +578,43 @@
         <div class="view-heading">
           <div>
             <p class="eyebrow">ABOUT // DARIO NOVELLI</p>
-            <h2 id="about-heading">Your morning signal, in three forms</h2>
+            <h2 id="about-heading">From inbox to daily brief</h2>
           </div>
-          <div class="version-chip">V4 WEB FOUNDATION</div>
+          <div class="version-chip">V4</div>
         </div>
         <div class="about-grid">
           <article class="console-card prose-card">
             <h3>FROM NEWSLETTERS TO SIGNAL</h3>
             <p>
-              I start with the newsletters you deliberately place in your chosen Gmail label.
-              I identify the useful reporting, connect the relevant developments, and turn it
-              into a clear morning brief. The goal is not to repeat your inbox: it is to help
-              you see what changed, why it matters, and what deserves your attention.
+              I'm Dario Novelli. I turn your selected newsletters into a brief on
+              what changed, why it matters and what deserves your attention.
             </p>
           </article>
           <article class="console-card prose-card">
             <h3>GEN, PLAY, AND READ</h3>
             <p>
-              In GEN, choose the label, hosts, editorial mood, and the sections that matter
-              to you. In PLAY, listen to the finished episode, follow the transcript, and open
-              its source references. In READ, scan the companion newspaper when a screen is
-              more useful than headphones.
+              GEN creates your edition. PLAY lets you listen, follow the transcript
+              and open sources. READ displays the optional newspaper.
             </p>
           </article>
           <article class="console-card prose-card">
             <h3>YOUR RHYTHM, YOUR EDITION</h3>
             <p>
-              Generate an edition when you need one, or schedule recurring briefings around
-              your day. Each run can use its own name, newsletter label, voices, tone, and
-              section order, so a broad morning review and a focused specialist briefing can
-              live side by side without becoming the same show in different clothes.
+              Generate on demand or automate editions in SCHED. Each can have its own
+              name, Gmail label, hosts, tone and sections.
             </p>
           </article>
           <article class="console-card prose-card">
             <h3>PRIVATE BY DESIGN</h3>
             <p>
-              I collect messages only from your chosen label; Google's read-only permission
-              itself covers the mailbox. Selected reporting is processed by Antigravity on
-              Google's service and, for cloud runs, temporarily on your private GitHub runner.
-              Kokoro renders speech inside that runner, without a paid speech API.
+              I read only your chosen label, although Google's read-only permission
+              covers the mailbox. Selected content is processed by Google's Antigravity
+              and, for cloud runs, temporarily on your private GitHub runner.
             </p>
             <p>
-              Sign-out locks this console and clears its displayed private data. Schedules
-              keep running independently. The podcast, paper and feed use unlisted links:
-              anyone holding a link can read or listen without signing in, and downloaded
-              copies are not erased by sign-out. Keep these links private. New favorites are
-              session-only unless you choose to remember their settings on this device.
+              Sign-out clears this console, not downloaded copies. Schedules keep running.
+              Podcast, newspaper and feed links are unlisted, not sign-in protected:
+              anyone with a link can open it. Keep these links private.
             </p>
           </article>
         </div>
@@ -642,6 +627,6 @@
     </div>
 
     <script src="/cloud-clock-config.js?v=4.1.3"></script>
-  <script type="module" src="/app.js?v=4.1.23"></script>
+  <script type="module" src="/app.js?v=4.1.24"></script>
   </body>
 </html>

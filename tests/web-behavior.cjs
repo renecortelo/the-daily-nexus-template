@@ -293,7 +293,7 @@ test('resource visibility distinguishes measurements, forecasts and unknown acco
   assert.match(text,/ACCOUNT ACTIONS BALANCE \/\/ UNKNOWN/); assert.match(text,/NOT remaining allowance/);
   assert.match(text,/NEW PDF \/\/ 0.0 MiB/); assert.doesNotMatch(text,/private/);
   context.appState.resourceProfile=null; context.renderResourceSummary();
-  assert.match(nodes.get('resource-summary').children[0].textContent,/NO TERMINAL MEASUREMENT/);
+  assert.match(nodes.get('resource-summary').children[0].textContent,/NO MEASUREMENTS YET/);
 });
 
 test('unsuccessful scheduled measurement never claims ready-by delivery', () => {
@@ -404,7 +404,8 @@ test('newsletter-only references retain coverage and lineage even without public
   assert.match(texts,/9 EXTRACTED RECORDS/);
   assert.match(texts,/2 DUPLICATES MERGED/);
   assert.match(texts,/COUNTS ARE NOT A GUARANTEE/);
-  assert.match(texts,/Newsletter evidence can still support/);
+  assert.match(texts,/No public article links available/);
+  assert.doesNotMatch(texts,/CONTENT-SIZED; NO MINIMUM DURATION/);
 });
 
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {

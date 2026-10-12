@@ -37,5 +37,5 @@ it. It checks lazy loading, decoding, looping, view/offscreen pauses, reduced
 motion, session locking, fallback and bounded layout.
 
 Browser-engine checks are not a physical iPhone/PWA test or full accessibility
-certification. The textual HOME steps and caption explain the same process
+certification. The textual HOME steps explain the same process
 without requiring motion or sound.

@@ -25,6 +25,30 @@ def temporary_test_directory():
 
 
 class WebAppSecurityTests(TestCase):
+    def test_end_user_copy_is_concise_without_hiding_privacy_or_action_constraints(self):
+        page = Path("web/index.html").read_text(encoding="utf-8")
+        source = Path("web/app.js").read_text(encoding="utf-8")
+        for phrase in (
+            "A short illustration", "skips newspaper writing, review and rendering",
+            "Scale sets the Read-edition article range", "V4 WEB FOUNDATION",
+            "Same approved edition", "no test episode is needed",
+            "Transcript will appear for newly synchronized episodes",
+            "CONTENT-SIZED; NO MINIMUM DURATION",
+        ):
+            self.assertNotIn(phrase, page + source)
+        for phrase in (
+            "anyone with a link can open it", "covers the mailbox",
+            "Google's Antigravity", "private GitHub runner",
+            "Sign-out clears this console, not downloaded copies",
+            "Schedules keep running", "after sign-out (settings only)",
+            "15 minutes idle or one hour after sign-in",
+            "Up to 10 sections, plus optional TIH", "TIH requires web research",
+            "Keyboard: Alt + Left or Right", "Automatically published to your feed",
+        ):
+            self.assertIn(phrase, page)
+        self.assertIn("Retry with WAKE RUNNER—not GENERATE", source)
+        self.assertIn("Pages only; readable text unavailable", source)
+
     def test_accessible_section_controls_share_labels_and_updated_static_shell(self):
         page = Path("web/index.html").read_text(encoding="utf-8")
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -38,9 +62,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.23', page)
-        self.assertIn('/styles.css?v=4.1.23', page)
-        self.assertIn('tdn-shell-v4-53', worker)
+        self.assertIn('/app.js?v=4.1.24', page)
+        self.assertIn('/styles.css?v=4.1.24', page)
+        self.assertIn('tdn-shell-v4-54', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -104,7 +128,8 @@ class WebAppSecurityTests(TestCase):
         self.assertIn('data-view="home"', page)
         self.assertNotIn('id="home-tour-pause"', page)
         self.assertNotIn('id="home-tour-replay"', page)
-        self.assertIn('A short illustration, not a live generation.', page)
+        self.assertNotIn('A short illustration', page)
+        self.assertIn('class="home-steps"', page)
         self.assertIn('select:not([multiple])', source)
         self.assertIn('syncCompactSelects(chapters)', source)
         self.assertIn(

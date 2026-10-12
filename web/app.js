@@ -167,12 +167,12 @@ function clearPrivateInterface() {
   byId("edition-list").replaceChildren();
   byId("schedule-count").textContent = "0";
   byId("queue-count").textContent = "0 QUEUED";
-  byId("monitor-scope").textContent = "LATEST 100 REQUEST WINDOW";
+  byId("monitor-scope").textContent = "LATEST 100 REQUESTS";
   for (const id of ["monitor-date-filter", "monitor-status-filter", "monitor-query-filter"]) byId(id).value = "";
   byId("monitor-sort-filter").value = "newest";
   byId("runner-status").textContent = "RUNNER STATUS UNKNOWN";
   byId("runner-status").parentElement.classList.remove("running", "error");
-  byId("runner-detail").textContent = "Awaiting the private cloud runner status.";
+  byId("runner-detail").textContent = "Runner status unavailable.";
   appState.runRequests = [];
   appState.runRequestRows = new Map();
   appState.wakeStates = new Map();
@@ -200,7 +200,7 @@ function showAuth() {
   clearPrivateInterface();
   appShell.hidden = true;
   authScreen.hidden = false;
-  setAuthStatus("Sign in to open your console. Automatic lock: 15 minutes idle or one hour after sign-in.");
+  setAuthStatus("Auto sign-out: 15 minutes idle or one hour after sign-in.");
 }
 
 function clearPrivateForms() {
@@ -738,8 +738,8 @@ function changeFavoriteStorage() {
     if (old !== target) old.removeItem(key);
     appState.rememberFavorites = remember;
     showAlert(remember
-      ? "Favorites will remain on this device after sign-out. No passwords or tokens are stored with them."
-      : "Favorites are now session-only and will be removed when you sign out.");
+      ? "Favorites will stay on this device after sign-out."
+      : "Favorites will be removed at sign-out.");
   } catch {
     byId("remember-favorites").checked = previous;
     showAlert("Favorite storage could not be changed. Your existing favorites were kept.", true);
@@ -858,7 +858,7 @@ function saveFavoriteProfile() {
     renderProfiles();
     byId("profile-picker").value = name;
     syncFavoriteActions();
-    showAlert(appState.rememberFavorites ? "Favorite saved on this device for this owner." : "Favorite saved for this console session only.");
+    showAlert(appState.rememberFavorites ? "Favorite saved on this device." : "Favorite saved for this session.");
   } catch (error) {
     showAlert(error.message || "Favorite could not be saved.", true);
   }
@@ -1331,7 +1331,7 @@ async function saveSchedule(event) {
       !clockSynchronized
         ? "Schedule saved, but the cloud clock needs attention. It will not run until synchronization succeeds."
         : cloudClockEndpoint()
-          ? "Schedule saved and synchronized to the private cloud clock."
+          ? "Schedule saved."
           : "Schedule saved. Configure Cloud Clock before it can run.",
     );
   } catch (error) {
@@ -1358,7 +1358,7 @@ async function removeSchedule(scheduleId) {
     }
     showAlert(
       clockSynchronized
-        ? "Schedule deleted and removed from the private cloud clock."
+        ? "Schedule deleted."
         : "Schedule deleted. The cloud clock still needs synchronization; reload the app after checking its status.",
       !clockSynchronized,
     );
@@ -1425,14 +1425,14 @@ async function requestRunnerWake(requestId) {
     const confirmed = ["dispatched", "already-requested"].includes(wake?.status);
     appState.wakeStates.set(requestId, confirmed ? "confirmed" : "unconfirmed");
     showAlert(wake?.status === "dispatched"
-      ? "Request saved. Runner wake accepted; generation starts when GitHub assigns a runner."
+      ? "Queued. Waiting for the runner to start."
       : wake?.status === "already-requested"
-        ? "Request saved. A recent wake was accepted; this does not confirm the runner has started."
-        : "Request saved, but wake is not confirmed. Check Cloud Clock, then use WAKE RUNNER on this queued item—not GENERATE again.", !confirmed);
+        ? "Queued. A runner wake was already accepted; waiting for it to start."
+        : "Queued, but runner wake is unconfirmed. Check Cloud Clock and retry with WAKE RUNNER—not GENERATE.", !confirmed);
   } catch (_error) {
     if (!appState.authorized || appState.authEpoch !== epoch) return;
     appState.wakeStates.set(requestId, "unconfirmed");
-    showAlert("Request saved, but wake is not confirmed. Use WAKE RUNNER on the queued item to retry without creating another episode.", true);
+    showAlert("Queued, but runner wake is unconfirmed. Retry with WAKE RUNNER—not GENERATE.", true);
   } finally {
     if (epoch === appState.authEpoch) {
       if (appState.wakePromise === pending) appState.wakePromise = null;
@@ -1503,7 +1503,7 @@ function updateRunnerDetail() {
   const detail = byId("runner-detail");
   const data = appState.runner;
   if (!data) {
-    detail.textContent = "Awaiting the private cloud runner status.";
+    detail.textContent = "Runner status unavailable.";
     return;
   }
   const state = String(data.state || "unknown").toLowerCase();
@@ -1530,12 +1530,12 @@ function updateRunnerDetail() {
     return;
   }
   if (state === "error") {
-    detail.textContent = `LAST RUN NEEDS ATTENTION // ${data.detail || "Open a new request after reviewing the private run."}`;
+    detail.textContent = `LAST RUN NEEDS ATTENTION // ${data.detail || "Review the failed run."}`;
     return;
   }
   detail.textContent = [
     `LAST CLOUD CHECK ${timeText(data.checkedAt)}`,
-    data.detail || "Private runner ready.",
+    data.detail || "Ready.",
     appState.monitorRefreshedAt ? `VIEW REFRESHED ${timeText(appState.monitorRefreshedAt)}` : "",
   ].filter(Boolean).join(" // ");
 }
@@ -1559,7 +1559,7 @@ function renderResourceSummary() {
   const secondsText = value => durationText(value * 1000);
   if (appState.resourceReadUnavailable) add("RESOURCE REFRESH UNAVAILABLE // Previous measurements may be stale; runner and queue refresh are independent.");
   if (!profile) {
-    add("NO TERMINAL MEASUREMENT YET // Recorded after the next normal generation; no test episode is needed.");
+    add("NO MEASUREMENTS YET");
   } else {
     const total = metricNumber(profile.elapsed_seconds);
     const state = ["completed", "failed", "interrupted"].includes(profile.status) ? profile.status.toUpperCase() : "UNKNOWN";
@@ -1608,8 +1608,8 @@ function renderResourceSummary() {
       if (value !== null) add(`${label} // ${(value / (1024 * 1024)).toFixed(1)} MiB`);
     }
   }
-  add("ACCOUNT ACTIONS BALANCE // UNKNOWN. These are task measurements, not billed minutes or a verified monthly balance.");
-  add("HOSTING TOTAL STORAGE AND TRANSFER // UNKNOWN. Older releases and actual downloads are not included in file-size measurements. Check provider usage before assuming free-tier headroom.");
+  add("ACCOUNT ACTIONS BALANCE // UNKNOWN. Task times are not billed minutes.");
+  add("HOSTING TOTAL STORAGE AND TRANSFER // UNKNOWN. Check provider usage for free-tier limits.");
   for (const [label, url] of [["GitHub account usage", "https://github.com/settings/billing/usage"], ["Firebase usage console", "https://console.firebase.google.com/"]]) {
     const link = element("a", "item-meta", label);
     link.href = url; link.target = "_blank"; link.rel = "noopener noreferrer";
@@ -1824,7 +1824,7 @@ async function deleteRunRequest(requestId) {
     const batch = writeBatch(appState.db);
     batch.delete(doc(appState.db, "users", appState.user.uid, "runRequests", requestId));
     await batch.commit();
-    showAlert("Request removed from the process monitor.");
+    showAlert("Request deleted.");
   } catch (error) {
     showAlert(firebaseErrorMessage(error), true);
   }
@@ -2064,8 +2064,8 @@ function renderEpisodeArchives() {
     appState.episodes = [];
     play.className = "episode-list empty-state";
     read.className = "edition-list empty-state";
-    play.textContent = "No synchronized episodes are available yet.";
-    read.textContent = "No synchronized editions are available yet.";
+    play.textContent = "No episodes yet.";
+    read.textContent = "No newspapers yet.";
     return;
   }
   play.className = "episode-list";
@@ -2212,7 +2212,7 @@ async function refreshMonitor() {
     if (profile) renderResourceProfile(profile);
     else { appState.resourceReadUnavailable = true; renderResourceSummary(); }
     renderRunRequests(requests);
-    showAlert("Private runner status refreshed.");
+    showAlert("Status refreshed.");
   } catch (error) {
     showAlert(firebaseErrorMessage(error), true);
   } finally {
@@ -2335,7 +2335,7 @@ function renderPlayerDetails(mode = "references") {
   container.replaceChildren();
   if (!episode) {
     container.className = "player-details empty-state";
-    container.textContent = "Load an episode to view references.";
+    container.textContent = "Select an episode.";
     return;
   }
   container.className = "player-details";
@@ -2350,7 +2350,7 @@ function renderPlayerDetails(mode = "references") {
     const budget = episode.episodeBudget;
     if (budget && Number.isFinite(budget.selected_news_stories)) {
       container.append(element("p", "item-meta evidence-mix",
-        `AUDIO COVERAGE // ${budget.selected_news_stories} OF ${budget.available_stories} NEWS STORIES // ${budget.represented_newsletters} NEWSLETTERS REPRESENTED // CONTENT-SIZED; NO MINIMUM DURATION`));
+        `AUDIO COVERAGE // ${budget.selected_news_stories} OF ${budget.available_stories} NEWS STORIES // ${budget.represented_newsletters} NEWSLETTERS REPRESENTED`));
     }
     if (Number.isFinite(mix.extracted_story_records)) {
       container.append(element("p", "item-meta evidence-mix",
@@ -2358,7 +2358,7 @@ function renderPlayerDetails(mode = "references") {
     }
     if (!refs.length) {
       container.append(element("p", "empty-state",
-        "No public article links were provided. Newsletter evidence can still support this edition."));
+        "No public article links available."));
       return;
     }
     for (const reference of refs) {
@@ -2374,7 +2374,7 @@ function renderPlayerDetails(mode = "references") {
   }
   if (!episode.transcript.length) {
     container.className = "player-details empty-state";
-    container.textContent = "Transcript will appear for newly synchronized episodes.";
+    container.textContent = "No transcript available.";
     return;
   }
   for (const [index, segment] of episode.transcript.entries()) {
@@ -2599,8 +2599,8 @@ function renderEditionView(mode) {
   byId("edition-readable").setAttribute("aria-pressed", String(readable));
   byId("edition-facsimile").setAttribute("aria-pressed", String(!readable));
   byId("edition-reader-note").textContent = edition.reading
-    ? "Same approved edition: adaptable text or original pages."
-    : "This edition has original pages only. Readable text is included with newly published papers.";
+    ? ""
+    : "Pages only; readable text unavailable.";
   const readerToken = {};
   appState.readerToken = readerToken;
   if (readable) renderReadableEdition(edition.reading, pages);
@@ -2686,7 +2686,7 @@ function renderEditionPages(edition, pages, readerToken) {
     if (settled !== count) return;
     if (!loaded) {
       pages.className = "edition-pages empty-state";
-      pages.textContent = "The in-app preview is unavailable. Use OPEN PDF to read the original.";
+      pages.textContent = "Preview unavailable. Use OPEN PDF.";
     } else if (loaded < count && [1, 2, 3].includes(edition.pageCount)) {
       pages.append(element("p", "item-meta", "Some pages could not load. OPEN PDF contains the original edition."));
     }

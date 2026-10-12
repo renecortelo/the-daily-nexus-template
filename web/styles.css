@@ -1699,11 +1699,10 @@ select:not([multiple]) { padding-inline-end: 1.85rem; }
 .home-copy h2 { max-width: 20ch; margin-bottom: 0.8rem; }
 .home-copy p:not(.eyebrow) { max-width: 45ch; font-size: var(--font-body); color: var(--muted); line-height: 1.65; }
 .nexus-tour { margin: 0; }
+#edition-reader-note:empty { display: none; }
 .tour-display { background: var(--black); border-radius: 0.2rem; padding: 0.25rem; }
 .home-film { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 0.2rem; }
 .home-film[hidden] { display: none; }
-.tour-caption { margin: 0.55rem 0; text-align: center; font: var(--font-xs)/1.5 Consolas, monospace; color: var(--amber); }
-.nexus-tour figcaption { font-size: var(--font-sm); line-height: 1.5; color: var(--muted); }
 .home-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; padding: 0; margin: 1.25rem 0 0; list-style: none; }
 .home-steps li { border-top: 1px solid var(--line); padding-top: 0.6rem; }
 .home-steps span { color: var(--amber); font: var(--font-sm)/1.4 Consolas, monospace; }
