@@ -3039,9 +3039,11 @@ function syncHomeFilm() {
   const film = byId("home-film");
   const poster = byId("home-film-poster");
   if (!film || !poster) return;
+  const revision = appState.homeFilmRevision = (appState.homeFilmRevision || 0) + 1;
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches || appState.homeFilmFailed;
   const active = appState.authorized && !byId("app-shell").hidden
     && document.visibilityState !== "hidden"
+    && !appState.homeFilmPageHidden
     && byId("view-home").classList.contains("active")
     && appState.homeFilmInView !== false;
   if (!active || still) {
@@ -3056,10 +3058,18 @@ function syncHomeFilm() {
   film.muted = true;
   film.hidden = false;
   poster.hidden = true;
-  film.play()?.catch((error) => {
-    if (error?.name === "AbortError") return; // Navigation can cancel an in-flight play.
-    film.hidden = true;
-    poster.hidden = false; // Autoplay/network restrictions must not break the console.
+  // WebKit may suspend a video that is still being made visible. Let its
+  // presentation settle first; superseded callbacks must never restart it.
+  window.requestAnimationFrame(() => {
+    if (revision !== appState.homeFilmRevision) return;
+    window.requestAnimationFrame(() => {
+      if (revision !== appState.homeFilmRevision) return;
+      film.play()?.catch((error) => {
+        if (revision !== appState.homeFilmRevision || error?.name === "AbortError") return;
+        film.hidden = true;
+        poster.hidden = false; // Autoplay restrictions must not break the console.
+      });
+    });
   });
 }
 
@@ -3069,8 +3079,14 @@ function setupHomeFilm() {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   motion.addEventListener?.("change", syncHomeFilm);
   document.addEventListener("visibilitychange", syncHomeFilm);
-  window.addEventListener("pagehide", () => film.pause());
-  window.addEventListener("pageshow", syncHomeFilm);
+  window.addEventListener("pagehide", () => {
+    appState.homeFilmPageHidden = true;
+    syncHomeFilm();
+  });
+  window.addEventListener("pageshow", () => {
+    appState.homeFilmPageHidden = false;
+    syncHomeFilm();
+  });
   film.addEventListener("error", () => {
     appState.homeFilmFailed = true;
     syncHomeFilm();

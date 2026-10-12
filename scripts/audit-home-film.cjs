@@ -43,8 +43,32 @@ const server=http.createServer((req,res)=>{
    await page.locator('#home-tour').screenshot({path:`tmp/home-film-audit/${safari?'webkit':'chromium'}-${width}-playing.png`});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
    await page.locator('#home-film').evaluate(el=>{el.currentTime=17.8;});await page.waitForFunction(()=>document.querySelector('#home-film').currentTime<1);
-   await page.evaluate(()=>scrollTo({top:1800,behavior:'instant'}));await page.waitForFunction(()=>document.querySelector('#home-film').paused);
-   await page.evaluate(()=>scrollTo({top:0,behavior:'instant'}));await page.waitForFunction(()=>!document.querySelector('#home-film').paused);
+   for (let cycle=0;cycle<5;cycle++) {
+    await page.evaluate(()=>scrollTo({top:1800,behavior:'instant'}));await page.waitForFunction(()=>document.querySelector('#home-film').paused);
+    const stoppedAt=await page.locator('#home-film').evaluate(el=>el.currentTime);
+    await page.evaluate(()=>scrollTo({top:0,behavior:'instant'}));
+    try {
+     await page.waitForFunction(at=>{
+      const v=document.querySelector('#home-film');return !v.paused && (v.currentTime>at+.05 || v.currentTime<at-.05);
+     },stoppedAt);
+    } catch (error) {
+     console.error(JSON.stringify(await page.evaluate(()=>{
+      const film=document.querySelector('#home-film'),rect=document.querySelector('#home-tour').getBoundingClientRect();
+      return {scrollY,viewport:innerHeight,top:rect.top,bottom:rect.bottom,inView:appState.homeFilmInView,
+       paused:film.paused,hidden:film.hidden,posterHidden:document.querySelector('#home-film-poster').hidden,
+       readyState:film.readyState,currentTime:film.currentTime,visibility:document.visibilityState};
+     })));
+     throw error;
+    }
+   }
+   await page.evaluate(()=>{
+    document.querySelector('[data-view="gen"]').click();document.querySelector('[data-view="home"]').click();
+    dispatchEvent(new Event('pagehide'));
+   });
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   assert.equal(await page.locator('#home-film').evaluate(el=>el.paused),true);
+   await page.evaluate(()=>dispatchEvent(new Event('pageshow')));
+   await page.waitForFunction(()=>!document.querySelector('#home-film').paused);
    await page.locator('[data-view="gen"]').click();assert.equal(await page.locator('#home-film').evaluate(el=>el.paused),true);
    await page.locator('[data-view="home"]').click();await page.waitForFunction(()=>!document.querySelector('#home-film').paused);
    await page.emulateMedia({reducedMotion:'reduce'});await page.waitForFunction(()=>document.querySelector('#home-film').paused&&document.querySelector('#home-film').hidden);

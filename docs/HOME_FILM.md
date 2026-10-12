@@ -23,6 +23,10 @@ footage, character asset, music or cloned actor voice is distributed.
 - WebP poster: identical aspect ratio prevents layout jumps.
 - The video source is assigned only for the visible, authorized HOME.
 - Navigation, sign-out, hidden tabs and an offscreen illustration stop playback.
+- Resume waits for two presentation frames after revealing the video, avoiding
+  an immediate hidden-to-playing race in WebKit. A revision guard cancels old
+  playback callbacks and ignores stale autoplay rejections. Page exit invalidates
+  pending playback; page restore re-evaluates the existing visibility gates.
 - Reduced-motion preferences and media/autoplay failures show the still poster.
 - No external player, tracking, paid API, new dependency or generation call.
 - Versioned public art uses normal Hosting/browser caching, not the service
@@ -40,7 +44,8 @@ The optional Playwright audits use synthetic fixtures with external networking
 blocked: `node scripts/audit-home-film.cjs`, its `--webkit` variant and
 `node scripts/audit-web-layout.cjs` (also with `--webkit`). The film audit serves
 only its fixture and two art assets on a temporary loopback server, then closes
-it. It checks lazy loading, decoding, looping, view/offscreen pauses, reduced
+it. It checks lazy loading, decoding, looping, five consecutive offscreen/resume
+cycles per viewport, page exit during pending resume, view pauses, reduced
 motion, session locking, fallback and bounded layout.
 
 Browser-engine checks are not a physical iPhone/PWA test or full accessibility

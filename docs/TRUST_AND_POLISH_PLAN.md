@@ -673,6 +673,14 @@ There is no audio track or connection to podcast controls. Both publishing paths
 allowlist the same assets. See `HOME_FILM.md` for the scope, cost and QA limits.
 This release does not change generation, schedules, retry limits or billing.
 
+HOME lifecycle hardening (4.1.28 / cache v4-58): defer silent-video resume until
+its visible presentation has settled. Cancel superseded requests, ignore stale
+autoplay failures, and prevent pending callbacks from playing after page exit.
+Synthetic WebKit and Chromium checks exercise repeated offscreen returns and
+page restore. This addresses reproducible asynchronous lifecycle defects;
+physical iPhone/PWA confirmation remains open. Podcast controls, illustration
+assets, provider settings, schedules and generation budgets are unchanged.
+
 1. Review the diff and add focused regressions.
 2. Run Python, browser-behavior, clock, lint and syntax checks locally.
 3. Export only approved source/docs/tests to the public template, retaining its

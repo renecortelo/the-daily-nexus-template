@@ -1133,6 +1133,7 @@ function filmHarness() {
   ctx.byId('view-home').classList.contains=()=>true;
   ctx.document.visibilityState='visible';ctx.document.addEventListener=(event,fn)=>{ctx.document[event]=fn;};
   ctx.window.addEventListener=(event,fn)=>{ctx.window[event]=fn;};
+  ctx.window.requestAnimationFrame=fn=>fn();
   return {...h,film,poster:ctx.byId('home-film-poster')};
 }
 
@@ -1174,6 +1175,30 @@ test('film lifecycle follows viewport, visibility, page restore, and preference 
   c.document.visibilityState='visible';c.document.visibilitychange();assert.equal(film.paused,false);
   c.window.matchMedia=()=>({matches:true});changed();assert.equal(poster.hidden,false);assert.equal(film.paused,true);
   film.error();assert.equal(c.appState.homeFilmFailed,true);
+});
+
+test('film resumes after presentation settles and cancels pending work on pagehide', () => {
+  const {context:c,film}=filmHarness();const frames=[];
+  c.window.requestAnimationFrame=fn=>frames.push(fn);
+  const flush=()=>{while(frames.length)frames.shift()();};
+  c.setupHomeFilm();assert.equal(film.plays,undefined);
+  assert.equal(film.hidden,false);frames.shift()();assert.equal(film.plays,undefined);
+  c.window.pagehide();flush();assert.equal(film.plays,undefined);assert.equal(film.paused,true);
+  c.window.pageshow();flush();assert.equal(film.plays,1);
+  c.syncHomeFilm();c.appState.authorized=false;c.syncHomeFilm();flush();
+  assert.equal(film.plays,1);assert.equal(film.paused,true);
+  c.appState.authorized=true;c.syncHomeFilm();c.syncHomeFilm();flush();
+  assert.equal(film.plays,2,'Only the latest visibility update may start playback');
+});
+
+test('an old autoplay rejection cannot hide a newer playback or reduced-motion state', async () => {
+  const {context:c,film,poster}=filmHarness();let rejectOld;
+  film.play=()=>new Promise((_resolve,reject)=>{rejectOld=reject;});c.syncHomeFilm();
+  film.play=()=>Promise.resolve();c.syncHomeFilm();
+  rejectOld({name:'NotAllowedError'});await Promise.resolve();
+  assert.equal(film.hidden,false);assert.equal(poster.hidden,true);
+  c.window.matchMedia=()=>({matches:true});c.syncHomeFilm();
+  assert.equal(film.hidden,true);assert.equal(poster.hidden,false);
 });
 
 test('both progress controls announce time and paused compact playback offers Resume', () => {
