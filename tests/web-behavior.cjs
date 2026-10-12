@@ -1117,7 +1117,7 @@ test('home film is original local media, lazy and silent, with no external playe
   assert.equal(source.includes('setupHomeFilm'),true);
   assert.equal((page.match(/id="home-film"/g)||[]).length,1);
   assert.match(page,/preload="none" autoplay muted loop playsinline/);
-  assert.match(page,/data-src="\/assets\/nexus-editor-film-v2.mp4"/);
+  assert.match(page,/data-src="\/assets\/nexus-editor-film-v3.mp4"/);
   assert.equal(page.includes('class="agent-workshop"'),false);
   assert.equal(page.includes('tour-scene'),false);
   assert.match(styles,/aspect-ratio: 16 \/ 9/);
@@ -1127,7 +1127,7 @@ test('home film is original local media, lazy and silent, with no external playe
 
 function filmHarness() {
   const h=harness(['syncHomeFilm','setupHomeFilm']);const ctx=h.context;
-  const film=ctx.byId('home-film');film.dataset={src:'/assets/nexus-editor-film-v2.mp4'};
+  const film=ctx.byId('home-film');film.dataset={src:'/assets/nexus-editor-film-v3.mp4'};
   film.getAttribute=key=>film.attributes[key];film.play=()=>{film.plays=(film.plays||0)+1;film.paused=false;return Promise.resolve();};
   film.pause=()=>{film.pauses=(film.pauses||0)+1;film.paused=true;};
   ctx.byId('view-home').classList.contains=()=>true;

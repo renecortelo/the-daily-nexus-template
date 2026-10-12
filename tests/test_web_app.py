@@ -62,9 +62,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.25', page)
-        self.assertIn('/styles.css?v=4.1.25', page)
-        self.assertIn('tdn-shell-v4-55', worker)
+        self.assertIn('/app.js?v=4.1.26', page)
+        self.assertIn('/styles.css?v=4.1.26', page)
+        self.assertIn('tdn-shell-v4-56', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")
@@ -143,7 +143,7 @@ class WebAppSecurityTests(TestCase):
         self.assertNotIn('youtube.com', page)
         self.assertEqual(1, page.count('id="home-film"'))
         self.assertIn('preload="none" autoplay muted loop playsinline', page)
-        self.assertIn('data-src="/assets/nexus-editor-film-v2.mp4"', page)
+        self.assertIn('data-src="/assets/nexus-editor-film-v3.mp4"', page)
         self.assertNotIn('class="agent-workshop"', page)
         self.assertNotIn('tour-scene', page)
         self.assertIn('prefers-reduced-motion: reduce', source)
@@ -309,7 +309,7 @@ class WebAppSecurityTests(TestCase):
                 (project / "web" / filename).write_text(filename, encoding="utf-8")
             (project / "web" / "private.txt").write_text("do not copy", encoding="utf-8")
             for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
-                             "nexus-editor-film-v2.mp4", "nexus-editor-poster-v2.webp"):
+                             "nexus-editor-film-v3.mp4", "nexus-editor-poster-v3.webp"):
                 (project / "assets" / filename).write_bytes(b"image")
 
             _copy_static_web_app(project, public)
@@ -318,8 +318,8 @@ class WebAppSecurityTests(TestCase):
             self.assertTrue((public / "cloud-clock-config.js").is_file())
             self.assertTrue((public / "assets" / "tdn-icon.png").is_file())
             self.assertTrue((public / "assets" / "tdn-icon-transparent.png").is_file())
-            self.assertTrue((public / "assets" / "nexus-editor-film-v2.mp4").is_file())
-            self.assertTrue((public / "assets" / "nexus-editor-poster-v2.webp").is_file())
+            self.assertTrue((public / "assets" / "nexus-editor-film-v3.mp4").is_file())
+            self.assertTrue((public / "assets" / "nexus-editor-poster-v3.webp").is_file())
             self.assertFalse((public / "private.txt").exists())
 
     def test_publisher_writes_cloud_clock_endpoint_only_from_environment(self):
@@ -334,7 +334,7 @@ class WebAppSecurityTests(TestCase):
             ):
                 (project / "web" / filename).write_text(filename, encoding="utf-8")
             for filename in ("tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
-                             "nexus-editor-film-v2.mp4", "nexus-editor-poster-v2.webp"):
+                             "nexus-editor-film-v3.mp4", "nexus-editor-poster-v3.webp"):
                 (project / "assets" / filename).write_bytes(b"image")
             with patch.dict(
                 os.environ,

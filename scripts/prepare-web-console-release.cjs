@@ -12,7 +12,7 @@ const WEB_FILES = [
   "service-worker.js",
 ];
 const ASSET_FILES = ["tdn-icon.png", "tdn-icon-transparent.png", "google-g.png",
-  "nexus-editor-film-v2.mp4", "nexus-editor-poster-v2.webp"];
+  "nexus-editor-film-v3.mp4", "nexus-editor-poster-v3.webp"];
 
 function fail(message) {
   throw new Error(message);

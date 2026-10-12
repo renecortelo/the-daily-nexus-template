@@ -1,22 +1,25 @@
 # HOME editorial workshop
 
-HOME uses a silent, original 16-second cartoon illustration of the editorial
+HOME uses a silent, original 18-second cartoon illustration of the editorial
 agent's work: select newsletters, inspect evidence, write a brief and prepare
 a podcast with an optional, separately written newspaper. This is explanatory
 art, not live progress or a claim of perfect fact-checking.
 
-The piece is limited cel animation assembled from 16 generated acting poses
-and a painted workshop, not a fully in-betweened theatrical film. Its original
-sun character uses the app's warm retro-futurist palette. It receives mail from
-the left with matching gaze and hands, reviews sources, types a brief, moves to
-the microphone and presents both a podcast and an optional paper. The recording
-signal and finished audio are shown explicitly, not just the newspaper.
+The piece is limited cel animation assembled from original generated acting
+poses, a painted workshop and a movable recording table, not a fully
+in-betweened theatrical film. Its sun character uses the app's warm
+retro-futurist palette. It receives three envelopes from the left with matching
+gaze and hands. Accepted mail remains visible, unfolds into source pages and is
+compared together with a magnifier before typing. The agent holds a rolled
+newspaper, throws it, pulls a microphone table toward the center, puts on
+headphones and speaks with changing expressions and an animated audio signal.
+One short ribbon title enters and exits per beat, without descriptive subtitles.
 No third-party film
 footage, character asset, music or cloned actor voice is distributed.
 
 ## Playback and cost
 
-- H.264 MP4: 1280×720, 16 seconds, 24 frames/s, no audio track.
+- H.264 MP4: 1280×720, 18 seconds, 24 frames/s, no audio track.
 - WebP poster: identical aspect ratio prevents layout jumps.
 - The video source is assigned only for the visible, authorized HOME.
 - Navigation, sign-out, hidden tabs and an offscreen illustration stop playback.
