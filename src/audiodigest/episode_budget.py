@@ -11,6 +11,33 @@ from audiodigest.models import Story
 MAX_EPISODE_SECONDS = 30 * 60
 
 
+def newsletter_coverage(
+    stories: list[Story], newsletter_ids: list[str], selected_ids: tuple[str, ...],
+) -> dict[str, int]:
+    """Count retained news sources, not quality or inferred omission reasons.
+
+    Shared sources count once. TIH, research and unknown IDs cannot inflate the
+    newsletter totals. No identifiers or source text leave this function.
+    """
+    sources = set(newsletter_ids)
+    selected = set(selected_ids)
+    extracted_sources: set[str] = set()
+    audio_sources: set[str] = set()
+    for story in stories:
+        if story.section == Section.TODAY_IN_HISTORY:
+            continue
+        contributing = sources.intersection(story.source_ids)
+        extracted_sources.update(contributing)
+        if story.story_id in selected:
+            audio_sources.update(contributing)
+    return {
+        "newsletters_with_extracted_news": len(extracted_sources),
+        "newsletters_without_extracted_news": len(sources - extracted_sources),
+        "newsletters_in_audio": len(audio_sources),
+        "newsletters_outside_audio": len(extracted_sources - audio_sources),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class EpisodeBudget:
     newsletter_count: int

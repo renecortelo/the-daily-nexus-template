@@ -169,6 +169,10 @@ class WebSchedulerTests(TestCase):
                             "omitted_news_stories": 1,
                             "unrepresented_newsletters": 1,
                             "source_passages_cited": 8,
+                            "newsletters_with_extracted_news": 2,
+                            "newsletters_without_extracted_news": 1,
+                            "newsletters_in_audio": 1,
+                            "newsletters_outside_audio": 1,
                             "source_ids": ["synthetic-mailbox-id"],
                             "evidence": [{"excerpt": "Synthetic original reporting."}],
                         },
@@ -215,9 +219,45 @@ class WebSchedulerTests(TestCase):
             self.assertEqual(9, metadata["sourceMix"]["extracted_story_records"])
             self.assertEqual(2, metadata["sourceMix"]["duplicate_story_records"])
             self.assertEqual(1, metadata["sourceMix"]["omitted_news_stories"])
+            for key, value in {
+                "newsletters_with_extracted_news": 2, "newsletters_without_extracted_news": 1,
+                "newsletters_in_audio": 1, "newsletters_outside_audio": 1,
+            }.items():
+                self.assertEqual(value, metadata["sourceMix"][key])
             self.assertNotIn("source_ids", metadata["sourceMix"])
             self.assertNotIn("evidence", json.dumps(metadata, default=str))
             self.assertNotIn("Synthetic original reporting.", json.dumps(metadata, default=str))
+
+    def test_newsletter_coverage_metadata_accepts_only_bounded_integer_counts(self):
+        keys = (
+            "newsletters_with_extracted_news", "newsletters_without_extracted_news",
+            "newsletters_in_audio", "newsletters_outside_audio",
+        )
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            manifest = root / "manifest.json"
+            transcript = root / "transcript.json"
+            transcript.write_text('{"segments": []}', encoding="utf-8")
+
+            class Database:
+                def episode_for_date(self, _day):
+                    return {
+                        "status": "staged", "title": "Synthetic edition", "guid": "synthetic",
+                        "duration_seconds": 300, "manifest_path": str(manifest), "show_notes": [],
+                    }
+
+            for value in (True, -1, 0.5, float("inf"), "synthetic-private-text", 10**9 + 1):
+                with self.subTest(value_type=type(value).__name__):
+                    manifest.write_text(json.dumps({
+                        "transcript_path": str(transcript),
+                        "source_mix": {"mode": "newsletter_first", **dict.fromkeys(keys, value)},
+                    }), encoding="utf-8")
+                    _, metadata = _published_metadata(
+                        self._settings(root), Database(), episode_date=date(2026, 10, 7),
+                        execution_id="synthetic", publication_label="Example",
+                        publication_sequence=1,
+                    )
+                    self.assertEqual({"mode": "newsletter_first"}, metadata["sourceMix"])
 
     def test_post_publication_archive_failure_never_marks_generation_failed(self):
         class Client(_FakeWebClient):

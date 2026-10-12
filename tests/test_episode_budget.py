@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest import TestCase
 
-from audiodigest.episode_budget import MAX_EPISODE_SECONDS, plan_episode
+from audiodigest.episode_budget import MAX_EPISODE_SECONDS, newsletter_coverage, plan_episode
 from audiodigest.models import Story
 
 
@@ -23,6 +23,57 @@ def news(index, source, *, facts=8, section="AI", rank=10):
 
 class EpisodeBudgetTests(TestCase):
     app = SimpleNamespace(target_min_words=2850, target_max_words=3800)
+
+    def test_coverage_separates_extraction_gap_from_audio_selection(self):
+        stories = [news(1, "mail-a"), news(2, "mail-b")]
+        result = newsletter_coverage(stories, ["mail-a", "mail-b", "mail-c"], ("story-1",))
+        self.assertEqual({
+            "newsletters_with_extracted_news": 2,
+            "newsletters_without_extracted_news": 1,
+            "newsletters_in_audio": 1,
+            "newsletters_outside_audio": 1,
+        }, result)
+        self.assertNotIn("mail-", str(result))
+
+    def test_coverage_preserves_shared_sources_without_double_counting(self):
+        merged = news(1, "mail-a")
+        merged.source_ids = ["mail-a", "mail-b", "mail-b", "research"]
+        stories = [merged, news(2, "mail-a")]
+        result = newsletter_coverage(stories, ["mail-a", "mail-b", "mail-b"], ("story-1",))
+        self.assertEqual(2, result["newsletters_with_extracted_news"])
+        self.assertEqual(2, result["newsletters_in_audio"])
+        self.assertEqual(0, result["newsletters_without_extracted_news"])
+        self.assertEqual(0, result["newsletters_outside_audio"])
+
+    def test_tih_and_unknown_sources_do_not_masquerade_as_news_coverage(self):
+        stories = [news(1, "mail-a", section="TIH: Today in History"), news(2, "research")]
+        result = newsletter_coverage(stories, ["mail-a"], ("story-1", "story-2", "unknown"))
+        self.assertEqual(0, result["newsletters_with_extracted_news"])
+        self.assertEqual(1, result["newsletters_without_extracted_news"])
+        self.assertEqual(0, result["newsletters_in_audio"])
+        self.assertEqual(0, result["newsletters_outside_audio"])
+
+    def test_zero_counts_remain_explicit_without_inferred_omission_reason(self):
+        self.assertEqual({
+            "newsletters_with_extracted_news": 0, "newsletters_without_extracted_news": 0,
+            "newsletters_in_audio": 0, "newsletters_outside_audio": 0,
+        }, newsletter_coverage([], [], ()))
+        result = newsletter_coverage([], ["mail-a"], ())
+        self.assertEqual(1, result["newsletters_without_extracted_news"])
+        self.assertEqual(0, result["newsletters_outside_audio"])
+
+    def test_coverage_matches_budget_with_more_sources_than_shortlist_slots(self):
+        stories = [news(i, f"mail-{i}") for i in range(40)]
+        sources = [f"mail-{i}" for i in range(42)]
+        budget = plan_episode(stories, self.app, sources)
+        result = newsletter_coverage(stories, sources, budget.selected_ids)
+        self.assertEqual(budget.represented_newsletters, result["newsletters_in_audio"])
+        self.assertGreater(result["newsletters_outside_audio"], 0)
+        self.assertEqual(2, result["newsletters_without_extracted_news"])
+        self.assertEqual(len(sources), sum(result[key] for key in (
+            "newsletters_without_extracted_news", "newsletters_in_audio",
+            "newsletters_outside_audio",
+        )))
 
     def test_newsletter_bands_are_ceilings_not_minimum_durations(self):
         for count, ceiling in [(1, 600), (3, 1300), (7, 2200), (15, 3000), (25, 3400)]:

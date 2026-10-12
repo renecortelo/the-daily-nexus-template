@@ -280,7 +280,7 @@ test('Media Session uses the same guarded finite seek and transport actions as b
 });
 
 test('resource visibility distinguishes measurements, forecasts and unknown account balances', () => {
-  const {context,nodes}=harness(['metricNumber','renderResourceSummary']);
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
   context.timestampText=()=> 'A TIME'; context.durationText=value=>`${value/1000}s`;
   context.appState.schedules=new Map([['synthetic',{enabled:true,weekdays:[0,1,2,3,4,5,6]}]]);
   context.appState.resourceProfile={status:'completed',elapsed_seconds:600,at:'2026-10-09T05:00:00Z',
@@ -297,7 +297,7 @@ test('resource visibility distinguishes measurements, forecasts and unknown acco
 });
 
 test('unsuccessful scheduled measurement never claims ready-by delivery', () => {
-  const {context,nodes}=harness(['metricNumber','renderResourceSummary']);
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
   context.timestampText=()=> 'A TIME'; context.durationText=()=> 'A DURATION';
   context.appState.resourceProfile={status:'failed',elapsed_seconds:400,ready_by_at:'2026-10-09T04:00:00Z',
     measurements:{ready_by_late_seconds:0},recent:[{status:'failed',elapsed_seconds:400}]};
@@ -391,12 +391,14 @@ test('historic references hide personalized parameters and reject credential-bea
 });
 
 test('newsletter-only references retain coverage and lineage even without public URLs', () => {
-  const {context,nodes}=harness(['renderPlayerDetails','minimizeReferenceURL','safeReference']);
+  const {context,nodes}=harness(['renderPlayerDetails','newsletterCoverageSummary','minimizeReferenceURL','safeReference']);
   context.element=(tag,className,text)=>({tag,className,textContent:text});
   context.appState.activeEpisode={references:[],sourceMix:{
     mode:'newsletter_only',newsletter_messages:3,newsletter_backed_stories:7,
     extracted_story_records:9,duplicate_story_records:2,omitted_news_stories:1,
     source_passages_cited:6,
+    newsletters_with_extracted_news:2,newsletters_without_extracted_news:1,
+    newsletters_in_audio:1,newsletters_outside_audio:1,
   },episodeBudget:{selected_news_stories:6,available_stories:7,represented_newsletters:3}};
   context.renderPlayerDetails('references');
   const texts=nodes.get('player-details').children.map(item=>item.textContent).join('\n');
@@ -404,8 +406,54 @@ test('newsletter-only references retain coverage and lineage even without public
   assert.match(texts,/9 EXTRACTED RECORDS/);
   assert.match(texts,/2 DUPLICATES MERGED/);
   assert.match(texts,/COUNTS ARE NOT A GUARANTEE/);
+  assert.match(texts,/2 WITH NEWS \/\/ 1 WITHOUT RETAINED NEWS \/\/ 1 IN AUDIO/);
+  assert.match(texts,/1 WITH NEWS OUTSIDE AUDIO/);
   assert.match(texts,/No public article links available/);
   assert.doesNotMatch(texts,/CONTENT-SIZED; NO MINIMUM DURATION/);
+});
+
+test('coverage summary is numeric, balanced, zero-aware and absent for legacy records', () => {
+  const {context}=harness(['newsletterCoverageSummary']);
+  const data={newsletters_with_extracted_news:0,newsletters_without_extracted_news:3,
+    newsletters_in_audio:0,newsletters_outside_audio:0,source_ids:['private'],excerpt:'private'};
+  assert.match(context.newsletterCoverageSummary(data),/0 WITH NEWS \/\/ 3 WITHOUT RETAINED NEWS/);
+  assert.doesNotMatch(context.newsletterCoverageSummary(data),/private/);
+  assert.match(context.newsletterCoverageSummary({newsletters_with_extracted_news:0,
+    newsletters_without_extracted_news:3}),/3 WITHOUT RETAINED NEWS \/\/ AUDIO SELECTION NOT MEASURED/);
+  for (const value of [null,undefined,{},[],{...data,newsletters_in_audio:1},
+    {...data,newsletters_without_extracted_news:'3'}, {...data,newsletters_without_extracted_news:true},
+    {...data,newsletters_without_extracted_news:-1}, {...data,newsletters_without_extracted_news:Infinity},
+    {...data,newsletters_without_extracted_news:0.5}, {...data,newsletters_without_extracted_news:1e10}]) {
+    assert.equal(context.newsletterCoverageSummary(value),'');
+  }
+});
+
+test('completed profiles keep coverage visible without private source fields', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'A TIME';context.durationText=()=> 'A DURATION';
+  context.appState.schedules=new Map();
+  context.appState.resourceProfile={status:'completed',elapsed_seconds:600,counters:{
+    newsletters_with_extracted_news:2,newsletters_without_extracted_news:1,
+    newsletters_in_audio:1,newsletters_outside_audio:1,source_identity:'private',
+  }};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(child=>child.textContent).join('\n');
+  assert.match(text,/2 WITH NEWS \/\/ 1 WITHOUT RETAINED NEWS/);
+  assert.doesNotMatch(text,/private/);
+});
+
+test('running monitor shows the same bounded coverage summary', () => {
+  const {context,nodes}=harness(['newsletterCoverageSummary','updateRunnerDetail']);
+  context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.durationText=()=> 'A DURATION';
+  context.SESSION_MAX_MS=3600000;
+  context.runEstimateRange=()=>({low:60000,high:120000,observed:false});
+  context.appState.runner={state:'running',progress:{stage:3,label:'Extraction',counters:{
+    newsletters_with_extracted_news:2,newsletters_without_extracted_news:1,
+    newsletters_in_audio:2,newsletters_outside_audio:0,
+  }}};
+  context.updateRunnerDetail();
+  assert.match(nodes.get('runner-detail').textContent,/2 WITH NEWS \/\/ 1 WITHOUT RETAINED NEWS/);
+  assert.match(nodes.get('runner-detail').textContent,/0 WITH NEWS OUTSIDE AUDIO/);
 });
 
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {

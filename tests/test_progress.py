@@ -24,14 +24,18 @@ class ProgressTests(TestCase):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         reporter.start()
         try:
-            counts(extracted_records=9, merged_duplicates=2, omitted_stories=1)
+            counts(extracted_records=9, merged_duplicates=2, omitted_stories=1,
+                   newsletters_with_extracted_news=2, newsletters_without_extracted_news=1,
+                   newsletters_in_audio=1, newsletters_outside_audio=1)
             profile = reporter.finish("completed")
         finally:
             reporter.close()
         profile["counters"].update({"source_identity": "private-source", "mail_text": "private"})
         profile.update({"newsletter": "private", "source_ids": ["private-source"]})
         clean = safe_event(profile)
-        expected = {"extracted_records": 9, "merged_duplicates": 2, "omitted_stories": 1}
+        expected = {"extracted_records": 9, "merged_duplicates": 2, "omitted_stories": 1,
+                    "newsletters_with_extracted_news": 2, "newsletters_without_extracted_news": 1,
+                    "newsletters_in_audio": 1, "newsletters_outside_audio": 1}
         self.assertEqual(expected, {key: clean["counters"][key] for key in expected})
         destination = io.StringIO()
         with tempfile.TemporaryDirectory() as directory:
@@ -49,6 +53,8 @@ class ProgressTests(TestCase):
             with self.subTest(value_type=type(value).__name__):
                 profile["counters"] = {key: value for key in (
                     "extracted_records", "merged_duplicates", "omitted_stories",
+                    "newsletters_with_extracted_news", "newsletters_without_extracted_news",
+                    "newsletters_in_audio", "newsletters_outside_audio",
                 )}
                 self.assertEqual({}, safe_event(profile)["counters"])
 

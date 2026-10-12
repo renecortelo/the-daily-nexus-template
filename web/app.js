@@ -1521,6 +1521,7 @@ function updateRunnerDetail() {
         ? `VOICE ${data.progress.counters.voice_blocks || 0}/${data.progress.counters.voice_total}` : "",
       data.progress?.counters?.newsletters ? `NEWSLETTERS ${data.progress.counters.newsletters}` : "",
       data.progress?.counters?.selected_stories ? `SELECTED STORIES ${data.progress.counters.selected_stories}` : "",
+      newsletterCoverageSummary(data.progress?.counters),
       data.progress?.counters?.word_count ? `SCRIPT ${data.progress.counters.word_count} WORDS` : "",
       data.progress ? `LAST PROGRESS ${timeText(data.checkedAt)}` : "",
       data.progress?.failure_code ? `LAST VALIDATION ${data.progress.failure_code.replaceAll("_", " ").toUpperCase()}` : "",
@@ -1543,6 +1544,20 @@ function updateRunnerDetail() {
 function metricNumber(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1e12
     ? value : null;
+}
+
+function newsletterCoverageSummary(data) {
+  if (!data || typeof data !== "object") return "";
+  const values = ["newsletters_with_extracted_news", "newsletters_without_extracted_news",
+    "newsletters_in_audio", "newsletters_outside_audio"].map(key => data[key]);
+  const valid = value => Number.isInteger(value) && value >= 0 && value <= 1e9;
+  if (!values.slice(0, 2).every(valid)) return "";
+  const [withNews, withoutNews, inAudio, outsideAudio] = values;
+  const extraction = `NEWSLETTER SOURCES // ${withNews} WITH NEWS // ${withoutNews} WITHOUT RETAINED NEWS`;
+  if (inAudio === undefined && outsideAudio === undefined) return `${extraction} // AUDIO SELECTION NOT MEASURED`;
+  if (!values.slice(2).every(valid)) return "";
+  if (inAudio + outsideAudio !== withNews) return "";
+  return `${extraction} // ${inAudio} IN AUDIO // ${outsideAudio} WITH NEWS OUTSIDE AUDIO`;
 }
 
 function renderResourceProfile(snapshot) {
@@ -1569,6 +1584,8 @@ function renderResourceSummary() {
       publish_failure: "PUBLICATION FAILURE", interrupted: "INTERRUPTED", no_content: "NO APPROVED CONTENT",
       subprocess_timeout: "OPERATION TIMEOUT", other: "OTHER FAILURE", sync_pending: "PUBLISHED; METADATA SYNC PENDING" };
     if (Object.hasOwn(reasons, profile.reason)) add(`OUTCOME DETAIL // ${reasons[profile.reason]}`);
+    const coverage = newsletterCoverageSummary(profile.counters);
+    if (coverage) add(coverage);
     const measurements = profile.measurements || {};
     const labels = { start_delay_seconds: "START DELAY (INCLUDES SETUP)", setup_seconds: "JOB SETUP BEFORE GENERATION",
       job_observed_seconds: "JOB TIME OBSERVED SO FAR (EXCLUDES FINAL CLEANUP)", protected_remaining_seconds: "PROTECTED TIME LEFT AT FINISH" };
@@ -2348,6 +2365,8 @@ function renderPlayerDetails(mode = "references") {
       container.append(element("p", "item-meta evidence-mix", summary));
     }
     const budget = episode.episodeBudget;
+    const coverage = newsletterCoverageSummary(mix);
+    if (coverage) container.append(element("p", "item-meta evidence-mix", coverage));
     if (budget && Number.isFinite(budget.selected_news_stories)) {
       container.append(element("p", "item-meta evidence-mix",
         `AUDIO COVERAGE // ${budget.selected_news_stories} OF ${budget.available_stories} NEWS STORIES // ${budget.represented_newsletters} NEWSLETTERS REPRESENTED`));

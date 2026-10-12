@@ -20,6 +20,22 @@ fixtures and documentation.
   required script coverage. Merely citing an ID still does not prove useful coverage.
 - `source_passages_cited` describes retained evidence lineage, not a truth score
   or a count of sentences independently checked by a human.
+- `newsletters_with_extracted_news` counts distinct collected newsletter sources
+  supporting retained non-TIH news after consolidation. Its complement,
+  `newsletters_without_extracted_news`, has no retained news candidate; that is
+  not a claim of an empty email, blocked URL, irrelevance or factual rejection.
+- `newsletters_in_audio` counts distinct newsletter sources behind selected news.
+  `newsletters_outside_audio` counts sources with retained news but none in the
+  audio shortlist, not the number of stories excluded from it. A source counts
+  once even when several stories cite it. TIH, research and unknown IDs never
+  inflate these four counts.
+
+Extraction counts are available before a no-content failure; audio-selection
+counts appear only after planning. The monitor distinguishes unmeasured audio
+selection from measured zero. New editions retain these bounded numbers in
+owner-only metadata and show them in references. Older records remain unknown;
+missing counts are not silently reconstructed as zero. No model call or extra
+validation/repair pass is needed: the ledger uses validated source linkage.
 
 Protected progress profiles preserve numeric `extracted_records`,
 `merged_duplicates` and `omitted_stories` alongside the existing coverage counters.
@@ -55,7 +71,9 @@ Follow the pipeline in order instead of treating every gap as a Gmail failure:
    mapping. Do not guess missing identities from weak vocabulary overlap, fetch
    unrelated mailbox messages or persist originals in public diagnostics.
 
-If the original mapping is gone, report the uncertainty. A future improvement
+If the original mapping is gone, report the uncertainty. The numeric ledger
+distinguishes extraction from selection but cannot explain why the extractor
+retained no news from a particular source. A future improvement
 can explain source accounting in the existing extraction response, without an
 extra model pass or a requirement to manufacture a story from every message.
 Any declared omission reason still needs to be distinguished from source-proven

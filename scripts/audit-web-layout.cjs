@@ -24,7 +24,7 @@ function element(tag,cls,text){const el=document.createElement(tag);el.className
 const byId=id=>document.getElementById(id);
 const appState={authorized:true,activeEpisode:{transcript:[{text:'Data engineering and architecture',startMs:60000,isHeading:true},{text:'Cloud and software',startMs:120000,isHeading:true}]}};
 function syncHomeFilm(){} // Layout-only fixture; real video lifecycle has its own offline audit.
-${['syncCompactSelects','setupCompactSelects','setupCompactInputs','setupNavigation','renderPlayerChapters','syncHostControls','syncNewspaperControls','syncParameterControls'].map(extract).join('\n')}
+${['syncCompactSelects','setupCompactSelects','setupCompactInputs','setupNavigation','renderPlayerChapters','syncHostControls','syncNewspaperControls','syncParameterControls','newsletterCoverageSummary'].map(extract).join('\n')}
 setupCompactSelects();setupCompactInputs();setupNavigation();renderPlayerChapters();
 document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCount.value='1';form.elements.soloName.value='Dalia';syncParameterControls(form);});
 </script></body>`);
@@ -68,7 +68,11 @@ document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCo
     document.querySelector('#edition-pages').classList.remove('empty-state');
     document.querySelector('#edition-pages').innerHTML='<div class="edition-page" style="width:1200px;height:800px">Synthetic newspaper zoomed to 200%</div>';
     document.querySelector('#player-title').textContent='A long podcast title with a detailed edition name and publication sequence';
-    document.querySelector('#runner-detail').textContent='LAST CLOUD CHECK 07:19:13 AM // No task is due.';
+    const coverage=newsletterCoverageSummary({newsletters_with_extracted_news:123,
+     newsletters_without_extracted_news:12,newsletters_in_audio:100,newsletters_outside_audio:23});
+    document.querySelector('#runner-detail').textContent='RUNNING // EXTRACTING STORIES // '+coverage;
+    document.querySelector('#player-details').append(element('p','item-meta evidence-mix',coverage));
+    document.querySelector('#resource-summary').append(element('p','item-meta',coverage));
     const requests=document.querySelector('#run-request-list');requests.classList.remove('empty-state');requests.replaceChildren();
     for(let i=0;i<6;i++){
      const row=document.createElement('article');row.className='request-item';

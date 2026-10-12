@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 from collections import Counter
@@ -25,6 +26,7 @@ from audiodigest.models import (
     VerificationResult,
 )
 from audiodigest.pipeline import (
+    NoContentError,
     Pipeline,
     VerificationError,
     _episode_guid,
@@ -35,6 +37,7 @@ from audiodigest.pipeline import (
     _remove_stale_preview_files,
     _write_progress_status,
 )
+from audiodigest.progress import ProgressReporter
 from audiodigest.publisher import PublishResult
 
 
@@ -493,6 +496,35 @@ class OptionalNewspaperTests(TestCase):
     def test_verified_podcast_can_publish_without_a_paper_end_to_end(self):
         self._assert_podcast_without_paper(include_newspaper=True)
 
+    def test_empty_extraction_reports_newsletter_gap_without_claiming_audio_selection(self):
+        sources = fixture_sources(Path("tests/fixtures/newsletters.json"))
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = load_settings("config.example.toml")
+            settings.app.runtime_dir = Path(name)
+            pipeline = Pipeline(settings)
+            pipeline._load_sources = Mock(return_value=sources)
+            pipeline._enrich_articles = Mock()
+            pipeline.editorial = Mock()
+            pipeline.editorial.extract_stories.return_value = ([], AntigravityMetadata())
+            reporter = ProgressReporter(interval=0, stream=io.StringIO())
+            reporter.start()
+            try:
+                with (
+                    patch("audiodigest.pipeline.run_cost_guard"),
+                    self.assertRaises(NoContentError),
+                ):
+                    pipeline.run(requested_date=date(2026, 8, 10))
+                counters = reporter.snapshot()["counters"]
+            finally:
+                reporter.close()
+            self.assertEqual(0, counters["newsletters_with_extracted_news"])
+            self.assertEqual(len(sources), counters["newsletters_without_extracted_news"])
+            self.assertNotIn("newsletters_in_audio", counters)
+            self.assertNotIn("newsletters_outside_audio", counters)
+            pipeline.editorial.extract_stories.assert_called_once()
+            pipeline.editorial.generate_script.assert_not_called()
+            pipeline.editorial.verify.assert_not_called()
+
     def test_newspaper_opt_out_publishes_podcast_without_paper_calls(self):
         self._assert_podcast_without_paper(include_newspaper=False)
 
@@ -576,6 +608,14 @@ class OptionalNewspaperTests(TestCase):
             self.assertEqual([], manifest["newspaper_preview_paths"])
             self.assertEqual("outside_target", manifest["audio_quality"]["status"])
             self.assertEqual(-17.2, manifest["audio_quality"]["integrated_lufs"])
+            mix = manifest["source_mix"]
+            self.assertEqual(1, mix["newsletters_with_extracted_news"])
+            self.assertEqual(len(sources) - 1, mix["newsletters_without_extracted_news"])
+            self.assertEqual(1, mix["newsletters_in_audio"])
+            self.assertEqual(0, mix["newsletters_outside_audio"])
+            pipeline.editorial.extract_stories.assert_called_once()
+            pipeline.editorial.generate_script.assert_called_once()
+            pipeline.editorial.verify.assert_called_once()
             renderer.return_value.render.assert_called_once()
             self.assertIsNone(
                 pipeline.database.episode_for_date(date(2026, 8, 10))["newspaper_path"]

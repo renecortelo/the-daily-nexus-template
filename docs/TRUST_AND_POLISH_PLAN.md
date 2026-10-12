@@ -119,6 +119,17 @@ and production adoption of these file controls remain open.
 
 ## 2. Original-source verification and source lineage
 
+Newsletter source accounting implemented on 2026-10-12: deterministic distinct-
+source counts separate retained news extraction from the audio shortlist. Empty
+extraction results still emit extraction counts before the existing no-content
+failure; selection remains unmeasured until planning. TIH, research, unknown
+identifiers and repeated citations do not inflate newsletter representation.
+The bounded progress stream, private metadata, monitor/resource profile and
+episode references preserve/show these numeric counts. Legacy records remain
+unknown rather than acquiring fictional zeros. No mail text, source identifier,
+omission reason, extra model call, retry, schedule or duration change is added.
+These counts diagnose the phase of a coverage gap, not its factual justification.
+
 Optional enrichment hardening implemented/tested on 2026-10-12: robots 404/410
 allow articles, 401/403 deny them, and network/rate-limit/server uncertainty skips
 only enrichment. Bounded public-HTTPS robots redirects are followed; their rules

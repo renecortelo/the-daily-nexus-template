@@ -35,7 +35,7 @@ from audiodigest.editorial import (
     EditorialPipeline,
     newspaper_prose_word_count,
 )
-from audiodigest.episode_budget import plan_episode
+from audiodigest.episode_budget import newsletter_coverage, plan_episode
 from audiodigest.evidence import review_evidence
 from audiodigest.execution_budget import RunBudgetExceeded, check_budget, reserve_time
 from audiodigest.gmail_client import GmailClient, fixture_sources
@@ -703,11 +703,21 @@ class Pipeline:
             )
             _stage(3, 8, "Extracting and ranking evidence-backed stories")
             stories, extract_meta = self.editorial.extract_stories(sources, day)
+            source_mix = _evidence_mix(sources, stories)
+            source_mix["mode"] = evidence_mode
+            extracted_coverage = newsletter_coverage(
+                stories,
+                [source.message_id for source in sources if source.source_type == "newsletter"],
+                (),
+            )
+            # Extraction is measured even if no useful news survives. Audio
+            # selection is reported separately only after a shortlist exists.
+            counts(**{key: extracted_coverage[key] for key in (
+                "newsletters_with_extracted_news", "newsletters_without_extracted_news",
+            )})
             if not stories:
                 raise NoContentError("Antigravity found no substantive stories")
             counts(stories=len(stories))
-            source_mix = _evidence_mix(sources, stories)
-            source_mix["mode"] = evidence_mode
             if not source_mix["newsletter_backed_stories"]:
                 raise NoContentError(
                     "No newsletter-backed stories were extracted. The selected Gmail "
@@ -731,6 +741,11 @@ class Pipeline:
             extraction_counts = getattr(self.editorial, "extraction_counts", {})
             if isinstance(extraction_counts, dict):
                 source_mix.update(extraction_counts)
+            source_mix.update(newsletter_coverage(
+                stories,
+                [source.message_id for source in sources if source.source_type == "newsletter"],
+                episode_budget.selected_ids,
+            ))
             source_mix.update({
                 "consolidated_stories": len(stories),
                 "selected_news_stories": episode_budget.selected_news_stories,
@@ -748,6 +763,19 @@ class Pipeline:
                 extracted_records=int(source_mix.get("extracted_story_records", len(stories))),
                 merged_duplicates=int(source_mix.get("duplicate_story_records", 0)),
                 omitted_stories=int(source_mix["omitted_news_stories"]),
+                **{key: source_mix[key] for key in (
+                    "newsletters_with_extracted_news", "newsletters_without_extracted_news",
+                    "newsletters_in_audio", "newsletters_outside_audio",
+                )},
+            )
+            print(
+                "Newsletter coverage: "
+                f"{source_mix['newsletters_with_extracted_news']} with retained news; "
+                f"{source_mix['newsletters_without_extracted_news']} without retained news. "
+                f"Audio: {source_mix['newsletters_in_audio']} newsletter sources represented; "
+                f"{source_mix['newsletters_outside_audio']} with news outside the shortlist. "
+                "No-news counts do not establish why a source was omitted.",
+                flush=True,
             )
             print(
                 "Coverage ledger: "

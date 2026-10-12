@@ -328,9 +328,17 @@ def _published_metadata(
                         "omitted_news_stories",
                         "unrepresented_newsletters",
                         "source_passages_cited",
+                        "newsletters_with_extracted_news",
+                        "newsletters_without_extracted_news",
+                        "newsletters_in_audio",
+                        "newsletters_outside_audio",
                     }
                     and isinstance(value, (str, int))
                     and not isinstance(value, bool)
+                    and (key not in {
+                        "newsletters_with_extracted_news", "newsletters_without_extracted_news",
+                        "newsletters_in_audio", "newsletters_outside_audio",
+                    } or (isinstance(value, int) and 0 <= value <= 10**9))
                 }
             transcript_path = Path(str(manifest.get("transcript_path", "")))
             raw_segments = json.loads(transcript_path.read_text(encoding="utf-8")).get(
