@@ -32,6 +32,35 @@ fill a target duration or treat a shorter edition as a failure without looking
 at the available evidence. Original-source approval and publication verification
 remain mandatory.
 
+### Investigating a coverage gap
+
+Follow the pipeline in order instead of treating every gap as a Gmail failure:
+
+1. Confirm the exact label, episode date and schedule timezone privately. A
+   schedule's display name need not equal its episode run name. Inspect the
+   parameters that produced the run, not just a later edited schedule.
+2. Compare collection counts with the original messages, if they remain
+   available. Inspect substantive body text and the 50,000-character per-body
+   prompt cap. Re-reading a matching count is useful evidence, not proof that
+   labels, bodies and mailbox processing state are unchanged since the run.
+3. Inspect extraction and consolidation. A configured desk can legitimately
+   exclude unrelated reporting; promotional content may have no useful news.
+   These are possible explanations, not conclusions from a source count alone.
+   Consolidation must retain every supporting source's lineage.
+4. Compare available news with selected news. If no news candidates were omitted,
+   the audio shortlist did not drop a candidate. A missing newsletter then lacks
+   representation in the retained news evidence, not necessarily in collection.
+5. Use the original run's private manifest to identify missing sources when it
+   exists. Published aggregate metrics and reference links do not retain that
+   mapping. Do not guess missing identities from weak vocabulary overlap, fetch
+   unrelated mailbox messages or persist originals in public diagnostics.
+
+If the original mapping is gone, report the uncertainty. A future improvement
+can explain source accounting in the existing extraction response, without an
+extra model pass or a requirement to manufacture a story from every message.
+Any declared omission reason still needs to be distinguished from source-proven
+facts and must not weaken evidence binding or trigger unbounded repair calls.
+
 ## Listening and script review
 
 1. Compare a few lead stories with their original supporting passages. Check
@@ -65,6 +94,25 @@ about PDF quality. When enabled, review the independent edition for complete
 sentences, distinct developments, useful supported visuals and readable two-page
 layout; a third page is reserved for substantive overflow. Do not use the podcast
 script as a fallback newspaper or present a missing paper as successful.
+
+Check the artifact's generation date against renderer changes before assigning
+a historical layout defect to the current code. Review every page visually:
+page bounds alone do not detect text collisions, excessive density, tiny body
+type or an unnecessary mostly empty third page. A logo/image count does not
+prove that the reporting contains useful illustrations. Likewise, exact-sentence
+deduplication cannot detect repeated implications or several restatements of
+one development across the headline, lead, standfirst and executive panel.
+Avoid joining unrelated stories under one implied causal narrative. Prefer a
+supported comparison, timeline or process visual when it adds something beyond
+another set of headline cards; never invent values to fill a chart.
+
+For delivered audio, measure the actual encoded file rather than extrapolating
+from cached voice previews. Compare integrated loudness and true peak with the
+configured targets; inspect loudness range and long pauses separately. Short
+host-level samples can reveal imbalance but do not represent the whole voice
+track. Strictly increasing transcript timestamps inside the recording establish
+timeline consistency, not audible sentence alignment or natural pronunciation.
+Keep technical conformance and subjective listening findings separate.
 
 Keep failed attempts in timing analysis and separate generation time from workflow
 time and account-billed minutes. A small successful sample confirms adoption,

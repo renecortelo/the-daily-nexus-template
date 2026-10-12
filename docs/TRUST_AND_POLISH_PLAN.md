@@ -6,6 +6,31 @@ redesign. Production credentials and deployment state must never enter the
 reusable public repository. Functional fixes must reach both repositories through
 a reviewed, allowlisted export.
 
+## Current implementation versus deployment checks
+
+The dated increments below are a chronological record, not a single outstanding
+task list. As of the 2026-10-12 source revision:
+
+- Dedicated runner authorization and server-side console age enforcement are
+  implemented and tested. Activation is a separate step in each deployment;
+  repository code or emulator success cannot certify an operator's live grant.
+  Follow [RUNNER_IDENTITY.md](RUNNER_IDENTITY.md), then verify both local access
+  and a normal cloud run. This template contains no operator activation state.
+- Optional enrichment transport hardening, source-grounded editorial review,
+  bounded coverage diagnostics and final encoded-audio measurements are shipped.
+  Later normal-run adoption, editorial usefulness and perceived voice quality
+  require observation rather than more synthetic success claims.
+- Shared playback/form/monitor controllers and HOME lifecycle guards are shipped.
+  Physical iPhone/PWA, VoiceOver and software-keyboard checks remain open.
+- Newspaper rendering has complete-copy and layout safeguards. Semantic repetition,
+  explanatory visuals and efficient use of the two-page target still need review
+  on real approved editions; old PDFs are not rewritten by a source update.
+- Further web-module extraction is maintenance work, not a prerequisite to the
+  security fixes above. Provider-wide billed quota reconciliation remains open.
+
+See [EDITORIAL_QA.md](EDITORIAL_QA.md) for the private, read-only review procedure.
+Keep live results, source inventories and account-specific status out of this plan.
+
 ## Non-negotiable release controls
 
 - Keep `useG1Credits=false`, telemetry disabled, and provider no-spend controls.
@@ -25,7 +50,7 @@ First increment implemented on 2026-10-09: accurate disclosures, original-sign-i
 console deadlines, logout cleanup, favorite retention controls, model source
 aliases and recognized URL/email minimization. Local regression gates: 301 Python
 tests, 20 browser behavior tests, 9 clock tests, and Ruff. The server authorization
-gate below remains open; this increment does not claim complete token revocation
+gate below was still open at that point; this increment does not claim complete token revocation
 or migrate historical cloud records.
 
 First increment:
@@ -432,7 +457,9 @@ logout guards and bounds across all five views, with provider requests blocked.
 These checks do not certify actual media decoding, sound quality, real Safari,
 iOS volume support, PWA or assistive technologies. The shell advances to 4.1.14 /
 cache v4-44. Logic is consolidated within the existing app file; further module
-extraction and the deferred desktop identity activation remain open.
+extraction remains open. Identity activation is deployment-specific; use the
+current implementation summary and migration guide rather than this historical
+increment to determine its status.
 
 Incremental monitor implemented on 2026-10-10: rows are reconciled by immutable
 Firestore document ID. Identical snapshots keep the same text nodes, cards and
