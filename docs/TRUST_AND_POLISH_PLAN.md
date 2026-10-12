@@ -291,6 +291,22 @@ was not changed.
 
 ## 5. Podcast and newspaper quality
 
+Editorial-adoption review increment (2026-10-12): ordinary-run review now uses
+the distinctions in [EDITORIAL_QA.md](EDITORIAL_QA.md), including collected versus
+represented newsletters, selected news versus TIH, exact versus semantic repetition,
+and script metrics versus actual listening. A defect discarded three already
+computed coverage counters at the protected progress allowlist; numeric
+`extracted_records`, `merged_duplicates` and `omitted_stories` now survive both
+the reporter and private log filter. Unknown keys and text remain excluded.
+The counter fix changes diagnostics only. The existing draft additionally asks
+for plain, attributed interpretation and avoids restating an action with a
+synonym or acronym inside one sentence. Extraction follows supplied desk
+definitions instead of a hardcoded reader location. These are instructions in
+existing calls, not new style rejection gates or extra model passes. Selection,
+factual checks, schedules, duration rules and runtime caps remain unchanged.
+Historical logs cannot recover discarded fields. Normal future runs must confirm
+counter adoption; subjective listening improvement remains unverified.
+
 Status: first audio-safety/measurement increment implemented on 2026-10-09.
 Subjective listening changes and newspaper-design work remain open.
 

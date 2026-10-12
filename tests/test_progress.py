@@ -20,6 +20,38 @@ from audiodigest.progress import (
 
 
 class ProgressTests(TestCase):
+    def test_coverage_counts_survive_reporter_and_private_log_filter_without_source_text(self):
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        reporter.start()
+        try:
+            counts(extracted_records=9, merged_duplicates=2, omitted_stories=1)
+            profile = reporter.finish("completed")
+        finally:
+            reporter.close()
+        profile["counters"].update({"source_identity": "private-source", "mail_text": "private"})
+        profile.update({"newsletter": "private", "source_ids": ["private-source"]})
+        clean = safe_event(profile)
+        expected = {"extracted_records": 9, "merged_duplicates": 2, "omitted_stories": 1}
+        self.assertEqual(expected, {key: clean["counters"][key] for key in expected})
+        destination = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            filter_stream([PREFIX + json.dumps(profile)], destination, Path(directory) / "result")
+        output = destination.getvalue()
+        self.assertNotIn("private", output)
+        self.assertNotIn("source_ids", output)
+        filtered = json.loads(output.splitlines()[0][len(PREFIX):])
+        for key, value in expected.items():
+            self.assertEqual(value, filtered["counters"][key])
+
+    def test_coverage_counters_reject_unbounded_or_nonnumeric_values(self):
+        profile = ProgressReporter(interval=0, stream=io.StringIO()).snapshot()
+        for value in (True, -1, float("inf"), "private", {}, 10**400):
+            with self.subTest(value_type=type(value).__name__):
+                profile["counters"] = {key: value for key in (
+                    "extracted_records", "merged_duplicates", "omitted_stories",
+                )}
+                self.assertEqual({}, safe_event(profile)["counters"])
+
     def test_recovered_attempt_clears_code_but_retains_measurements(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         reporter.start()

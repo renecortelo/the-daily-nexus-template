@@ -92,6 +92,16 @@ class EditorialDraftContractTests(TestCase):
         self.assertIn("Set factual_approved explicitly", instruction)
         self.assertIn("Do not demand phonetic respellings", instruction)
 
+    def test_plain_spoken_copy_does_not_repeat_a_claim_or_remove_attributed_analysis(self):
+        for count, style in ((1, "broadcast"), (2, "broadcast"), (2, "conversation")):
+            with self.subTest(count=count, style=style):
+                instruction, _payload = self.script_request(self.engine(count=count, style=style))
+                self.assertIn("interpretation explicitly attributed", instruction)
+                self.assertIn("same action inside one sentence", instruction)
+                self.assertIn("distinct supported detail", instruction)
+                self.assertIn("rather than presenting it as an established fact", instruction)
+                self.assertIn("Do not change\nverbatim quotations", instruction)
+
     def test_contract_orders_only_nonempty_sections_and_maps_exact_coverage(self):
         stories = [story("first"), story("second"), story("third", "DATA")]
         contract = _script_output_contract(

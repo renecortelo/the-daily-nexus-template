@@ -657,7 +657,8 @@ Extract, classify, merge, and rank factual stories for {episode_date.isoformat()
 Use only the supplied evidence. Do not add background facts from memory or the web.
 Retain each substantive development with a unique story_id and source aliases; the app merges
 duplicate coverage locally, retaining every fact's source support.
-Distinguish Barcelona from Spain-wide news, and Spain/Mexico from general world news.
+Distinguish local and regional news from national and international news, following
+the supplied section definitions rather than assuming a fixed location for the reader.
 When the source material supports it, retain 20-35 distinct, useful stories rather than only
 headline news. Aim for two or more atomic facts per story where the evidence supplies them.
 Prefer breadth across the selected newsletters, while merging genuinely duplicate coverage.
@@ -889,8 +890,14 @@ where grammatically appropriate: we're, it's, that's, don't. Avoid press-release
 such as 'strategic capital entry' when a plain phrase such as 'buying a stake' conveys the
 same supported meaning. Very formal hosts may keep an uncontracted register. Do not change
 verbatim quotations, factual qualifiers, proper names or precise figures. Break dense
-lists and nested clauses into complete, connected sentences. Introduce a necessary technical
-acronym once when its expansion is supported by the supplied evidence; do not guess expansions.
+lists and nested clauses into complete, connected sentences. Explain a necessary technical
+label in plain spoken language only when the evidence explains it. Keep an analyst's
+interpretation explicitly attributed rather than presenting it as an established fact.
+Do not repeat the same action inside one sentence using a synonym or acronym; the second
+clause should add a distinct supported detail, otherwise leave it out. Preserve meaning
+and technical precision instead of replacing them with a vague generalization.
+Introduce a necessary technical acronym once when its expansion is supported by the
+supplied evidence; do not guess expansions.
 Give exact figures in manageable groups without rounding, dropping qualifiers, or adding
 comparisons absent from the evidence. Prefer conversational turns of roughly 30-75 words
 when the story needs them, with shorter questions only when useful; never add filler merely
