@@ -40,6 +40,7 @@ from audiodigest.script_contract import (
     _normalize_script_section_order,
     _script_output_contract,
     _script_output_example,
+    _script_source_notes,
 )
 
 NEWSPAPER_TARGET_PROSE_WORDS = 1_050
@@ -285,7 +286,10 @@ def _source_verification_validator(data: dict[str, Any]) -> VerificationResult:
 def _validate_reference_urls(notes: list[str], allowed: set[str]) -> None:
     def validate(match: re.Match[str]) -> str:
         value = match.group(0)
+        # A source URL can legitimately end with punctuation (e.g. a wiki title).
         trimmed = value.rstrip(".,;:!?)]}")
+        if normalize_url(trimmed) not in allowed and normalize_url(value) in allowed:
+            trimmed = value
         safe = normalize_url(trimmed)
         if not safe or safe not in allowed:
             raise DataValidationError(
@@ -952,7 +956,9 @@ facts from those stories should be explained rather than merely listed. Sections
 the provided episode order and empty sections must be omitted. When TIH evidence is supplied,
 "TIH: Today in History" must be the first section and should combine selected historical
 events with a concise snapshot of what was happening in the world on the episode date.
-Include public sources in show notes.
+Return show_notes as an empty list. The application builds references from the supplied
+source records for the story IDs actually cited, including newsletter-only sources.
+Do not compose, copy, shorten or guess reference URLs, including during repairs.
 
 The renderer speaks each section heading once before its dialogue. Do not repeat the heading,
 announce a section number, or restate a section title inside that section's dialogue. Move
@@ -1008,6 +1014,9 @@ Return JSON only:
             )
 
         def validate_script(data: dict[str, Any]) -> EpisodeScript:
+            # This field belongs to the application, not the drafting model. Discard
+            # it before parsing even when a legacy draft supplies a malformed value.
+            data = {**data, "show_notes": []}
             if len(host_names) == 2 and dialogue_style == "conversation":
                 data = _normalize_conversation_turns(data, CONVERSATION_TURN_MAX_WORDS)
             data = _normalize_script_section_order(data, section_order)
@@ -1054,15 +1063,6 @@ Return JSON only:
                 raise ValueError("the sign-off must reproduce the selected quotation")
             if closing_quote.author not in script.sign_off_text:
                 raise ValueError("the sign-off must name the quotation author")
-            if not any(closing_quote.source_url in note for note in script.show_notes):
-                raise ValueError("show notes must include the closing quotation source")
-            _validate_reference_urls(
-                script.show_notes,
-                {
-                    normalize_url(closing_quote.source_url),
-                    *(normalize_url(url) for story in stories for url in story.source_urls),
-                },
-            )
             has_tih = any(story.section == Section.TODAY_IN_HISTORY for story in stories)
             if has_tih and (
                 not script.sections or script.sections[0].name != Section.TODAY_IN_HISTORY
@@ -1095,6 +1095,7 @@ Return JSON only:
                     f"script contains {script.word_count} words; "
                     f"the evidence-sized maximum is {target_max}"
                 )
+            script.show_notes = _script_source_notes(script, stories, closing_quote)
             return script
 
         script, metadata = self.antigravity.invoke(
@@ -1705,6 +1706,8 @@ return approved=false, factual_approved=true, and concrete editorial issues.
 Act as a strict factual verifier. Compare every claim in the proposed script against the
 original source_evidence.passages, using fact_support to locate the supporting source text.
 The story records are extracted candidates, NOT independent evidence or proof of correctness.
+Show notes are assembled by the application from cited source records. Check spoken claims
+against original evidence; do not request invented links for newsletter-only reporting.
 Check candidate assertions used in the script: repeating a mistaken extraction is still a
 factual failure. A correction supported by original passages may override a mistaken candidate;
 do not reject a supported correction or an unused candidate fact merely to preserve extracted
@@ -1764,7 +1767,12 @@ not a stylistic issue. Ground each factual repair instruction in the original pa
         reviewed_stories = [
             story for story in stories if story.story_id in set(budget.selected_ids) | cited
         ]
-        if isinstance(getattr(script, "show_notes", None), list):
+        if isinstance(getattr(script, "show_notes", None), list) and script.show_notes != (
+            _script_source_notes(script, reviewed_stories, closing_quote)
+        ):
+            # Canonical notes already carry exact source URLs, including characters
+            # such as apostrophes/parentheses that prose URL extraction can misread.
+            # Keep the membership check for externally supplied or legacy notes.
             _validate_reference_urls(
                 script.show_notes,
                 {

@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from audiodigest.closing_quotes import ClosingQuote
+from audiodigest.content import is_tracking_url, minimize_editorial_text, normalize_url
 from audiodigest.models import DataValidationError, DialogueTurn, EpisodeScript, Story
 
 CLOSING_COMMENT_MAX_WORDS = 25
@@ -41,7 +42,7 @@ def _script_output_contract(
         "required_fields": ["title", "hosts", "introduction", "sections", "conclusion"],
         "section_fields": ["name", "dialogue", "story_ids"],
         "turn_fields": ["host", "text"],
-        "show_notes": "list of strings; [] is valid; never invent a URL",
+        "show_notes": "application-owned; return []; source links are assembled from cited stories",
         "exact_hosts_in_order": host_names,
         "introduction": {
             "introduce_each_active_host": True,
@@ -77,6 +78,53 @@ def _script_output_example(contract: dict[str, Any], disclosure: str) -> dict[st
         "show_notes": [],
         "disclosure": disclosure,
     }
+
+
+def _script_source_notes(
+    script: EpisodeScript, stories: list[Story], quote: ClosingQuote,
+) -> list[str]:
+    """Build references from cited records, never from model-authored show notes.
+
+    Preserve first-citation order and distinct URLs. Mail-only stories remain
+    identifiable without exposing mailbox IDs, passage text or inventing a link.
+    Source lineage and factual verification are still required by the pipeline.
+    """
+    by_id = {story.story_id: story for story in stories}
+    cited_ids = list(dict.fromkeys(
+        identifier for section in script.sections for identifier in section.story_ids
+    ))
+    if any(identifier not in by_id for identifier in cited_ids):
+        raise DataValidationError(
+            "script cites unsupported story IDs", failure_code="script_unsupported_reference",
+        )
+    notes: list[str] = []
+    seen_urls: set[str] = set()
+    for identifier in cited_ids:
+        story = by_id[identifier]
+        # Headlines are reporting data too; URLs embedded in a label are not citations.
+        label = " ".join(minimize_editorial_text(re.sub(
+            r"https?://\S+", "", story.headline, flags=re.IGNORECASE,
+        )).split()) or "Newsletter story"
+        public_urls = []
+        for raw in story.source_urls:
+            safe = normalize_url(raw)
+            if safe and not is_tracking_url(safe) and safe not in public_urls:
+                public_urls.append(safe)
+        if not public_urls:
+            notes.append(f"{label} — Newsletter source (no public link)")
+        for url in public_urls:
+            if url not in seen_urls:
+                notes.append(f"{label} — {url}")
+                seen_urls.add(url)
+    quote_url = normalize_url(quote.source_url)
+    if not quote_url or is_tracking_url(quote_url):
+        raise DataValidationError(
+            "closing quotation source must be a safe public URL",
+            failure_code="source_evidence",
+        )
+    # Keep explicit quotation attribution even if a news story cites this same page.
+    notes.append(f"Closing quotation — {quote.author} — {quote_url}")
+    return notes
 
 
 def _normalize_conversation_turns(data: dict[str, Any], maximum: int) -> dict[str, Any]:

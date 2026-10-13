@@ -83,7 +83,7 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
             "nonempty dialogue arrays of {host,text}, exact hosts and section names, "
             "one object per nonempty section, story_ids as arrays of supplied strings. "
             "Replace placeholder narration with supported reporting; never invent IDs. "
-            "Preserve valid text and keep show_notes a string array ([] is valid)."
+            "Preserve valid text and return show_notes as []; the application assembles references."
         ) if code.startswith("script_") or (
             isinstance(payload.get("output_contract"), dict)
             and "exact_hosts_in_order" in payload["output_contract"]
@@ -94,9 +94,9 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
         )
     elif code == "script_reference_url":
         plan["action"] = (
-            "Fix only show_notes: a string array of exact supplied public source URLs, "
-            "never placeholder or guessed URLs. [] is allowed; the application inserts "
-            "the quotation source. Preserve supported narration and story coverage."
+            "Fix only show_notes: return []. The application assembles all references "
+            "from cited source records and the approved quotation. Do not write URLs. "
+            "Preserve supported narration and story coverage."
         )
     elif code == "source_evidence":
         plan["action"] = (

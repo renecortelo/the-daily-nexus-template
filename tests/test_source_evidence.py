@@ -255,6 +255,73 @@ class SourceEvidenceTests(TestCase):
                     "http://example.com/report"):
             with self.assertRaisesRegex(ValueError, "not supported"):
                 _validate_reference_urls([url], {"https://example.com/report"})
+        for ending in ("(history)", "report.", "report!"):
+            url = f"https://example.com/{ending}"
+            exact = [f"Source — {url}"]
+            _validate_reference_urls(exact, {url})
+            self.assertEqual([f"Source — {url}"], exact)
+
+    def test_generated_and_repaired_script_references_are_built_before_factual_review(self):
+        story, index = supported_story()
+        engine = self.engine()
+        engine.settings.hosts.count = 1
+        engine.settings.hosts.solo_name = "Dalia"
+        engine._source_evidence = index
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/quote")
+        draft = self.script(story.facts[0]).to_dict()
+        draft["show_notes"] = ["Invented reference — https://example.com/forged"]
+        original = copy.deepcopy(draft)
+        def invoke(instruction, payload, validator, **kwargs):
+            self.assertEqual(1, kwargs["retries"])
+            if "previous_script" in payload:
+                # Reproduces the repaired draft reintroducing a fabricated URL.
+                return validator(copy.deepcopy(draft)), AntigravityMetadata()
+            self.assertIn("original source_evidence.passages", instruction)
+            self.assertIn("12%", payload["source_evidence"]["passages"][0]["text"])
+            self.assertEqual([
+                "Product pilot reports growth — https://example.com/report",
+                "Closing quotation — An Author — https://example.com/quote",
+            ], payload["script"]["show_notes"])
+            return validator({
+                "approved": False, "factual_approved": False,
+                "issues": ["Synthetic factual rejection: keep the provisional qualification."],
+            }), AntigravityMetadata()
+        engine.antigravity.invoke.side_effect = invoke
+        first, _ = engine.generate_script([story], date(2026, 10, 9), quote)
+        review, _ = engine.verify([story], first, quote)
+        self.assertFalse(review.factually_safe)
+        repaired, _ = engine.generate_script(
+            [story], date(2026, 10, 9), quote,
+            repair_issues=review.issues, previous_script=first,
+        )
+        second_review, _ = engine.verify([story], repaired, quote)
+        self.assertFalse(second_review.factually_safe)
+        self.assertEqual(first.show_notes, repaired.show_notes)
+        self.assertEqual(original, draft)
+        self.assertEqual(4, engine.antigravity.invoke.call_count)
+
+    def test_application_notes_preserve_exact_source_url_punctuation_during_verification(self):
+        url = "https://example.com/history/Fermat's_(theorem)"
+        source = synthetic_source()
+        source.article_urls = [url]
+        story, index = supported_story(source, extracted_story(source_urls=[url]))
+        engine = self.engine()
+        engine.settings.hosts.count = 1
+        engine.settings.hosts.solo_name = "Dalia"
+        engine._source_evidence = index
+        quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/quote")
+        def invoke(instruction, payload, validator, **kwargs):
+            if "previous_script" in payload:
+                return validator(self.script(story.facts[0]).to_dict()), AntigravityMetadata()
+            self.assertTrue(payload["script"]["show_notes"][0].endswith(url))
+            return validator({
+                "approved": True, "factual_approved": True, "issues": [],
+            }), AntigravityMetadata()
+        engine.antigravity.invoke.side_effect = invoke
+        script, _ = engine.generate_script([story], date(2026, 10, 9), quote)
+        review, _ = engine.verify([story], script, quote)
+        self.assertTrue(review.factually_safe)
+        self.assertEqual(2, engine.antigravity.invoke.call_count)
 
     def test_source_review_cannot_omit_factual_classification_or_bypass_it_with_order_issue(self):
         with self.assertRaisesRegex(ValueError, "explicitly classify"):

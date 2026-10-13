@@ -161,3 +161,19 @@ retained output still passes independent original-source factual review before a
 These safeguards reduce preventable contract failures; they cannot guarantee that
 an external model always returns valid, supported content. Do not claim an exact
 cause for a historical `model_structure` failure when its private draft is absent.
+
+### Application-owned podcast references
+
+Drafts and factual repairs return `show_notes: []`. Before parsing a generated
+script, discard any model-supplied show notes, including malformed legacy values.
+After validating coverage and story IDs, build references in first-citation order
+from those story records, deduplicate normalized public URLs, and append the
+approved quotation attribution. A newsletter-only story receives a descriptive
+entry without an invented link or mailbox identifier. Unused stories are excluded.
+The saved script schema and player/feed reference format remain unchanged.
+
+This assembly adds no model calls and does not approve spoken claims. Unknown
+story IDs, altered source lineage, and factual failures still block publication.
+Regression checks cover a repaired draft reintroducing an unsupported URL, a
+newsletter without a public link, tracking/credential removal, duplicate links,
+and legitimate source URLs ending with punctuation.

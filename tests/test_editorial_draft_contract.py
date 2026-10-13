@@ -13,7 +13,11 @@ from audiodigest.editorial import (
     _script_output_contract,
 )
 from audiodigest.models import DataValidationError, EpisodeScript, Story
-from audiodigest.script_contract import _normalize_conversation_turns, _script_output_example
+from audiodigest.script_contract import (
+    _normalize_conversation_turns,
+    _script_output_example,
+    _script_source_notes,
+)
 
 
 def story(identifier, section="AI"):
@@ -246,7 +250,7 @@ class EditorialDraftContractTests(TestCase):
         result = validate(draft)
         self.assertEqual('Learn "carefully". — An Author.', result.sign_off[0].text)
         self.assertEqual(draft["closing_comment"][0]["text"], result.sign_off[1].text)
-        self.assertIn("https://example.com/quote", result.show_notes[0])
+        self.assertIn("https://example.com/quote", result.show_notes[-1])
         self.assertNotIn("closing_comment", result.to_dict())
         self.assertEqual([], draft["show_notes"])
         self.assertNotIn("sign_off", draft)
@@ -284,7 +288,8 @@ class EditorialDraftContractTests(TestCase):
         result = validate(draft)
         self.assertEqual('Learn "carefully". — An Author.', result.sign_off[0].text)
         self.assertEqual(draft["sign_off"][1]["text"], result.sign_off[1].text)
-        self.assertEqual(draft["show_notes"], result.show_notes)
+        self.assertEqual(1, sum("https://example.com/quote" in n for n in result.show_notes))
+        self.assertIn("Newsletter source (no public link)", result.show_notes[0])
         # Re-normalization of a stored script is stable.
         again = validate(result.to_dict())
         self.assertEqual(result.to_dict(), again.to_dict())
@@ -308,17 +313,18 @@ class EditorialDraftContractTests(TestCase):
         draft["closing_comment"] = [{"host": "Nox", "text": 'Learn "carefully". — An Author.'}]
         self.assertEqual(1, len(validate(draft).sign_off))
 
-    def test_unknown_comment_host_and_unsupported_sources_remain_rejected(self):
+    def test_unknown_comment_host_remains_rejected_but_model_notes_are_replaced(self):
         draft, validate = self.closing_draft()
         draft["closing_comment"] = [{"host": "Unconfigured", "text": "A brief observation."}]
         with self.assertRaisesRegex(ValueError, "host"):
             validate(draft)
         draft["closing_comment"] = []
         draft["show_notes"] = ["Invented source - https://example.com/unsupported"]
-        with self.assertRaisesRegex(ValueError, "not supported"):
-            validate(draft)
+        result = validate(draft)
+        self.assertNotIn("unsupported", " ".join(result.show_notes))
+        self.assertIn("https://example.com/quote", result.show_notes[-1])
 
-    def test_malformed_comment_and_notes_remain_structural_errors(self):
+    def test_malformed_comment_remains_an_error_but_application_owned_notes_are_ignored(self):
         for comment in ("Not a dialogue list", [None], [{"host": "Nox"}],
                         [{"host": "Nox", "text": "One."}] * 2):
             draft, validate = self.closing_draft()
@@ -327,10 +333,39 @@ class EditorialDraftContractTests(TestCase):
                 ValueError, "closing_comment",
             ):
                 validate(draft)
+        for notes in ([None], {"url": "https://example.com/forged"}, None, "made up"):
+            draft, validate = self.closing_draft()
+            draft["show_notes"] = notes
+            with self.subTest(notes=notes):
+                result = validate(draft)
+                self.assertIn("https://example.com/quote", result.show_notes[-1])
+                self.assertNotIn("forged", " ".join(result.show_notes))
+                self.assertEqual(notes, draft["show_notes"])
+
+    def test_source_notes_follow_cited_stories_deduplicate_and_exclude_private_links(self):
         draft, validate = self.closing_draft()
-        draft["show_notes"] = [None]
-        with self.assertRaisesRegex(ValueError, "show_notes"):
-            validate(draft)
+        script = validate(draft)
+        stories = [story("first"), story("second"), story("mail"), story("unused")]
+        stories[0].source_urls = ["https://example.com/report?utm_source=mail",
+                                  "https://example.com/report"]
+        stories[1].source_urls = ["https://example.com/second", "https://example.com/report"]
+        stories[2].headline = "Newsletter pilot reader@example.com https://example.com/forged"
+        stories[2].source_urls = ["https://example.com/p?token=synthetic", "http://example.com/p"]
+        stories[3].source_urls = ["https://example.com/not-in-episode"]
+        script.sections[0].story_ids = ["second", "first", "mail", "second"]
+        quote = ClosingQuote("Learn.", "An Author", "https://example.com/quote")
+        notes = _script_source_notes(script, stories, quote)
+        self.assertTrue(notes[0].endswith("https://example.com/second"))
+        self.assertTrue(notes[1].endswith("https://example.com/report"))
+        self.assertIn("Newsletter source (no public link)", notes[2])
+        self.assertEqual(4, len(notes))
+        for private in ("token=", "utm_", "reader@example.com", "forged",
+                        "private-mailbox-identity", "not-in-episode"):
+            self.assertNotIn(private, " ".join(notes))
+        self.assertEqual(notes, _script_source_notes(script, stories, quote))
+        script.sections[0].story_ids.append("unknown")
+        with self.assertRaisesRegex(DataValidationError, "unsupported story IDs"):
+            _script_source_notes(script, stories, quote)
 
     def test_closing_normalizer_keeps_input_and_host_assignment_stable(self):
         quote = ClosingQuote("Learn.", "An Author", "https://example.com/quote")
