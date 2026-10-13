@@ -34,8 +34,10 @@ from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
 from audiodigest.progress import increment
 from audiodigest.script_contract import (
+    BRIEF_OPENING_MAX_BUDGET_WORDS,
     CONVERSATION_TURN_MAX_WORDS,
     _bound_closing_comment,
+    _brief_introduction,
     _normalize_conversation_turns,
     _normalize_script_closing,
     _normalize_script_section_order,
@@ -831,8 +833,31 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
             for host in active_hosts
         )
         dialogue_style = getattr(self.settings.hosts, "dialogue_style", "broadcast")
+        compact_intro = _brief_introduction(host_names, episode_date)
+        # Size follows the existing evidence budget, not message volume or labels.
+        # A legacy factual-repair draft keeps its valid opening: never silently
+        # drop previously verified reporting or violate exact patch preservation.
+        owns_brief_intro = target_max <= BRIEF_OPENING_MAX_BUDGET_WORDS and (
+            previous_script is None
+            or [turn.to_dict() for turn in previous_script.introduction] == compact_intro
+        )
+        opening_rule = (
+            "This is a brief edition. Copy output_contract.introduction.exact_turns "
+            "unchanged: the application owns this concise identity/date/credit opening. "
+            "Do not add a greeting, news preview, agenda, generic mission statement or "
+            "another producer credit. All supported news facts, qualifiers and attribution "
+            "belong in their news sections, not the introduction. Keep transitions and "
+            "conclusion brief without recapping news already explained. The exact AI "
+            "disclosure remains mandatory and separate; do not repeat it in the opening."
+            if owns_brief_intro else
+            "Keep the introduction proportionate to the evidence-sized edition, without "
+            "a long agenda or repeating the disclosure or producer credit. During factual "
+            "repairs preserve already valid introductory reporting unless an issue requires "
+            "its correction; never crop a sentence or discard a supported fact for brevity."
+        )
         output_contract = _script_output_contract(
             stories, section_order, required_story_ids, host_names, dialogue_style,
+            brief_introduction=compact_intro if owns_brief_intro else None,
         )
         output_example = _script_output_example(output_contract, AI_DISCLOSURE)
         if len(host_names) == 1:
@@ -885,6 +910,7 @@ Dario Novelli is the agent, editor, and producer; he is not a speaking host. In 
 introduction, each active host must introduce themselves by full name in the first person. One
 active host, and only one, must credit the program as edited and produced by Dario Novelli.
 {conversation_rule}
+{opening_rule}
 
 The supplied story records are extracted drafting candidates, not independent proof.
 Do not add names, dates, numbers, locations, causes, predictions or background details from
@@ -1054,6 +1080,10 @@ Return JSON only:
             # This field belongs to the application, not the drafting model. Discard
             # it before parsing even when a legacy draft supplies a malformed value.
             data = {**data, "show_notes": []}
+            if owns_brief_intro and not patched:
+                # No prose trimming, news rewriting or source replacement. This
+                # field is declared application-owned before the drafting call.
+                data = {**data, "introduction": [dict(turn) for turn in compact_intro]}
             if not patched and len(host_names) == 2 and dialogue_style == "conversation":
                 data = _normalize_conversation_turns(data, CONVERSATION_TURN_MAX_WORDS)
             data = _normalize_script_section_order(data, section_order)

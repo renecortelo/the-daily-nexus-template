@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from audiodigest.closing_quotes import ClosingQuote
@@ -11,6 +12,25 @@ from audiodigest.models import DataValidationError, DialogueTurn, EpisodeScript,
 
 CLOSING_COMMENT_MAX_WORDS = 25
 CONVERSATION_TURN_MAX_WORDS = 115
+BRIEF_OPENING_MAX_BUDGET_WORDS = 1_300
+
+
+def _brief_introduction(host_names: list[str], episode_date: date) -> list[dict[str, str]]:
+    """Application-owned identity only; never shorten or summarize news here.
+
+    The exact AI disclosure remains a separate renderer block. English month names
+    are explicit so this English program does not inherit the machine's locale.
+    """
+    month = (
+        "January", "February", "March", "April", "May", "June", "July", "August",
+        "September", "October", "November", "December",
+    )[episode_date.month - 1]
+    introduction = [{"host": host, "text": f"I'm {host}."} for host in host_names]
+    introduction[0]["text"] += (
+        f" The Daily Nexus, {month} {episode_date.day}, {episode_date.year}, "
+        "edited and produced by Dario Novelli."
+    )
+    return introduction
 
 
 def _script_output_contract(
@@ -19,6 +39,8 @@ def _script_output_contract(
     required_story_ids: list[str],
     host_names: list[str],
     dialogue_style: str,
+    *,
+    brief_introduction: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Expose existing deterministic constraints before drafting, not another review.
 
@@ -48,6 +70,8 @@ def _script_output_contract(
             "introduce_each_active_host": True,
             "editor_credit_occurrences": 1,
             "editor_is_not_a_host": True,
+            "application_owned": brief_introduction is not None,
+            "exact_turns": brief_introduction,
         },
         "sections": sections,
         "maximum_words_per_turn": CONVERSATION_TURN_MAX_WORDS if conversation else None,
@@ -61,8 +85,12 @@ def _script_output_contract(
 def _script_output_example(contract: dict[str, Any], disclosure: str) -> dict[str, Any]:
     """A valid structural template with real desks/IDs, not misleading placeholders."""
     hosts = contract["exact_hosts_in_order"]
-    introduction = [{"host": host, "text": f"I'm {host}."} for host in hosts]
-    introduction[0]["text"] += " The Daily Nexus is edited and produced by Dario Novelli."
+    exact_intro = contract["introduction"].get("exact_turns")
+    if exact_intro is not None:
+        introduction = [dict(turn) for turn in exact_intro]
+    else:
+        introduction = [{"host": host, "text": f"I'm {host}."} for host in hosts]
+        introduction[0]["text"] += " The Daily Nexus is edited and produced by Dario Novelli."
     return {
         "title": "The Daily Nexus - Month D, YYYY",
         "hosts": list(hosts),

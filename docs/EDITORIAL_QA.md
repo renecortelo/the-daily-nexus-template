@@ -116,6 +116,26 @@ arbitrary rejection quotas or weaker factual checks. For a historical discrepanc
 first confirm which source revision produced that run; newer fixes do not rewrite
 already-published recordings.
 
+### Proportionate brief openings
+
+When the existing evidence-sized script ceiling is at most 1,300 words, new drafts
+use an application-owned opening: each active host introduces themselves, and one
+host states the program, episode date and producer credit. This threshold follows
+the evidence budget, not a Gmail label or the number of received messages alone.
+The original AI disclosure remains intact as a separate spoken block. All news
+facts, qualifiers and attribution belong in their selected sections; an agenda or
+news preview is not needed in the opening. Broader editions keep their editorial
+introduction. The trusted quotation, optional short comment, coverage, full factual
+review, source references and duration ceiling are unchanged.
+
+This is assembled before factual review, not a post-verification trim or additional
+model call. Exact news-turn patches preserve the existing introduction. Full repairs
+of a newly compact edition retain the same compact opening; a legacy repair draft
+with a different valid introduction keeps its existing behavior so introductory
+reporting is not silently deleted. Ordinary deliveries still need listening checks:
+word count is not a promised number of seconds, and concise copy alone does not
+establish naturalness or factual coverage. No historic audio is regenerated.
+
 ## Newspaper and runtime
 
 If the newspaper is disabled, its `skipped` state is intentional and says nothing
