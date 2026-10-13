@@ -19,10 +19,24 @@ from audiodigest.antigravity_client import (
     enforce_safe_antigravity_settings,
 )
 from audiodigest.config import AntigravitySettings
+from audiodigest.models import DataValidationError
 from audiodigest.progress import ProgressReporter
 
 
 class AntigravityParsingTests(TestCase):
+    def test_ambiguous_or_nonfinite_json_is_rejected_not_silently_overwritten(self):
+        for text in ('{"stories":[],"stories":[]}', '{"nested":{"x":1,"x":2}}',
+                     '{"score":NaN}', '{"score":Infinity}'):
+            with self.subTest(text=text), self.assertRaises(DataValidationError) as error:
+                _json_from_response(text)
+            self.assertEqual("json_invalid", _validation_code(error.exception))
+    def test_typed_codes_cannot_leak_unrecognized_field_or_exception_content(self):
+        self.assertEqual("script_shape", _validation_code(DataValidationError(
+            "private content", failure_code="script_shape",
+        )))
+        self.assertEqual("model_structure", _validation_code(DataValidationError(
+            "private content", failure_code="private-account-identifier",
+        )))
     def test_validation_codes_are_safe_categories_not_exception_text(self):
         self.assertEqual(
             "script_coverage",
@@ -392,3 +406,25 @@ class AntigravitySafetyTests(TestCase):
             )
             self.assertTrue(payloads[1]["repair_plan"]["validation_still_required"])
             self.assertTrue(payloads[1]["repair_plan"]["never_expand_to_reach_a_minimum"])
+
+    def test_terminal_contract_failure_is_bounded_and_does_not_print_private_error(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            settings.settings_path.write_text('{"useG1Credits":false,"enableTelemetry":false}')
+            output = io.StringIO()
+            def reject(_value):
+                raise DataValidationError("private source excerpt and identity",
+                                          failure_code="script_reference_url")
+            with (
+                patch("audiodigest.antigravity_client.subprocess.run") as run,
+                patch("sys.stdout", output),
+            ):
+                run.return_value = subprocess.CompletedProcess(
+                    [], 0, stdout='{"response":"{\\"show_notes\\":[]}"}', stderr="",
+                )
+                with self.assertRaises(AntigravityCLIError) as error:
+                    AntigravityCLI(settings).invoke("Check.", {}, reject, retries=1)
+            self.assertEqual(2, run.call_count)
+            self.assertEqual("script_reference_url", error.exception.failure_code)
+            self.assertNotIn("private source", str(error.exception) + output.getvalue())
+            self.assertEqual([], list(settings.workspace_dir.glob("request-*.json")))

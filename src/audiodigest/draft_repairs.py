@@ -28,12 +28,17 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
             "Keep required story IDs, material facts, attribution and qualifiers. "
             "Respect the supplied upper limit; never cut a sentence mid-thought."
         )
-    elif code in {"script_coverage", "script_unsupported_reference"}:
+    elif code in {"script_coverage", "script_unsupported_reference", "script_section_coverage"}:
         plan["action"] = (
             "Explain missing required stories from original evidence in the proper section; "
             "do not merely attach IDs to unrelated prose. Preserve valid coverage. "
             "Remove unsupported IDs and any unsupported claims, not valid stories."
         )
+        if code == "script_section_coverage":
+            plan["action"] += (
+                " Place each story and its actual reporting under its exact supplied desk; "
+                "the same ID under an unrelated section does not count as coverage."
+            )
         contract = payload.get("output_contract")
         sections = contract.get("sections", []) if isinstance(contract, dict) else []
         required = payload.get("required_story_ids", [])
@@ -59,6 +64,47 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
             plan["missing_required_by_section"] = [
                 row for row in plan["missing_required_by_section"] if row["story_ids"]
             ]
+    elif code == "script_turn_length":
+        plan["action"] = (
+            "Rewrite only overlong conversation turns into complete shorter sentences, "
+            "preserving each fact, qualifier, attribution and exact host. Follow "
+            "output_contract.maximum_words_per_turn. Do not truncate or remove coverage."
+        )
+    elif code in {"script_section_name", "script_duplicate_section", "script_shape",
+                  "model_required_field", "model_list_shape", "model_dialogue_shape"}:
+        plan["action"] = (
+            "Correct the extraction object, not a podcast script: stories is an array of "
+            "objects with unique story_id, exact section, headline, facts, why_it_matters, "
+            "source_ids, source_urls, evidence_refs, numeric confidence and rank_score. "
+            "Use exact supplied source aliases and passage IDs. Keep facts and evidence_refs "
+            "aligned. An empty source_urls array is valid. Never invent evidence."
+        ) if isinstance(payload.get("sources"), list) else (
+            "Follow output_contract and the JSON example exactly: required keys, objects, "
+            "nonempty dialogue arrays of {host,text}, exact hosts and section names, "
+            "one object per nonempty section, story_ids as arrays of supplied strings. "
+            "Replace placeholder narration with supported reporting; never invent IDs. "
+            "Preserve valid text and keep show_notes a string array ([] is valid)."
+        ) if code.startswith("script_") or (
+            isinstance(payload.get("output_contract"), dict)
+            and "exact_hosts_in_order" in payload["output_contract"]
+        ) else (
+            "Fix the rejected field under the JSON schema in the original instruction. "
+            "Preserve supported reporting and attribution. Do not convert a newspaper "
+            "or verification object into host dialogue; use its own requested schema."
+        )
+    elif code == "script_reference_url":
+        plan["action"] = (
+            "Fix only show_notes: a string array of exact supplied public source URLs, "
+            "never placeholder or guessed URLs. [] is allowed; the application inserts "
+            "the quotation source. Preserve supported narration and story coverage."
+        )
+    elif code == "source_evidence":
+        plan["action"] = (
+            "Use only exact source aliases, passage IDs and URLs supplied in original "
+            "evidence. Every facts entry needs aligned evidence_refs from its cited source. "
+            "Never manufacture or repair a missing passage or URL by guessing. "
+            "A newsletter with no public URL remains usable evidence; omit invented URLs."
+        )
     elif code == "script_closing_comment":
         plan["action"] = (
             "Fix only closing_comment: zero or one object with an exact active host and "

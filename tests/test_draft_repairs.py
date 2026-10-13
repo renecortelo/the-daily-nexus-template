@@ -6,6 +6,27 @@ from audiodigest.draft_repairs import draft_repair_plan
 
 
 class DraftRepairTests(TestCase):
+    def test_shape_and_turn_repairs_remain_bounded_and_preserve_material(self):
+        for code in ("script_shape", "script_section_name", "script_duplicate_section",
+                     "model_dialogue_shape", "script_turn_length", "source_evidence"):
+            plan = draft_repair_plan({}, None, code)
+            self.assertTrue(plan["validation_still_required"])
+            self.assertTrue(plan["never_expand_to_reach_a_minimum"])
+        self.assertIn("Never manufacture", draft_repair_plan({}, {}, "source_evidence")["action"])
+
+    def test_extraction_shape_repair_does_not_accidentally_request_host_dialogue(self):
+        plan = draft_repair_plan({"sources": []}, {}, "model_required_field")
+        self.assertIn("not a podcast script", plan["action"])
+        self.assertIn("facts and evidence_refs", plan["action"])
+        self.assertNotIn("nonempty dialogue", plan["action"])
+
+    def test_shared_field_codes_keep_paper_and_verification_on_their_own_schema(self):
+        for payload in ({"stories": []}, {"script": {}}):
+            plan = draft_repair_plan(payload, {}, "model_required_field")
+            self.assertIn("own requested schema", plan["action"])
+            self.assertNotIn("nonempty dialogue arrays", plan["action"])
+        plan = draft_repair_plan({}, {}, "script_reference_url")
+        self.assertIn("Fix only show_notes", plan["action"])
     def test_actual_evidence_ceiling_error_uses_compression_not_expansion(self):
         code = _validation_code(ValueError(
             "script contains 3500 words; the evidence-sized maximum is 3400"

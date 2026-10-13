@@ -185,6 +185,15 @@ class ProgressTests(TestCase):
         event["counters"] = {"links": 10**400, "stories": "private-text"}
         self.assertEqual({}, safe_event(event)["counters"])
 
+    def test_contract_failure_categories_survive_filter_without_arbitrary_strings(self):
+        event = ProgressReporter(interval=0, stream=io.StringIO()).snapshot()
+        for code in ("model_required_field", "model_list_shape", "model_dialogue_shape",
+                     "script_shape", "script_section_name", "script_duplicate_section",
+                     "script_section_coverage", "script_turn_length", "script_reference_url",
+                     "source_evidence"):
+            self.assertEqual(code, safe_event({**event, "failure_code": code})["failure_code"])
+        self.assertNotIn("failure_code", safe_event({**event, "failure_code": "private-account"}))
+
     def test_final_log_summary_is_readable_and_uses_only_sanitized_fields(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         event = reporter.snapshot("finish")

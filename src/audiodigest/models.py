@@ -18,21 +18,28 @@ from audiodigest.content import minimize_editorial_text, normalize_url
 class DataValidationError(ValueError):
     """Raised when model or persisted data does not match the required contract."""
 
+    def __init__(self, message: str, *, failure_code: str = ""):
+        super().__init__(message)
+        self.failure_code = failure_code
+
 
 def _required_str(data: dict[str, Any], key: str) -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise DataValidationError(f"{key!r} must be a non-empty string")
+        raise DataValidationError(f"{key!r} must be a non-empty string",
+                                  failure_code="model_required_field")
     return value.strip()
 
 
 def _string_list(data: dict[str, Any], key: str, *, minimum: int = 0) -> list[str]:
     value = data.get(key, [])
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise DataValidationError(f"{key!r} must be a list of strings")
+        raise DataValidationError(f"{key!r} must be a list of strings",
+                                  failure_code="model_list_shape")
     result = [item.strip() for item in value if item.strip()]
     if len(result) < minimum:
-        raise DataValidationError(f"{key!r} must contain at least {minimum} item(s)")
+        raise DataValidationError(f"{key!r} must contain at least {minimum} item(s)",
+                                  failure_code="model_list_shape")
     return result
 
 
@@ -43,6 +50,9 @@ class DialogueTurn:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DialogueTurn:
+        if not isinstance(data, dict):
+            raise DataValidationError("dialogue turn must be an object",
+                                      failure_code="model_dialogue_shape")
         return cls(
             host=_required_str(data, "host"),
             text=_required_str(data, "text"),
@@ -64,9 +74,11 @@ def _dialogue_list(
             raise DataValidationError(f"{key!r} must not be empty")
         return [DialogueTurn(host=default_host, text=value.strip())]
     if not isinstance(value, list) or not value:
-        raise DataValidationError(f"{key!r} must be a non-empty dialogue list")
+        raise DataValidationError(f"{key!r} must be a non-empty dialogue list",
+                                  failure_code="model_dialogue_shape")
     if any(not isinstance(item, dict) for item in value):
-        raise DataValidationError(f"{key!r} dialogue entries must be objects")
+        raise DataValidationError(f"{key!r} dialogue entries must be objects",
+                                  failure_code="model_dialogue_shape")
     return [DialogueTurn.from_dict(item) for item in value]
 
 
@@ -184,13 +196,17 @@ class Story:
         *,
         allowed_sections: Sequence[str] | None = DEFAULT_SECTION_NAMES,
     ) -> Story:
+        if not isinstance(data, dict):
+            raise DataValidationError("story must be an object", failure_code="model_list_shape")
         try:
             section = parse_section(
                 _required_str(data, "section"),
                 allowed_sections=allowed_sections,
             )
         except ValueError as exc:
-            raise DataValidationError(str(exc)) from exc
+            raise DataValidationError(str(exc), failure_code=(
+                getattr(exc, "failure_code", "") or "model_structure"
+            )) from exc
         confidence = data.get("confidence")
         rank_score = data.get("rank_score")
         if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
@@ -233,13 +249,18 @@ class ScriptSection:
         default_host: str = "Dalia",
         allowed_sections: Sequence[str] | None = DEFAULT_SECTION_NAMES,
     ) -> ScriptSection:
+        if not isinstance(data, dict):
+            raise DataValidationError("script section must be an object",
+                                      failure_code="script_shape")
         try:
             name = parse_section(
                 _required_str(data, "name"),
                 allowed_sections=allowed_sections,
             )
         except ValueError as exc:
-            raise DataValidationError(str(exc)) from exc
+            raise DataValidationError(str(exc), failure_code=(
+                getattr(exc, "failure_code", "") or "script_section_name"
+            )) from exc
         dialogue_key = "dialogue" if "dialogue" in data else "narration"
         return cls(
             name=name,
@@ -285,7 +306,7 @@ class EpisodeScript:
         default_host = hosts[0]
         raw_sections = data.get("sections")
         if not isinstance(raw_sections, list):
-            raise DataValidationError("sections must be a list")
+            raise DataValidationError("sections must be a list", failure_code="script_shape")
         sections = [
             ScriptSection.from_dict(
                 item,
@@ -300,7 +321,8 @@ class EpisodeScript:
             if indexes != sorted(indexes):
                 raise DataValidationError("sections are not in the required order")
         if len({item.name for item in sections}) != len(sections):
-            raise DataValidationError("script contains duplicate sections")
+            raise DataValidationError("script contains duplicate sections",
+                                      failure_code="script_duplicate_section")
         script = cls(
             title=_required_str(data, "title"),
             hosts=hosts,

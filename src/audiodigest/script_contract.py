@@ -38,6 +38,10 @@ def _script_output_contract(
             "both_hosts_required_if_two_or_more_stories_cited": conversation,
         })
     return {
+        "required_fields": ["title", "hosts", "introduction", "sections", "conclusion"],
+        "section_fields": ["name", "dialogue", "story_ids"],
+        "turn_fields": ["host", "text"],
+        "show_notes": "list of strings; [] is valid; never invent a URL",
         "exact_hosts_in_order": host_names,
         "introduction": {
             "introduce_each_active_host": True,
@@ -51,6 +55,74 @@ def _script_output_contract(
         "closing_quote_and_source_inserted_by_application": True,
         "closing_comment": {"maximum_turns": 1, "optional": True},
     }
+
+
+def _script_output_example(contract: dict[str, Any], disclosure: str) -> dict[str, Any]:
+    """A valid structural template with real desks/IDs, not misleading placeholders."""
+    hosts = contract["exact_hosts_in_order"]
+    introduction = [{"host": host, "text": f"I'm {host}."} for host in hosts]
+    introduction[0]["text"] += " The Daily Nexus is edited and produced by Dario Novelli."
+    return {
+        "title": "The Daily Nexus - Month D, YYYY",
+        "hosts": list(hosts),
+        "introduction": introduction,
+        "sections": [{
+            "name": row["name"],
+            "dialogue": [{"host": host, "text": "Replace with distinct supported narration."}
+                         for host in hosts],
+            "story_ids": list(row["required_story_ids"] or row["available_story_ids"][:1]),
+        } for row in contract["sections"]],
+        "conclusion": [{"host": hosts[0], "text": "Thanks for listening."}],
+        "closing_comment": [],
+        "show_notes": [],
+        "disclosure": disclosure,
+    }
+
+
+def _normalize_conversation_turns(data: dict[str, Any], maximum: int) -> dict[str, Any]:
+    """Split only at existing sentence boundaries; preserve words, order and speakers.
+
+    A long single sentence still requires model correction. Never cut, summarize,
+    drop facts, change host attribution or apply this to broadcast/solo speech.
+    Independent factual review remains mandatory after this formatting operation.
+    """
+    def split(raw):
+        if not isinstance(raw, list):
+            return raw
+        turns = []
+        for turn in raw:
+            if not isinstance(turn, dict) or not isinstance(turn.get("text"), str):
+                turns.append(turn)
+                continue
+            text = turn["text"]
+            if len(text.split()) <= maximum:
+                turns.append(turn)
+                continue
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+            if any(len(sentence.split()) > maximum for sentence in sentences):
+                turns.append(turn)
+                continue
+            chunk = []
+            for sentence in sentences:
+                if chunk and len(" ".join([*chunk, sentence]).split()) > maximum:
+                    turns.append({**turn, "text": " ".join(chunk)})
+                    chunk = []
+                chunk.append(sentence)
+            if chunk:
+                turns.append({**turn, "text": " ".join(chunk)})
+        return turns
+
+    result = dict(data)
+    for key in ("introduction", "conclusion"):
+        if key in result:
+            result[key] = split(result[key])
+    if isinstance(result.get("sections"), list):
+        result["sections"] = [
+            {**row, "dialogue": split(row["dialogue"])}
+            if isinstance(row, dict) and "dialogue" in row else row
+            for row in result["sections"]
+        ]
+    return result
 
 
 def _bound_closing_comment(script: EpisodeScript, quote: ClosingQuote) -> None:

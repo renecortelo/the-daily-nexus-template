@@ -12,7 +12,8 @@ from audiodigest.editorial import (
     _normalize_script_closing,
     _script_output_contract,
 )
-from audiodigest.models import Story
+from audiodigest.models import DataValidationError, EpisodeScript, Story
+from audiodigest.script_contract import _normalize_conversation_turns, _script_output_example
 
 
 def story(identifier, section="AI"):
@@ -60,7 +61,7 @@ class EditorialDraftContractTests(TestCase):
         example = json.loads(instruction.split("Return JSON only:\n", 1)[1])
         self.assertEqual(["Nox"], example["hosts"])
         for key in ("introduction", "conclusion", "closing_comment"):
-            self.assertEqual({"Nox"}, {t["host"] for t in example[key]})
+            self.assertTrue({t["host"] for t in example[key]}.issubset({"Nox"}))
         self.assertIsNone(payload["output_contract"]["maximum_words_per_turn"])
 
     def test_listening_guide_preserves_facts_names_and_delivery_modes_without_extra_calls(self):
@@ -125,6 +126,76 @@ class EditorialDraftContractTests(TestCase):
         self.assertIsNone(contract["maximum_words_per_turn"])
         self.assertFalse(contract["sections"][0][
             "both_hosts_required_if_two_or_more_stories_cited"])
+
+    def test_ten_custom_desks_example_has_real_ids_both_hosts_and_no_invented_urls(self):
+        desks = tuple(f"Subject {i}" for i in range(10))
+        stories = [story(f"item-{i}", desks[i % 10]) for i in range(28)]
+        contract = _script_output_contract(
+            stories, desks, [s.story_id for s in stories], ["Dalia", "Nox"], "conversation",
+        )
+        example = _script_output_example(contract, AI_DISCLOSURE)
+        normalized = _normalize_script_closing(
+            example, ClosingQuote("Learn.", "An Author", "https://example.com/quote"),
+            ["Dalia", "Nox"],
+        )
+        parsed = EpisodeScript.from_dict(normalized, section_order=desks)
+        self.assertEqual(list(desks), [s.name.value for s in parsed.sections])
+        self.assertEqual(28, sum(len(s.story_ids) for s in parsed.sections))
+        self.assertTrue(all({t.host for t in s.dialogue} == {"Dalia", "Nox"}
+                            for s in parsed.sections))
+        self.assertEqual([], example["show_notes"])
+        self.assertEqual(1, parsed.introduction_text.count("Dario Novelli"))
+
+    def test_sentence_split_preserves_words_speakers_ids_and_input(self):
+        import copy
+        text = " ".join([" ".join(["supported"] * 45) + "."] * 3)
+        draft = {"sections": [{"name": "AI", "story_ids": ["first"],
+                               "dialogue": [{"host": "Nox", "text": text}]}]}
+        before = copy.deepcopy(draft)
+        turns = _normalize_conversation_turns(draft, 115)["sections"][0]["dialogue"]
+        self.assertEqual(text, " ".join(t["text"] for t in turns))
+        self.assertTrue(all(len(t["text"].split()) <= 115 for t in turns))
+        self.assertEqual({"Nox"}, {t["host"] for t in turns})
+        self.assertEqual(before, draft)
+
+    def test_overlong_single_sentence_is_never_cropped_or_silently_accepted(self):
+        draft, validate = self.closing_draft()
+        # Use the real two-host conversation validator.
+        engine = self.engine()
+        instruction, _ = self.script_request(engine, [story("first")])
+        draft = json.loads(instruction.split("Return JSON only:\n", 1)[1])
+        draft["sections"][0]["dialogue"][0]["text"] = " ".join(["supported"] * 116) + "."
+        validate = engine.antigravity.invoke.call_args.args[2]
+        with self.assertRaises(DataValidationError) as error:
+            validate(draft)
+        self.assertEqual("script_turn_length", error.exception.failure_code)
+
+    def test_wrong_desk_and_malformed_section_fail_with_safe_codes(self):
+        draft, validate = self.closing_draft()
+        draft["sections"].append(None)
+        with self.assertRaises(DataValidationError) as error:
+            validate(draft)
+        self.assertEqual("script_shape", error.exception.failure_code)
+
+        engine = self.engine(count=1)
+        engine.settings.podcast.sections = ("AI", "DATA")
+        first, second = story("first"), story("second", "DATA")
+        second.facts = ["A separate source documented a data platform test."]
+        instruction, _ = self.script_request(engine, [first, second])
+        draft = json.loads(instruction.split("Return JSON only:\n", 1)[1])
+        draft["sections"][0]["story_ids"] = ["first", "second"]
+        validate = engine.antigravity.invoke.call_args.args[2]
+        with self.assertRaises(DataValidationError) as error:
+            validate(draft)
+        self.assertEqual("script_section_coverage", error.exception.failure_code)
+
+    def test_placeholder_reporting_is_not_promoted_as_real_news(self):
+        # Structural templates are examples, never substitute source evidence.
+        engine = self.engine()
+        instruction, _ = self.script_request(engine, [story("first")])
+        self.assertNotIn("https://public-url", instruction)
+        self.assertNotIn('"exact section name"', instruction)
+        self.assertIn("original passages take precedence", instruction)
 
     def test_contract_never_bypasses_existing_coverage_or_host_validation(self):
         engine = self.engine(count=1, solo="Nox")

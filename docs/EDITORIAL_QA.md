@@ -137,3 +137,27 @@ time and account-billed minutes. A small successful sample confirms adoption,
 not a lasting reduction in retries or provider usage. Any proposed optimization
 must preserve original-source review, no-spend controls, publication reserve and
 the 60-minute workflow cap.
+
+## Structured-draft failure prevention
+
+The script example is built from the run's exact hosts, nonempty desks and required
+story IDs. It contains no fictitious public URL; empty show notes are valid. Its
+placeholder narration is a shape example, never news or a factual fallback.
+Extraction and script repair instructions are separate: an extraction repair must
+not accidentally request dialogue. The existing one-correction limit is unchanged.
+
+Dialogue arrays, required fields, section names/duplicates, desk-specific coverage,
+turn length, source evidence and unsupported reference URLs have fixed diagnostic
+codes. These categories may be logged; source snippets, IDs and exception text may
+not. Unknown diagnostics remain `model_structure`, never arbitrary model text.
+Ambiguous duplicate JSON keys and non-finite JSON constants are rejected.
+
+In two-host conversation mode only, an overlong turn can be split at existing
+sentence boundaries with its original words, order and speaker preserved. A single
+overlong sentence still requires correction; no sentence is cropped and no fact is
+removed to meet the limit. Solo/broadcast prose is not reformatted this way. All
+retained output still passes independent original-source factual review before audio.
+
+These safeguards reduce preventable contract failures; they cannot guarantee that
+an external model always returns valid, supported content. Do not claim an exact
+cause for a historical `model_structure` failure when its private draft is absent.

@@ -73,6 +73,16 @@ REASONS = {
 }
 RESULTS = {"idle", "already-claimed", "published", "completed", "failed"}
 FAILURE_CODES = {
+    "model_required_field",
+    "model_list_shape",
+    "model_dialogue_shape",
+    "script_shape",
+    "script_section_name",
+    "script_duplicate_section",
+    "script_section_coverage",
+    "script_turn_length",
+    "script_reference_url",
+    "source_evidence",
     "json_invalid",
     "model_incomplete",
     "model_timeout",

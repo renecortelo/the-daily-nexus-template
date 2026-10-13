@@ -22,6 +22,7 @@ from audiodigest.episode_budget import EpisodeBudget, plan_episode
 from audiodigest.evidence import SourceEvidenceIndex, review_evidence
 from audiodigest.models import (
     AntigravityMetadata,
+    DataValidationError,
     EpisodeScript,
     NewspaperIssue,
     SourceItem,
@@ -34,9 +35,11 @@ from audiodigest.preferences import editorial_tone
 from audiodigest.script_contract import (
     CONVERSATION_TURN_MAX_WORDS,
     _bound_closing_comment,
+    _normalize_conversation_turns,
     _normalize_script_closing,
     _normalize_script_section_order,
     _script_output_contract,
+    _script_output_example,
 )
 
 NEWSPAPER_TARGET_PROSE_WORDS = 1_050
@@ -246,7 +249,7 @@ def _stories_validator(
 ) -> list[Story]:
     raw = data.get("stories")
     if not isinstance(raw, list):
-        raise ValueError("stories must be a list")
+        raise DataValidationError("stories must be a list", failure_code="model_list_shape")
     stories = [Story.from_dict(item, allowed_sections=allowed_sections) for item in raw]
     if validate_source is not None:
         if len({story.story_id for story in stories}) != len(stories):
@@ -285,7 +288,10 @@ def _validate_reference_urls(notes: list[str], allowed: set[str]) -> None:
         trimmed = value.rstrip(".,;:!?)]}")
         safe = normalize_url(trimmed)
         if not safe or safe not in allowed:
-            raise ValueError("reference URL is not supported by the supplied source records")
+            raise DataValidationError(
+                "reference URL is not supported by the supplied source records",
+                failure_code="script_reference_url",
+            )
         return safe + value[len(trimmed):]
 
     for index, note in enumerate(notes):
@@ -694,7 +700,7 @@ Return JSON only:
     "why_it_matters": "evidence-grounded significance without speculation",
     "source_ids": ["source-0001"],
     "evidence_refs": [["source-0001:mail:001"]],
-    "source_urls": ["public HTTPS URL when available"],
+    "source_urls": [],
     "confidence": 0.0,
     "rank_score": 0.0
   }}]
@@ -721,11 +727,21 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
             "episode_date": episode_date.isoformat(),
             "sources": self._source_evidence.prompts,
             "section_definitions": editorial_section_definitions(configured_sections),
+            "output_contract": {
+                "stories": "array of objects; [] is valid only when no substantive evidence exists",
+                "source_urls": "array of exact supplied HTTPS URLs; [] is valid",
+                "evidence_refs": "one array per facts entry, each with 1-2 exact passage IDs",
+                "exact_configured_sections": list(configured_sections),
+                "source_ids": "exact aliases from sources[].message_id, never real mailbox IDs",
+            },
         }
 
         def validate_stories(data: dict[str, Any]) -> list[Story]:
             def validate_source(story: Story, raw: dict[str, Any]) -> None:
-                self._source_evidence.bind(story, raw)
+                try:
+                    self._source_evidence.bind(story, raw)
+                except DataValidationError as exc:
+                    raise DataValidationError(str(exc), failure_code="source_evidence") from exc
                 story.source_ids = [alias_to_source[alias] for alias in story.source_ids]
 
             stories = _stories_validator(
@@ -812,10 +828,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
         output_contract = _script_output_contract(
             stories, section_order, required_story_ids, host_names, dialogue_style,
         )
-        introduction_shape = [
-            {"host": host_name, "text": "spoken opening and first-person introduction"}
-            for host_name in host_names
-        ]
+        output_example = _script_output_example(output_contract, AI_DISCLOSURE)
         if len(host_names) == 1:
             conversation_rule = (
                 "This is a single-host program. Do not invent or address an absent co-host."
@@ -823,7 +836,8 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
         elif dialogue_style == "conversation":
             conversation_rule = (
                 "This is a natural two-host news conversation. Both hosts must speak in the "
-                "introduction and in every substantive section. Use shorter turns, genuine "
+                "introduction and every section citing two or more stories. Use shorter turns, "
+                "genuine "
                 "questions, evidence-based reactions, clarification, and occasional restrained "
                 "disagreement or humor. Let one host build on the other's point instead of "
                 "reading alternating blocks. Never invent personal experiences, unsupported "
@@ -971,21 +985,7 @@ Do not output this checklist or treat it as a substitute for the independent fac
 {repair}
 
 Return JSON only:
-{{
-  "title": "The Daily Nexus - Month D, YYYY",
-  "hosts": {json.dumps(host_names)},
-  "introduction": {json.dumps(introduction_shape, ensure_ascii=False)},
-  "sections": [{{
-    "name": "exact section name",
-    "dialogue": [{{"host": {json.dumps(host_names[0])}, "text": "spoken narration"}}],
-    "story_ids": ["cited story ID"]
-  }}],
-  "conclusion": [{{"host": {json.dumps(host_names[0])}, "text": "short closing"}}],
-  "closing_comment": [{{"host": {json.dumps(host_names[-1])},
-                       "text": "12-20-word original witty observation"}}],
-  "show_notes": ["Headline - Publication - https://public-url"],
-  "disclosure": {json.dumps(AI_DISCLOSURE)}
-}}
+{json.dumps(output_example, ensure_ascii=False, indent=2)}
 """.strip()
         payload = {
             "episode_date": episode_date.isoformat(),
@@ -1008,6 +1008,8 @@ Return JSON only:
             )
 
         def validate_script(data: dict[str, Any]) -> EpisodeScript:
+            if len(host_names) == 2 and dialogue_style == "conversation":
+                data = _normalize_conversation_turns(data, CONVERSATION_TURN_MAX_WORDS)
             data = _normalize_script_section_order(data, section_order)
             data = _normalize_script_closing(data, closing_quote, host_names)
             script = EpisodeScript.from_dict(
@@ -1044,7 +1046,10 @@ Return JSON only:
                         len(turn.text.split()) > CONVERSATION_TURN_MAX_WORDS
                         for turn in script.dialogue_turns
                     ):
-                        raise ValueError("conversation turns must stay concise and responsive")
+                        raise DataValidationError(
+                            "conversation turns must stay concise and responsive",
+                            failure_code="script_turn_length",
+                        )
             if closing_quote.text not in script.sign_off_text:
                 raise ValueError("the sign-off must reproduce the selected quotation")
             if closing_quote.author not in script.sign_off_text:
@@ -1064,6 +1069,14 @@ Return JSON only:
             ):
                 raise ValueError("TIH: Today in History must be the first script section")
             valid_story_ids = {story.story_id for story in stories}
+            story_desks = {story.story_id: story.section.value for story in stories}
+            for section in script.sections:
+                if any(story_desks.get(identifier, section.name.value) != section.name.value
+                       for identifier in section.story_ids):
+                    raise DataValidationError(
+                        "story IDs must be cited under their supplied subject section",
+                        failure_code="script_section_coverage",
+                    )
             cited_story_ids = {
                 story_id for section in script.sections for story_id in section.story_ids
             }

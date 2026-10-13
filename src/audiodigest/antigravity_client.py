@@ -21,6 +21,7 @@ from audiodigest.private_store import (
     write_private_value,
 )
 from audiodigest.progress import (
+    FAILURE_CODES,
     clear_failure_code,
     increment,
     record_failure_code,
@@ -37,6 +38,9 @@ class AntigravityCLIError(RuntimeError):
 
 
 def _validation_code(exc: Exception) -> str:
+    explicit = getattr(exc, "failure_code", "")
+    if isinstance(explicit, str) and explicit in FAILURE_CODES:
+        return explicit
     if isinstance(exc, json.JSONDecodeError) or "not valid json" in str(exc).casefold():
         return "json_invalid"
     text = str(exc).casefold()
@@ -200,8 +204,21 @@ def _json_from_response(value: str) -> dict[str, Any]:
     )
     if fence:
         text = fence.group(1)
+    def object_fields(pairs):
+        result = {}
+        for key, item in pairs:
+            if key in result:
+                raise DataValidationError("JSON object contains duplicate keys",
+                                          failure_code="json_invalid")
+            result[key] = item
+        return result
+
+    def invalid_constant(_value):
+        raise DataValidationError("JSON must not contain non-finite numeric constants",
+                                  failure_code="json_invalid")
+
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(text, object_pairs_hook=object_fields, parse_constant=invalid_constant)
     except json.JSONDecodeError as exc:
         raise DataValidationError(f"Antigravity response was not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
@@ -474,7 +491,7 @@ class AntigravityCLI:
                 if attempt < retries:
                     print(
                         "Antigravity draft needs correction; retrying with the "
-                        f"rejected draft ({exc}).",
+                        f"rejected draft ({failure_code}).",
                         flush=True,
                     )
                     current_payload = {
@@ -493,6 +510,7 @@ class AntigravityCLI:
                         ),
                     }
         raise AntigravityCLIError(
-            f"Antigravity output failed validation: {last_error}",
-            failure_code=getattr(last_error, "failure_code", "") or _validation_code(last_error),
+            f"Antigravity output failed validation: {_validation_code(last_error)}; "
+            "raw validation details withheld for privacy",
+            failure_code=_validation_code(last_error),
         )
