@@ -48,6 +48,17 @@ fill a target duration or treat a shorter edition as a failure without looking
 at the available evidence. Original-source approval and publication verification
 remain mandatory.
 
+Review packets share an excerpt only when its original text, source group and
+attribution are identical. Each fact still points to its complete supporting
+text. Overlapping prose, different source messages and different articles are
+not merged. Within the packet, `fact_support` points to the first validated
+identical excerpt, not to a shortened or newly summarized passage.
+Original evidence IDs and hashes remain in the private manifest;
+integrity, collected-source checks and the review-size bound run before this
+packet-only compaction. This adds no model call and removes no factual review.
+A smaller packet is not proof of a faster model response; measure ordinary
+deliveries before claiming time savings.
+
 ### Investigating a coverage gap
 
 Follow the pipeline in order instead of treating every gap as a Gmail failure:

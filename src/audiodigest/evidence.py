@@ -155,6 +155,7 @@ def review_evidence(
     detect corruption, not authorship or authenticity against a malicious editor.
     """
     passages: dict[str, dict[str, Any]] = {}
+    originals: dict[str, str] = {}
     claims = []
     for story in stories:
         if index is not None:
@@ -188,9 +189,12 @@ def review_evidence(
                 "url": normalize_url(support.url) if support.url else "",
                 "text": minimize_editorial_text(support.excerpt),
             }
-            if ref in passages and passages[ref] != record:
+            if ref in passages and (
+                passages[ref] != record or originals[ref] != support.excerpt
+            ):
                 raise DataValidationError("source passage identifier has conflicting evidence")
             passages[ref] = record
+            originals[ref] = support.excerpt
             if ref not in supports[support.fact_index]:
                 supports[support.fact_index].append(ref)
         if not supports or any(not refs for refs in supports.values()):
@@ -203,8 +207,32 @@ def review_evidence(
         )
     if sum(len(item["text"]) for item in passages.values()) > MAX_REVIEW_EVIDENCE_CHARS:
         raise DataValidationError("original-source evidence exceeds the bounded review size")
+
+    # Neighboring citations can carry exactly the same original context (for
+    # example, both passages of a two-paragraph item). Share only byte-identical
+    # original excerpts from the same source group and attribution. Never merge
+    # overlapping prose or deduplicate across newsletters/articles. Validation
+    # and the size bound above apply to every original before this representation
+    # change; persisted StoryEvidence and its integrity hashes are untouched.
+    retained: list[dict[str, Any]] = []
+    representatives: dict[tuple[str, ...], str] = {}
+    canonical: dict[str, str] = {}
+    for ref, record in passages.items():
+        signature = (
+            ref.rsplit(":", 1)[0], originals[ref], record["source_id"],
+            record["publication"], record["source_type"], record["kind"], record["url"],
+            record["text"],
+        )
+        if signature not in representatives:
+            representatives[signature] = ref
+            retained.append(record)
+        canonical[ref] = representatives[signature]
+    for claim in claims:
+        claim["passage_ids"] = list(dict.fromkeys(
+            canonical[ref] for ref in claim["passage_ids"]
+        ))
     return {
         "version": "source-passages-v1",
         "origin": "collected-this-run" if index is not None else "saved-source-excerpts",
-        "passages": list(passages.values()), "fact_support": claims,
+        "passages": retained, "fact_support": claims,
     }
