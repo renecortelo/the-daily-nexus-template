@@ -53,6 +53,8 @@ COUNTERS = {
     "model_retries",
     "model_validation_failures",
     "model_validation_recoveries",
+    "script_patch_repairs",
+    "script_full_repairs",
     "progress_updates_failed",
 }
 OPERATIONS = {"model", "voice_model", "speech", "audio_encode", "paper_render"}

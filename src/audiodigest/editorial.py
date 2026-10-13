@@ -32,6 +32,7 @@ from audiodigest.models import (
 )
 from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
+from audiodigest.progress import increment
 from audiodigest.script_contract import (
     CONVERSATION_TURN_MAX_WORDS,
     _bound_closing_comment,
@@ -42,6 +43,7 @@ from audiodigest.script_contract import (
     _script_output_example,
     _script_source_notes,
 )
+from audiodigest.script_patches import apply_script_edits, script_repair_contract
 
 NEWSPAPER_TARGET_PROSE_WORDS = 1_050
 NEWSPAPER_TARGET_TOTAL_WORDS = 1_300
@@ -1013,14 +1015,50 @@ Return JSON only:
                 stories, self._source_aliases, self._source_evidence,
             )
 
+        # Only factual repairs of an existing draft can return a bounded patch.
+        # Broader corrections retain the full response in this same budgeted call.
+        previous_draft = previous_script.to_dict() if previous_script and repair_issues else None
+        maximum_turn_words = output_contract["maximum_words_per_turn"]
+        if previous_draft is not None:
+            payload["repair_response_contract"] = script_repair_contract(maximum_turn_words)
+            instruction = instruction.replace("Return JSON only:\n", "Full-script alternative:\n")
+            instruction += (
+                "\nFor this repair, prefer the exact edits response in "
+                "payload.repair_response_contract instead of returning the entire script. "
+                "Use zero-based indexes and copy expected text exactly from previous_script. "
+                "Replace only existing news-turn text; preserve speakers, story_ids, order, "
+                "introduction, conclusion and the approved closing. Correct all latest issues "
+                "from original evidence, never from an anchor alone. If any issue requires "
+                "other fields, additional turns, more edits than allowed, or broader changes, "
+                "return the complete script using the preceding output_contract and example "
+                "instead. Do not combine edits and script fields. Do not return a no-op. "
+                "This is the same response, not an additional call. Full structural and "
+                "independent factual review remain mandatory."
+            )
+
+        applied_edit_count: int | None = None
+
         def validate_script(data: dict[str, Any]) -> EpisodeScript:
+            nonlocal applied_edit_count
+            patched = "edits" in data
+            edit_count = len(data.get("edits", [])) if isinstance(data.get("edits"), list) else 0
+            if patched:
+                if previous_draft is None:
+                    raise DataValidationError(
+                        "script edits require an existing factual-repair draft",
+                        failure_code="script_shape",
+                    )
+                data = apply_script_edits(
+                    previous_draft, data, maximum_words_per_turn=maximum_turn_words,
+                )
             # This field belongs to the application, not the drafting model. Discard
             # it before parsing even when a legacy draft supplies a malformed value.
             data = {**data, "show_notes": []}
-            if len(host_names) == 2 and dialogue_style == "conversation":
+            if not patched and len(host_names) == 2 and dialogue_style == "conversation":
                 data = _normalize_conversation_turns(data, CONVERSATION_TURN_MAX_WORDS)
             data = _normalize_script_section_order(data, section_order)
-            data = _normalize_script_closing(data, closing_quote, host_names)
+            if not patched:
+                data = _normalize_script_closing(data, closing_quote, host_names)
             script = EpisodeScript.from_dict(
                 data,
                 section_order=section_order,
@@ -1035,6 +1073,10 @@ Return JSON only:
                 raise ValueError(
                     "the introduction must credit editor and producer Dario Novelli exactly once"
                 )
+            if closing_quote.text not in script.sign_off_text:
+                raise ValueError("the sign-off must reproduce the selected quotation")
+            if closing_quote.author not in script.sign_off_text:
+                raise ValueError("the sign-off must name the quotation author")
             _bound_closing_comment(script, closing_quote)
             if len(host_names) == 2:
                 speakers = {turn.host.casefold() for turn in script.dialogue_turns}
@@ -1059,10 +1101,6 @@ Return JSON only:
                             "conversation turns must stay concise and responsive",
                             failure_code="script_turn_length",
                         )
-            if closing_quote.text not in script.sign_off_text:
-                raise ValueError("the sign-off must reproduce the selected quotation")
-            if closing_quote.author not in script.sign_off_text:
-                raise ValueError("the sign-off must name the quotation author")
             has_tih = any(story.section == Section.TODAY_IN_HISTORY for story in stories)
             if has_tih and (
                 not script.sections or script.sections[0].name != Section.TODAY_IN_HISTORY
@@ -1096,6 +1134,20 @@ Return JSON only:
                     f"the evidence-sized maximum is {target_max}"
                 )
             script.show_notes = _script_source_notes(script, stories, closing_quote)
+            if patched:
+                # Do not silently reshape already valid copy, including quote-host
+                # attribution. Word count and source notes are application-owned.
+                immutable_result = script.to_dict()
+                for key in ("word_count", "show_notes"):
+                    immutable_result.pop(key, None)
+                expected_result = {key: value for key, value in data.items()
+                                   if key not in {"word_count", "show_notes"}}
+                if immutable_result != expected_result:
+                    raise DataValidationError(
+                        "script repair must preserve all other draft fields",
+                        failure_code="script_shape",
+                    )
+            applied_edit_count = edit_count if patched else None
             return script
 
         script, metadata = self.antigravity.invoke(
@@ -1104,6 +1156,17 @@ Return JSON only:
             validate_script,
             retries=1,
         )
+        if previous_draft is not None:
+            increment("script_patch_repairs" if applied_edit_count is not None
+                      else "script_full_repairs")
+            repair_format = (
+                f"{applied_edit_count} bounded news-turn edits"
+                if applied_edit_count is not None else "complete structured draft"
+            )
+            print(
+                f"Script repair response: {repair_format}; full factual review follows.",
+                flush=True,
+            )
         print(
             f"Script coverage: {len(required_story_ids)} selected story IDs cited "
             f"in {script.word_count:,} words; factual review follows; no minimum or filler.",

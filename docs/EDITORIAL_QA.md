@@ -188,3 +188,29 @@ story IDs, altered source lineage, and factual failures still block publication.
 Regression checks cover a repaired draft reintroducing an unsupported URL, a
 newsletter without a public link, tracking/credential removal, duplicate links,
 and legitimate source URLs ending with punctuation.
+
+### Bounded factual script repairs
+
+After a rejected factual review, the existing repair call can return exact text
+replacements for existing news turns instead of returning the complete script.
+At most twelve unique targets are accepted. Each uses zero-based section/turn
+indexes and the exact current text as an anchor; stale anchors, unknown fields,
+mixed script/patch responses, no-op edits and invalid batches are rejected
+atomically. Hosts, story IDs, source lineage, headings, introduction, conclusion
+and trusted closing cannot be changed through a patch. Conversation replacements
+retain the existing 115-word ceiling without cropping or silently splitting them.
+
+Issues requiring broader changes use the complete-script response in the same
+already-budgeted call. The existing single structural retry and configured factual
+repair limit remain unchanged: there is no extra fallback call, model pass or
+automatic episode retry. The complete reconstructed script still passes the same
+structural, coverage, host, quotation and episode-length constraints, followed by
+the unchanged independent factual review against original source passages. Text
+anchors establish the target only; they are not proof of a claim. Application-owned
+word counts and source notes are recomputed, not model-controlled.
+
+Cloud profiles count structurally accepted patch and full-script repair responses;
+local output also shows the edit count. These counters do not establish factual
+approval and contain no private text or anchors. Validate adoption and timing in ordinary deliveries;
+smaller response size does not establish model latency, reduced billed minutes,
+or unchanged subjective audio quality. No synthesis or voice setting changed.

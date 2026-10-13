@@ -12,6 +12,18 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
         "preserve_valid_facts_attribution_and_qualifiers": True,
         "never_expand_to_reach_a_minimum": True,
     }
+    if isinstance(payload.get("repair_response_contract"), dict):
+        plan["action"] = (
+            "Return a complete valid JSON response under repair_response_contract. "
+            "Prefer bounded news-turn edits with exact expected text from previous_script, "
+            "not the rejected edits. Correct all latest review issues using original "
+            "source_evidence. Do not change speakers, story IDs, section order or closing "
+            "through edits. For broader changes return a complete script under "
+            "output_contract in this same response, never mixed with edits. "
+            "Preserve already valid corrections; do not guess truncated content, "
+            "add filler or weaken any structural or factual validator."
+        )
+        return plan
     if code in {"json_invalid", "model_incomplete"}:
         plan["action"] = (
             "Return a complete valid JSON object using supplied evidence. Do not guess "
