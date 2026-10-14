@@ -119,3 +119,27 @@ savings, and matching repeated PCM does not certify subjective naturalness.
 Before adopting a synthesis change, compare equivalent text, voices, pronunciation,
 sample counts and complete encoded output on equivalent hardware. The current
 one-thread and inference-mode experiments do not justify a production change.
+
+## Optional newspaper admission and deadline
+
+Only protected cloud runs use this policy; local desktop behavior is unchanged.
+Before starting paper generation, reserve `max(900, ceil(0.55 * verified_script_words)
++ 180)` seconds for speech, encoding, publication and promotion. This conservative
+policy scales beyond the old 15-minute floor; it is not a measured completion guarantee.
+The remaining optional paper window is capped at ten minutes. With less than three
+minutes available, no paper model/render call starts. Existing structural and full
+original-source review remain required; rejected or incomplete copy is never published.
+
+The shared deadline covers writing, review/repairs, JSON/PDF/previews and progress-file
+promotion. Subprocess timeouts use that earlier deadline; the existing owned Unix
+alarm is shortened in the main thread and restored minus elapsed time afterwards,
+never renewed from scratch. Cooperative checks remain on other platforms/threads.
+Python signals do not guarantee interruption of long native C work; the unchanged
+55-minute protected task deadline and 60-minute workflow cap remain the final guards.
+See [Python signal behavior](https://docs.python.org/3.12/library/signal.html).
+
+An insufficient/exhausted optional window records `deferred`, not a disabled user
+preference or factual approval. The verified podcast continues with no paper and no
+automatic paper retry. Fixed numeric reserve/window/outcome counters reach the owner
+monitor. Cost/security errors and actual global exhaustion still abort the task.
+Ordinary future runs must verify adoption; no extra test generation is needed.

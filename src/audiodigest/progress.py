@@ -65,6 +65,8 @@ COUNTERS = {
     "speech_characters", "speech_samples",
     "evidence_passages_input", "evidence_passages_sent", "evidence_context_chars_saved",
     "progress_updates_failed",
+    "paper_completion_reserve_seconds", "paper_allowance_seconds",
+    "paper_budget_skipped", "paper_budget_exhausted",
 }
 OPERATIONS = {"model", "voice_model", "speech", "speech_prepare", "speech_pipeline",
               "speech_write", "speech_edges", "audio_encode", "paper_render"}

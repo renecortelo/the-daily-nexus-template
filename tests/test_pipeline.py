@@ -536,7 +536,10 @@ class OptionalNewspaperTests(TestCase):
     def test_newspaper_opt_out_publishes_podcast_without_paper_calls(self):
         self._assert_podcast_without_paper(include_newspaper=False)
 
-    def _assert_podcast_without_paper(self, *, include_newspaper):
+    def test_deferred_paper_publishes_verified_podcast_without_starting_optional_calls(self):
+        self._assert_podcast_without_paper(include_newspaper=True, deferred=True)
+
+    def _assert_podcast_without_paper(self, *, include_newspaper, deferred=False):
         sources = fixture_sources(Path("tests/fixtures/newsletters.json"))
         story = Story.from_dict(
             {
@@ -601,6 +604,8 @@ class OptionalNewspaperTests(TestCase):
                 patch("audiodigest.pipeline.run_cost_guard"),
                 patch("audiodigest.pipeline.KokoroAudioRenderer") as renderer,
                 patch("audiodigest.pipeline.FirebasePublisher") as publisher,
+                patch("audiodigest.pipeline.remaining_time",
+                      return_value=950 if deferred else None),
             ):
                 renderer.return_value.render.side_effect = render
                 publisher.return_value.publish.return_value = PublishResult(
@@ -608,10 +613,13 @@ class OptionalNewspaperTests(TestCase):
                 )
                 result = pipeline.run(requested_date=date(2026, 8, 10))
             self.assertEqual("published", result["status"])
-            expected_status = "failed" if include_newspaper else "skipped"
+            expected_status = (
+                "deferred" if deferred else "failed" if include_newspaper else "skipped"
+            )
             self.assertEqual(expected_status, result["newspaper_status"])
             self.assertEqual(
-                int(include_newspaper), pipeline._generate_verified_newspaper.call_count
+                int(include_newspaper and not deferred),
+                pipeline._generate_verified_newspaper.call_count
             )
             self.assertEqual("", result["newspaper_path"])
             self.assertTrue(Path(result["audio_path"]).is_file())

@@ -514,6 +514,18 @@ test('efficiency details show only measured values and fixed nested locations', 
   assert.doesNotMatch(text,/synthetic-private/);
 });
 
+test('optional paper deferral is distinct from disabled preferences and terminal podcast failure', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'Synthetic time';context.durationText=v=>`${v/1000}s`;
+  context.appState.resourceProfile={status:'completed',at:'2026-10-14T03:00:00Z',elapsed_seconds:100,
+    counters:{paper_completion_reserve_seconds:900,paper_allowance_seconds:50,paper_budget_skipped:1}};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(n=>n.textContent).join(' ');
+  assert.match(text,/COMPLETED/);assert.match(text,/INSUFFICIENT PROTECTED TIME/);
+  assert.match(text,/NO PAPER CALL STARTED/);assert.match(text,/NO AUTOMATIC RETRY/);
+  assert.doesNotMatch(text,/GENERATION FAILED|AS REQUESTED/);
+});
+
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {
   const {context}=harness(['consoleSessionFor']);
   const storage=storageFixture(); const started=Date.parse('2026-10-09T06:00:00Z');

@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 import uuid
 from collections import Counter
 from datetime import date, datetime
@@ -37,7 +38,12 @@ from audiodigest.editorial import (
 )
 from audiodigest.episode_budget import newsletter_coverage, plan_episode
 from audiodigest.evidence import review_evidence
-from audiodigest.execution_budget import RunBudgetExceeded, check_budget, reserve_time
+from audiodigest.execution_budget import (
+    RunBudgetExceeded,
+    check_budget,
+    remaining_time,
+    reserve_time,
+)
 from audiodigest.gmail_client import GmailClient, fixture_sources
 from audiodigest.models import (
     DataValidationError,
@@ -53,7 +59,8 @@ from audiodigest.newspaper import (
     NewspaperRenderError,
     is_legacy_script_style_issue,
 )
-from audiodigest.progress import counts, stage, timed_operation
+from audiodigest.paper_budget import PAPER_MINIMUM_SECONDS, completion_reserve, paper_allowance
+from audiodigest.progress import clear_failure_code, counts, increment, stage, timed_operation
 from audiodigest.publisher import FirebasePublisher, PublishResult
 from audiodigest.web_fetcher import ArticleFetchError, SafeArticleFetcher, UnsafeURLError
 
@@ -525,31 +532,43 @@ class Pipeline:
         return newspaper, metadata
 
     def _prepare_newspaper_artifact(
-        self, stories, day, working_dir, in_progress_dir, *, edition_name=""
+        self, stories, day, working_dir, in_progress_dir, *, edition_name="", script_words=None
     ):
         """An optional paper cannot invalidate an already verified audio script."""
-        try:
-            with reserve_time(15 * 60):
-                newspaper, metadata = self._generate_verified_newspaper(stories, day)
-            json_path = working_dir / "newspaper.json"
-            json_path.write_text(
-                json.dumps(newspaper.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            with timed_operation("paper_render"):
-                result = NewspaperRenderer(self.settings).render(
-                    newspaper,
-                    day,
-                    working_dir / "edition.pdf",
-                    working_dir / "edition-1.png",
-                    edition_name=edition_name,
+        reserve = completion_reserve(script_words)
+        remaining = remaining_time()
+        allowance = paper_allowance(remaining, reserve)
+        if allowance is not None:
+            counts(paper_completion_reserve_seconds=reserve, paper_allowance_seconds=allowance)
+            if allowance < PAPER_MINIMUM_SECONDS:
+                increment("paper_budget_skipped")
+                print(
+                    "Newspaper deferred: insufficient protected time; prioritizing verified audio.",
+                    flush=True,
                 )
-            previews = list(result.preview_paths)
-            progress_files = [
-                (json_path, in_progress_dir / "newspaper.json"),
-                (result.pdf_path, in_progress_dir / "edition.pdf"),
-            ]
-            progress_files.extend((path, in_progress_dir / path.name) for path in previews)
-            _promote_episode_files(progress_files)
+                return None, [{"stage": "newspaper-deferred", "reason": "budget_insufficient"}], []
+        phase_started = time.monotonic()
+        try:
+            with reserve_time(reserve, maximum_seconds=allowance):
+                newspaper, metadata = self._generate_verified_newspaper(stories, day)
+                json_path = working_dir / "newspaper.json"
+                json_path.write_text(
+                    json.dumps(newspaper.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                check_budget()
+                with timed_operation("paper_render"):
+                    result = NewspaperRenderer(self.settings).render(
+                        newspaper, day, working_dir / "edition.pdf", working_dir / "edition-1.png",
+                        edition_name=edition_name,
+                    )
+                check_budget()
+                previews = list(result.preview_paths)
+                progress_files = [
+                    (json_path, in_progress_dir / "newspaper.json"),
+                    (result.pdf_path, in_progress_dir / "edition.pdf"),
+                ]
+                progress_files.extend((path, in_progress_dir / path.name) for path in previews)
+                _promote_episode_files(progress_files)
             return newspaper, metadata, previews
         except (AntigravityPaymentRiskError, AntigravityConfigurationError):
             raise  # Cost/security guards remain fatal, not an optional-paper fallback.
@@ -562,6 +581,17 @@ class Pipeline:
             RunBudgetExceeded,
         ) as exc:
             check_budget()  # A globally exhausted deadline still stops the whole task.
+            clear_failure_code()
+            phase_expired = allowance is not None and (
+                isinstance(exc, RunBudgetExceeded)
+                or isinstance(exc, subprocess.TimeoutExpired)
+                and time.monotonic() - phase_started >= allowance
+            )
+            if phase_expired:
+                increment("paper_budget_exhausted")
+                print("Newspaper deferred: protected paper window exhausted; continuing to audio.",
+                      flush=True)
+                return None, [{"stage": "newspaper-deferred", "reason": "budget_exhausted"}], []
             print(
                 "Newspaper unavailable; continuing with the independently verified podcast.",
                 flush=True,
@@ -925,12 +955,16 @@ class Pipeline:
                         working_episode_dir,
                         in_progress_dir,
                         edition_name=run_name if execution_id else "",
+                        script_words=script.word_count,
                     )
                 )
             else:
                 newspaper, newspaper_metadata, preview_work_paths = None, [], []
             newspaper_status = (
                 "ready" if newspaper
+                else "deferred" if any(
+                    m.get("stage") == "newspaper-deferred" for m in newspaper_metadata
+                )
                 else "failed" if self.settings.podcast.include_newspaper
                 else "skipped"
             )

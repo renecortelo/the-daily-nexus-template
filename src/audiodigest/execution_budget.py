@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import signal
+import threading
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -29,18 +30,47 @@ def operation_timeout(default: float) -> float:
 
 
 @contextmanager
-def reserve_time(seconds: float):
+def reserve_time(seconds: float, *, maximum_seconds: float | None = None):
     """Bound an optional phase while preserving time for speech and publishing."""
+    for value in (seconds, maximum_seconds):
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                  or not math.isfinite(value) or value < 0):
+            raise ValueError("Invalid optional phase budget")
     deadline = _DEADLINE.get()
     if deadline is None:
         yield
         return
-    token = _DEADLINE.set(deadline - seconds)
+    started = time.monotonic()
+    phase_deadline = deadline - seconds
+    if maximum_seconds is not None:
+        phase_deadline = min(phase_deadline, started + maximum_seconds)
+    token = _DEADLINE.set(phase_deadline)
+    previous_timer = None
     try:
         check_budget()
+        if (hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread()
+                and signal.getsignal(signal.SIGALRM) is RunBudget._expired):
+            old_delay, _interval = signal.getitimer(signal.ITIMER_REAL)
+            delay = phase_deadline - started
+            if old_delay > 0:
+                delay = min(delay, old_delay)
+            previous_timer = signal.setitimer(signal.ITIMER_REAL, delay)
         yield
+        check_budget()
     finally:
         _DEADLINE.reset(token)
+        if previous_timer is not None:
+            # Never restart the outer clock at its original full duration.
+            remaining = previous_timer[0] - (time.monotonic() - started)
+            delay = max(0.000001, remaining) if previous_timer[0] > 0 else 0.0
+            signal.setitimer(signal.ITIMER_REAL, delay, previous_timer[1])
+
+
+def remaining_time() -> float | None:
+    """None means a local run without a protected cloud deadline."""
+    check_budget()
+    deadline = _DEADLINE.get()
+    return None if deadline is None else max(0.0, deadline - time.monotonic())
 
 
 class RunBudget:

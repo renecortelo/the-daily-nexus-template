@@ -272,7 +272,7 @@ def _published_metadata(
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("newspaper_status") in {"ready", "failed", "skipped"}:
+            if manifest.get("newspaper_status") in {"ready", "failed", "skipped", "deferred"}:
                 newspaper_status = manifest["newspaper_status"]
             if isinstance(manifest.get("newspaper"), dict):
                 newspaper_document = manifest["newspaper"]
@@ -732,6 +732,10 @@ def _execute_generation(
                 request_detail += " Podcast is ready; newspaper generation failed."
             elif metadata.get("newspaperStatus") == "skipped":
                 request_detail += " Newspaper skipped as requested."
+            elif metadata.get("newspaperStatus") == "deferred":
+                request_detail += (
+                    " Newspaper deferred to protect audio/publishing time; no automatic retry."
+                )
             client.patch_private_document(
                 "runRequests",
                 request_id,

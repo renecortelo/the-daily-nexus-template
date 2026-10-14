@@ -1,5 +1,8 @@
 # Trust and polish implementation plan
 
+Pending-work source of truth: [WORK_PLAN.md](WORK_PLAN.md). This document is a
+chronological implementation record; it must not be used to invent a new backlog.
+
 This plan improves the existing per-user product without a provider migration,
 paid APIs, extra model-review passes, a shared multi-user service, or a broad UI
 redesign. Production credentials and deployment state must never enter the

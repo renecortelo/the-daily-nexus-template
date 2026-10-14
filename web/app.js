@@ -1652,6 +1652,9 @@ function renderResourceSummary() {
     const metadataRepairs = metricNumber(profile.counters?.extraction_metadata_repairs);
     if (metadataRepairs !== null && metadataRepairs > 0) add(`EXTRACTION METADATA NORMALIZED // ${metadataRepairs}; FACTS AND SOURCE REFERENCES UNCHANGED`);
     const metrics = profile.counters || {};
+    if (metricNumber(metrics.paper_completion_reserve_seconds) !== null) add(`OPTIONAL PAPER BUDGET // AUDIO/PUBLISHING RESERVE ${secondsText(metrics.paper_completion_reserve_seconds)} · PAPER WINDOW ${secondsText(metricNumber(metrics.paper_allowance_seconds) ?? 0)}; ESTIMATE, NOT A COMPLETION GUARANTEE`);
+    if ((metricNumber(metrics.paper_budget_skipped) ?? 0) > 0) add("PAPER DEFERRED // INSUFFICIENT PROTECTED TIME; NO PAPER CALL STARTED, NO AUTOMATIC RETRY");
+    if ((metricNumber(metrics.paper_budget_exhausted) ?? 0) > 0) add("PAPER DEFERRED // OPTIONAL TIME WINDOW EXHAUSTED; VERIFIED PODCAST PRIORITIZED, NO AUTOMATIC RETRY");
     const contextsIn = metricNumber(metrics.evidence_passages_input), contextsSent = metricNumber(metrics.evidence_passages_sent);
     if (contextsIn !== null && contextsSent !== null) add(`EXACT CONTEXT SHARING ACROSS REVIEW PACKETS // ${contextsIn} entries → ${contextsSent}; ${metricNumber(metrics.evidence_context_chars_saved) ?? 0} repeated context characters not resent; ALL FACT SUPPORT RETAINED, NOT A TOKEN OR TIME SAVING MEASUREMENT`);
     const acceptedMs = metricNumber(metrics.model_accepted_ms), rejectedMs = metricNumber(metrics.model_rejected_ms);
@@ -2252,6 +2255,8 @@ function renderEpisodeArchives() {
         ? "RETIRED // OUTSIDE HOSTED RETENTION WINDOW"
         : data.newspaperStatus === "failed"
         ? "NEWSPAPER FAILED // VERIFIED PODCAST AVAILABLE IN PLAY"
+        : data.newspaperStatus === "deferred"
+          ? "NEWSPAPER DEFERRED // TIME BUDGET PROTECTED; VERIFIED PODCAST AVAILABLE IN PLAY"
         : data.newspaperStatus === "skipped"
           ? "PODCAST ONLY // NEWSPAPER NOT REQUESTED"
           : "PDF URL NOT SYNCHRONIZED"));
