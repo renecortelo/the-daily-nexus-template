@@ -111,7 +111,10 @@ class EfficiencyDiagnosticsTests(TestCase):
             add_metric("fictional-private-key", 30)
             final = reporter.finish("completed")
             add_metric("model_request_bytes", 50)
-            self.assertEqual(final, reporter.snapshot("finish"))
+            # Snapshot emission time is fresh; terminal measurements must stay frozen.
+            later = reporter.snapshot("finish")
+            self.assertEqual({key: value for key, value in final.items() if key != "at"},
+                             {key: value for key, value in later.items() if key != "at"})
         finally:
             reporter.close()
         self.assertEqual(30, final["counters"]["model_request_bytes"])
