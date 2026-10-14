@@ -20,6 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
+
 PREFIX = "TDN_PROGRESS "
 STAGES = {
     0: "Preparing",
@@ -33,6 +35,7 @@ STAGES = {
     8: "Publishing",
 }
 COUNTERS = {
+    *ACCOUNTING_COUNTERS,
     "newsletters",
     "links",
     "articles",

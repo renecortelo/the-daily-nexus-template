@@ -47,6 +47,7 @@ from audiodigest.models import (
     Story,
     source_prompt_dicts,
 )
+from audiodigest.newsletter_accounting import accounting_counts
 from audiodigest.newspaper import (
     NewspaperRenderer,
     NewspaperRenderError,
@@ -589,12 +590,14 @@ class Pipeline:
         episode_budget: dict[str, Any] | None = None,
         newspaper_status: str = "failed",
         audio_quality: AudioQuality | None = None,
+        newsletter_accounting: list[dict[str, Any]] | None = None,
     ) -> None:
         manifest = {
             "episode_date": day.isoformat(),
             "guid": guid,
             "source_message_ids": source_ids,
             "source_mix": source_mix,
+            "newsletter_accounting": newsletter_accounting or [],
             "episode_budget": episode_budget or {},
             "stories": [item.to_dict() for item in stories],
             "script": script.to_dict(),
@@ -715,6 +718,16 @@ class Pipeline:
             counts(**{key: extracted_coverage[key] for key in (
                 "newsletters_with_extracted_news", "newsletters_without_extracted_news",
             )})
+            newsletter_accounting = getattr(self.editorial, "newsletter_accounting", None)
+            if (
+                isinstance(newsletter_accounting, list)
+                and len(newsletter_accounting) == newsletter_count
+            ):
+                diagnostic_counts = accounting_counts(newsletter_accounting)
+                source_mix.update(diagnostic_counts)
+                counts(**diagnostic_counts)
+            else:
+                newsletter_accounting = []
             if not stories:
                 raise NoContentError("Antigravity found no substantive stories")
             counts(stories=len(stories))
@@ -1028,6 +1041,7 @@ class Pipeline:
                     item.message_id for item in sources if item.source_type == "newsletter"
                 ],
                 source_mix=source_mix,
+                newsletter_accounting=newsletter_accounting,
                 stories=stories,
                 script=script,
                 newspaper=newspaper,

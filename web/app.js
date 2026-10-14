@@ -1554,10 +1554,34 @@ function newsletterCoverageSummary(data) {
   if (!values.slice(0, 2).every(valid)) return "";
   const [withNews, withoutNews, inAudio, outsideAudio] = values;
   const extraction = `NEWSLETTER SOURCES // ${withNews} WITH NEWS // ${withoutNews} WITHOUT RETAINED NEWS`;
-  if (inAudio === undefined && outsideAudio === undefined) return `${extraction} // AUDIO SELECTION NOT MEASURED`;
-  if (!values.slice(2).every(valid)) return "";
-  if (inAudio + outsideAudio !== withNews) return "";
-  return `${extraction} // ${inAudio} IN AUDIO // ${outsideAudio} WITH NEWS OUTSIDE AUDIO`;
+  let summary;
+  if (inAudio === undefined && outsideAudio === undefined) summary = `${extraction} // AUDIO SELECTION NOT MEASURED`;
+  else {
+    if (!values.slice(2).every(valid) || inAudio + outsideAudio !== withNews) return "";
+    summary = `${extraction} // ${inAudio} IN AUDIO // ${outsideAudio} WITH NEWS OUTSIDE AUDIO`;
+  }
+  // Legacy records lack omission explanations. Never invent zeroes or infer
+  // causes from article-fetch failures, language or newsletter coverage totals.
+  const reasons = [
+    ["newsletter_no_supplied_text", "NO PREPARED TEXT (OBSERVED)"],
+    ["newsletter_model_no_substantive_news", "NO SUBSTANTIVE NEWS (MODEL-REPORTED, UNVERIFIED)"],
+    ["newsletter_model_promotional", "PROMOTIONAL (MODEL-REPORTED, UNVERIFIED)"],
+    ["newsletter_model_outside_sections", "OUTSIDE SECTIONS (MODEL-REPORTED, UNVERIFIED)"],
+    ["newsletter_model_insufficient_evidence", "INSUFFICIENT EVIDENCE (MODEL-REPORTED, UNVERIFIED)"],
+    ["newsletter_reason_unknown", "REASON UNKNOWN"],
+  ];
+  if (reasons.every(([key]) => valid(data[key])) &&
+      reasons.reduce((sum, [key]) => sum + data[key], 0) === withoutNews) {
+    for (const [key, label] of reasons) if (data[key]) summary += ` // ${data[key]} ${label}`;
+    const total = withNews + withoutNews;
+    for (const [key, label] of [["newsletter_body_input_capped", "BODY INPUT CAPPED"],
+      ["newsletter_article_input_capped", "ARTICLE INPUT CAPPED"]]) {
+      if (valid(data[key]) && data[key] > 0 && data[key] <= total) {
+        summary += ` // ${data[key]} ${label} (NOT AN OMISSION REASON)`;
+      }
+    }
+  }
+  return summary;
 }
 
 function renderResourceProfile(snapshot) {

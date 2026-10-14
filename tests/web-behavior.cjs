@@ -442,6 +442,27 @@ test('completed profiles keep coverage visible without private source fields', (
   assert.doesNotMatch(text,/private/);
 });
 
+test('newsletter explanations are balanced, optional and explicitly unverified', () => {
+  const {context}=harness(['newsletterCoverageSummary']);
+  const data={newsletters_with_extracted_news:1,newsletters_without_extracted_news:3,
+    newsletter_no_supplied_text:1,newsletter_model_promotional:1,
+    newsletter_model_no_substantive_news:0,newsletter_model_outside_sections:0,
+    newsletter_model_insufficient_evidence:0,newsletter_reason_unknown:1,
+    newsletter_body_input_capped:1,newsletter_article_input_capped:0,
+    source_accounting:[{reason:'synthetic-private-text'}],source_ids:['synthetic-private']};
+  const text=context.newsletterCoverageSummary(data);
+  assert.match(text,/1 NO PREPARED TEXT \(OBSERVED\)/);
+  assert.match(text,/1 PROMOTIONAL \(MODEL-REPORTED, UNVERIFIED\)/);
+  assert.match(text,/1 REASON UNKNOWN/);
+  assert.match(text,/1 BODY INPUT CAPPED \(NOT AN OMISSION REASON\)/);
+  assert.doesNotMatch(text,/synthetic-private/);
+  for (const value of [undefined,'1',true,-1,Infinity,0.5,1e10,2]) {
+    const invalid=context.newsletterCoverageSummary({...data,newsletter_reason_unknown:value});
+    assert.match(invalid,/3 WITHOUT RETAINED NEWS/);
+    assert.doesNotMatch(invalid,/PROMOTIONAL|REASON UNKNOWN|NO PREPARED TEXT|INPUT CAPPED/);
+  }
+});
+
 test('running monitor shows the same bounded coverage summary', () => {
   const {context,nodes}=harness(['newsletterCoverageSummary','updateRunnerDetail']);
   context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.durationText=()=> 'A DURATION';

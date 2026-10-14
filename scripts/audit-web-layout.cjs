@@ -69,7 +69,11 @@ document.querySelectorAll('.parameter-form').forEach(form=>{form.elements.hostCo
     document.querySelector('#edition-pages').innerHTML='<div class="edition-page" style="width:1200px;height:800px">Synthetic newspaper zoomed to 200%</div>';
     document.querySelector('#player-title').textContent='A long podcast title with a detailed edition name and publication sequence';
     const coverage=newsletterCoverageSummary({newsletters_with_extracted_news:123,
-     newsletters_without_extracted_news:12,newsletters_in_audio:100,newsletters_outside_audio:23});
+     newsletters_without_extracted_news:12,newsletters_in_audio:100,newsletters_outside_audio:23,
+     newsletter_no_supplied_text:2,newsletter_model_no_substantive_news:2,
+     newsletter_model_promotional:2,newsletter_model_outside_sections:2,
+     newsletter_model_insufficient_evidence:2,newsletter_reason_unknown:2,
+     newsletter_body_input_capped:1,newsletter_article_input_capped:1});
     document.querySelector('#runner-detail').textContent='RUNNING // EXTRACTING STORIES // '+coverage;
     document.querySelector('#player-details').append(element('p','item-meta evidence-mix',coverage));
     document.querySelector('#resource-summary').append(element('p','item-meta',coverage));

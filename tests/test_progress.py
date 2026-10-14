@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 from unittest import TestCase
 
+from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
 from audiodigest.progress import (
     FAILURE_CODES,
     PREFIX,
@@ -20,6 +21,17 @@ from audiodigest.progress import (
 
 
 class ProgressTests(TestCase):
+    def test_optional_reason_counters_are_numeric_only_and_allowlisted(self):
+        profile = {"event": "counts", "status": "running", "stage": 3,
+                   "at": "2026-10-12T00:00:00+00:00", "elapsed_seconds": 1,
+                   "stage_elapsed_seconds": 1,
+                   "counters": {**dict.fromkeys(ACCOUNTING_COUNTERS, 1),
+                                "newsletter_accounting": [{"excerpt": "synthetic-private"}]}}
+        self.assertEqual(dict.fromkeys(ACCOUNTING_COUNTERS, 1), safe_event(profile)["counters"])
+        for value in (True, -1, float("inf"), "synthetic-private", 10**9 + 1):
+            profile["counters"] = dict.fromkeys(ACCOUNTING_COUNTERS, value)
+            self.assertEqual({}, safe_event(profile)["counters"])
+
     def test_coverage_counts_survive_reporter_and_private_log_filter_without_source_text(self):
         reporter = ProgressReporter(interval=0, stream=io.StringIO())
         reporter.start()

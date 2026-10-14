@@ -22,6 +22,7 @@ from audiodigest.jobs import (
     ScheduledJob,
     apply_generation_parameters,
 )
+from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
 from audiodigest.newspaper_reading import approved_reading_copy
 from audiodigest.pipeline import Pipeline
 from audiodigest.progress import ProgressReporter, increment
@@ -316,6 +317,7 @@ def _published_metadata(
                     if key
                     in {
                         "mode",
+                        *ACCOUNTING_COUNTERS,
                         "newsletter_messages",
                         "newsletter_backed_stories",
                         "safe_article_links",
@@ -336,6 +338,7 @@ def _published_metadata(
                     and isinstance(value, (str, int))
                     and not isinstance(value, bool)
                     and (key not in {
+                        *ACCOUNTING_COUNTERS,
                         "newsletters_with_extracted_news", "newsletters_without_extracted_news",
                         "newsletters_in_audio", "newsletters_outside_audio",
                     } or (isinstance(value, int) and 0 <= value <= 10**9))

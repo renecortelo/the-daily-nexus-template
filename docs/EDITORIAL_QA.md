@@ -7,6 +7,38 @@ fixtures and documentation.
 
 ## Coverage is not a duration quota
 
+### Why a newsletter has no retained news
+
+New extractions optionally include fixed editorial explanations in the existing
+model response. They add no call, retry, duration quota or publication gate. The
+application first measures retained news from validated and consolidated source
+lineage; model explanations cannot override this coverage or approve a fact.
+
+- No prepared body **and** article passages: `newsletter_no_supplied_text`, an
+  observed input condition, not proof that the original email was empty.
+- `newsletter_model_no_substantive_news`, `newsletter_model_promotional`,
+  `newsletter_model_outside_sections` and `newsletter_model_insufficient_evidence`:
+  model-reported, unverified explanations. Outside-sections explanations are used
+  only when sections were configured. No free-text explanations are saved.
+- `newsletter_reason_unknown`: absent, malformed, conflicting or unsupported
+  explanations. Legacy records without measurements stay unmeasured, not zero.
+
+These six counters partition newsletters without retained news. Input-cap flags
+count newsletters whose original body or article text exceeded the existing
+50,000-character preparation limit. They are not explanations for omission and
+do not change that limit. Fetch failures and language never establish a cause.
+
+Counts reach private progress even when extraction returns no useful news.
+Completed local manifests also retain a per-input ledger with transient source
+aliases, passage counts and fixed categories only. Hosted profiles and episode
+metadata expose only bounded aggregate numbers to the authorized owner; no extra
+mailbox identifiers, subjects, senders, passages or arbitrary model text are copied.
+Cloud working files are ephemeral; do not promise hosted per-email diagnostics or
+retroactive explanations for older episodes. Original-source factual checks,
+audio selection, one-hour protection and no-spend safeguards remain unchanged.
+
+### Source coverage and audio selection
+
 - `sourceMix.newsletter_messages` counts collected messages, not stories or
   independently verified facts.
 - `episodeBudget.represented_newsletters` counts newsletter sources represented
@@ -82,13 +114,12 @@ Follow the pipeline in order instead of treating every gap as a Gmail failure:
    mapping. Do not guess missing identities from weak vocabulary overlap, fetch
    unrelated mailbox messages or persist originals in public diagnostics.
 
-If the original mapping is gone, report the uncertainty. The numeric ledger
-distinguishes extraction from selection but cannot explain why the extractor
-retained no news from a particular source. A future improvement
-can explain source accounting in the existing extraction response, without an
-extra model pass or a requirement to manufacture a story from every message.
-Any declared omission reason still needs to be distinguished from source-proven
-facts and must not weaken evidence binding or trigger unbounded repair calls.
+If the original mapping is gone, report the uncertainty. The coverage ledger
+distinguishes extraction from selection but cannot explain omissions on its own.
+New runs can carry the optional fixed-category accounting described above; these
+measurements do not reconstruct old runs or establish an editorial reason as a
+source-proven fact. Never manufacture stories or add unbounded correction calls
+to obtain an explanation.
 
 ## Listening and script review
 

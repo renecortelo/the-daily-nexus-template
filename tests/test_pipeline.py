@@ -16,6 +16,7 @@ from audiodigest.antigravity_client import (
 from audiodigest.audio import AudioResult
 from audiodigest.audio_quality import AudioQuality
 from audiodigest.config import load_settings
+from audiodigest.evidence import SourceEvidenceIndex
 from audiodigest.gmail_client import fixture_sources
 from audiodigest.models import (
     AntigravityMetadata,
@@ -24,7 +25,9 @@ from audiodigest.models import (
     NewspaperIssue,
     Story,
     VerificationResult,
+    source_prompt_dicts,
 )
+from audiodigest.newsletter_accounting import newsletter_accounting
 from audiodigest.pipeline import (
     NoContentError,
     Pipeline,
@@ -506,6 +509,9 @@ class OptionalNewspaperTests(TestCase):
             pipeline._enrich_articles = Mock()
             pipeline.editorial = Mock()
             pipeline.editorial.extract_stories.return_value = ([], AntigravityMetadata())
+            pipeline.editorial.newsletter_accounting = newsletter_accounting(
+                sources, SourceEvidenceIndex(sources, source_prompt_dicts(sources)).prompts, [],
+            )
             reporter = ProgressReporter(interval=0, stream=io.StringIO())
             reporter.start()
             try:
@@ -521,6 +527,8 @@ class OptionalNewspaperTests(TestCase):
             self.assertEqual(len(sources), counters["newsletters_without_extracted_news"])
             self.assertNotIn("newsletters_in_audio", counters)
             self.assertNotIn("newsletters_outside_audio", counters)
+            self.assertEqual(len(sources), counters["newsletter_reason_unknown"])
+            self.assertEqual(0, counters["newsletter_no_supplied_text"])
             pipeline.editorial.extract_stories.assert_called_once()
             pipeline.editorial.generate_script.assert_not_called()
             pipeline.editorial.verify.assert_not_called()
@@ -567,6 +575,11 @@ class OptionalNewspaperTests(TestCase):
             pipeline._enrich_articles = Mock()
             pipeline.editorial = Mock()
             pipeline.editorial.extract_stories.return_value = ([story], AntigravityMetadata())
+            pipeline.editorial.newsletter_accounting = newsletter_accounting(
+                sources,
+                SourceEvidenceIndex(sources, source_prompt_dicts(sources)).prompts,
+                [story],
+            )
             pipeline.editorial.generate_script.return_value = (script, AntigravityMetadata())
             pipeline.editorial.verify.return_value = (
                 VerificationResult(True, []),
@@ -613,6 +626,11 @@ class OptionalNewspaperTests(TestCase):
             self.assertEqual(len(sources) - 1, mix["newsletters_without_extracted_news"])
             self.assertEqual(1, mix["newsletters_in_audio"])
             self.assertEqual(0, mix["newsletters_outside_audio"])
+            self.assertEqual(len(sources) - 1, mix["newsletter_reason_unknown"])
+            self.assertEqual(len(sources), len(manifest["newsletter_accounting"]))
+            for row in manifest["newsletter_accounting"]:
+                self.assertNotIn("email_text", row)
+                self.assertNotIn("message_id", row)
             pipeline.editorial.extract_stories.assert_called_once()
             pipeline.editorial.generate_script.assert_called_once()
             pipeline.editorial.verify.assert_called_once()

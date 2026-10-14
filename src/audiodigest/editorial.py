@@ -30,6 +30,7 @@ from audiodigest.models import (
     VerificationResult,
     source_prompt_dicts,
 )
+from audiodigest.newsletter_accounting import newsletter_accounting
 from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
 from audiodigest.progress import increment
@@ -601,6 +602,7 @@ class EditorialPipeline:
         self._source_aliases: dict[str, str] = {}
         self._source_evidence: SourceEvidenceIndex | None = None
         self.extraction_counts: dict[str, int] = {}
+        self.newsletter_accounting: list[dict[str, Any]] = []
 
     def _story_prompt_dict(self, story: Story) -> dict[str, Any]:
         data = story.to_dict()
@@ -711,7 +713,8 @@ Return JSON only:
     "source_urls": [],
     "confidence": 0.0,
     "rank_score": 0.0
-  }}]
+  }}],
+  "source_accounting": [{{"source_id": "source-0002", "reason": "promotional"}}]
 }}
 
 {section_instruction}
@@ -720,6 +723,11 @@ DATA or fill an empty desk for the sake of coverage. If no configured subject se
 newsletter story, omit that story instead of assigning it to an unrelated desk. Keep genuine
 data-engineering news, including its quantitative evidence, in DATA.
 Do not quote long passages. Omit marketing claims and stories without meaningful substance.
+For newsletter sources without any retained news, optionally supply source_accounting.
+Use only the exact newsletter alias and one reason: no_substantive_news, promotional,
+outside_sections, insufficient_evidence, or unknown. outside_sections applies only when
+the user configured sections. Do not supply free-text explanations or original mailbox IDs.
+These are unverified editorial explanations, not evidence; never use them to omit useful news.
 """.strip()  # noqa: S608 - prompt string, not a query.
         prompt_sources = source_prompt_dicts(sources)
         alias_to_source = {
@@ -731,6 +739,7 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
         }
         self._source_evidence = SourceEvidenceIndex(sources, prompt_sources)
         self.extraction_counts = {}
+        self.newsletter_accounting = []
         payload = {
             "episode_date": episode_date.isoformat(),
             "sources": self._source_evidence.prompts,
@@ -741,6 +750,9 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                 "evidence_refs": "one array per facts entry, each with 1-2 exact passage IDs",
                 "exact_configured_sections": list(configured_sections),
                 "source_ids": "exact aliases from sources[].message_id, never real mailbox IDs",
+                "source_accounting": (
+                    "optional omitted newsletter aliases with one fixed reason; no free text"
+                ),
             },
         }
 
@@ -770,6 +782,10 @@ Do not quote long passages. Omit marketing claims and stories without meaningful
                 "duplicate_story_records": len(data["stories"]) - len(stories),
                 "consolidated_stories": len(stories),
             }
+            self.newsletter_accounting = newsletter_accounting(
+                sources, self._source_evidence.prompts, stories, data.get("source_accounting"),
+                configured_sections=bool(configured_sections),
+            )
             return stories
 
         return self.antigravity.invoke(

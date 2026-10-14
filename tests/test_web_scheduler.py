@@ -10,6 +10,7 @@ from audiodigest.antigravity_client import AntigravityCLIError
 from audiodigest.closing_quotes import load_closing_quotes
 from audiodigest.config import load_settings
 from audiodigest.jobs import GenerationParameters
+from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
 from audiodigest.pipeline import VerificationError
 from audiodigest.progress import record_failure_code, stage
 from audiodigest.web_runner import WebRunnerError
@@ -173,10 +174,13 @@ class WebSchedulerTests(TestCase):
                             "newsletters_without_extracted_news": 1,
                             "newsletters_in_audio": 1,
                             "newsletters_outside_audio": 1,
+                            **dict.fromkeys(ACCOUNTING_COUNTERS, 0),
+                            "newsletter_reason_unknown": 1,
                             "source_ids": ["synthetic-mailbox-id"],
                             "evidence": [{"excerpt": "Synthetic original reporting."}],
                         },
                         "stories": [{"evidence": [{"excerpt": "Synthetic original reporting."}]}],
+                        "newsletter_accounting": [{"source_alias": "source-0001"}],
                         "episode_budget": {
                             "newsletter_count": 3,
                             "available_stories": 12,
@@ -225,11 +229,15 @@ class WebSchedulerTests(TestCase):
             }.items():
                 self.assertEqual(value, metadata["sourceMix"][key])
             self.assertNotIn("source_ids", metadata["sourceMix"])
-            self.assertNotIn("evidence", json.dumps(metadata, default=str))
+            self.assertEqual(1, metadata["sourceMix"]["newsletter_reason_unknown"])
+            self.assertNotIn("newsletter_accounting", metadata)
+            self.assertNotIn("source-0001", json.dumps(metadata, default=str))
+            self.assertNotIn('"evidence":', json.dumps(metadata, default=str))
             self.assertNotIn("Synthetic original reporting.", json.dumps(metadata, default=str))
 
     def test_newsletter_coverage_metadata_accepts_only_bounded_integer_counts(self):
         keys = (
+            *ACCOUNTING_COUNTERS,
             "newsletters_with_extracted_news", "newsletters_without_extracted_news",
             "newsletters_in_audio", "newsletters_outside_audio",
         )
