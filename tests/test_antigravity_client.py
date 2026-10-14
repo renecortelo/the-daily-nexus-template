@@ -428,3 +428,36 @@ class AntigravitySafetyTests(TestCase):
             self.assertEqual("script_reference_url", error.exception.failure_code)
             self.assertNotIn("private source", str(error.exception) + output.getvalue())
             self.assertEqual([], list(settings.workspace_dir.glob("request-*.json")))
+
+    def test_real_retry_flow_preserves_safe_constraint_history_after_recovery(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as name:
+            settings = self._settings(Path(name))
+            settings.settings_path.write_text('{"useG1Credits":false,"enableTelemetry":false}')
+            output = io.StringIO()
+            reporter = ProgressReporter(interval=0, stream=output)
+            reporter.start()
+            attempts = []
+            def validate(value):
+                attempts.append(value)
+                if len(attempts) == 1:
+                    raise DataValidationError(
+                        "synthetic-private-text", failure_code="extraction_rank",
+                        diagnostic={"field": "rank_score", "item_index": 3,
+                                    "value_kind": "string", "value": "synthetic-private-text"},
+                    )
+                return value
+            try:
+                with patch("audiodigest.antigravity_client.subprocess.run") as run:
+                    run.return_value = subprocess.CompletedProcess(
+                        [], 0, stdout='{"response":"{\\"stories\\":[]}"}', stderr="",
+                    )
+                    AntigravityCLI(settings).invoke("Check.", {"sources": []}, validate, retries=1)
+                profile = reporter.finish("completed")
+            finally:
+                reporter.close()
+            self.assertEqual(2, run.call_count)
+            self.assertNotIn("failure_code", profile)
+            self.assertEqual(1, len(profile["validation_history"]))
+            self.assertEqual("rank_score", profile["validation_history"][0]["field"])
+            self.assertEqual(3, profile["validation_history"][0]["item_index"])
+            self.assertNotIn("synthetic-private", output.getvalue())

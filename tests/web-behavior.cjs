@@ -463,6 +463,25 @@ test('newsletter explanations are balanced, optional and explicitly unverified',
   }
 });
 
+test('validation history shows fixed constraints and indexes without rejected content', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'Synthetic time';
+  context.durationText=value=> `${value / 1000}s`;
+  context.appState.resourceProfile={status:'failed',at:'2026-10-14T03:00:00Z',elapsed_seconds:100,
+    counters:{extraction_metadata_repairs:2},validation_history:[
+      {stage:3,attempt:1,code:'extraction_section',field:'section',item_index:2,
+        value:'synthetic-private',source_id:'synthetic-private'},
+      {stage:3,attempt:2,code:'source_passage_unknown',field:'evidence_refs',fact_index:0},
+      {stage:3,attempt:1,code:'synthetic-private',field:'synthetic-private'},
+    ]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(node=>node.textContent).join(' ');
+  assert.match(text,/STAGE 3 \/\/ ATTEMPT 1 \/\/ EXTRACTION SECTION \/\/ FIELD section \/\/ STORY INDEX 2/);
+  assert.match(text,/SOURCE PASSAGE UNKNOWN \/\/ FIELD evidence_refs \/\/ FACT INDEX 0/);
+  assert.match(text,/EXTRACTION METADATA NORMALIZED \/\/ 2/);
+  assert.doesNotMatch(text,/synthetic-private/);
+});
+
 test('running monitor shows the same bounded coverage summary', () => {
   const {context,nodes}=harness(['newsletterCoverageSummary','updateRunnerDetail']);
   context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.durationText=()=> 'A DURATION';

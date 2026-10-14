@@ -12,6 +12,43 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
         "preserve_valid_facts_attribution_and_qualifiers": True,
         "never_expand_to_reach_a_minimum": True,
     }
+    if code.startswith("extraction_") or code in {
+        "source_alias_unknown", "source_alias_unused", "source_url_unowned",
+        "source_fact_alignment", "source_fact_support_shape", "source_passage_unknown",
+    }:
+        actions = {
+            "extraction_section": (
+                "Use one exact configured desk; otherwise a valid concise auto desk."
+            ),
+            "extraction_section_limit": (
+                "Consolidate related desks within the configured maximum; "
+                "keep all supported stories."
+            ),
+            "extraction_confidence": (
+                "Supply numeric confidence from 0 to 1, not a percentage or prose."
+            ),
+            "extraction_rank": (
+                "Supply a finite numeric rank_score, never null, a boolean or prose."
+            ),
+            "extraction_duplicate_id": "Give every extracted story a unique local story_id.",
+            "extraction_evidence_shape": (
+                "Return evidence_refs only; the application rebuilds evidence support objects."
+            ),
+            "extraction_consolidation": (
+                "Align each fact with exact supplied passage IDs; keep its original source support."
+            ),
+        }
+        plan["action"] = (
+            actions.get(code, (
+                "Correct only source aliases, passage IDs, support alignment or supplied URLs."
+            ))
+            + " Preserve all valid reporting, quantities, attribution and qualifiers. "
+            "Every fact needs one or two exact supplied passage IDs "
+            "at its matching evidence_refs index. "
+            "Never invent sources, URLs or support; empty source_urls is valid. "
+            "Return the complete corrected extraction object, not a host script."
+        )
+        return plan
     if isinstance(payload.get("repair_response_contract"), dict):
         plan["action"] = (
             "Return a complete valid JSON response under repair_response_contract. "

@@ -1610,6 +1610,41 @@ function renderResourceSummary() {
     if (Object.hasOwn(reasons, profile.reason)) add(`OUTCOME DETAIL // ${reasons[profile.reason]}`);
     const coverage = newsletterCoverageSummary(profile.counters);
     if (coverage) add(coverage);
+    const diagnosticCodes = new Set(("model_required_field model_list_shape model_dialogue_shape " +
+      "model_object_shape model_structure json_invalid model_incomplete model_timeout model_exit " +
+      "extraction_section extraction_section_limit extraction_confidence extraction_rank " +
+      "extraction_duplicate_id extraction_evidence_shape extraction_consolidation source_evidence " +
+      "source_alias_unknown source_alias_unused source_url_unowned source_fact_alignment " +
+      "source_fact_support_shape source_passage_unknown script_shape script_section_name " +
+      "script_duplicate_section script_section_coverage script_turn_length script_reference_url " +
+      "script_coverage script_unsupported_reference script_hosts script_closing script_editor_credit " +
+      "script_quote_text script_quote_author script_quote_source script_closing_comment script_length " +
+      "verification_rejected").split(" "));
+    const diagnosticFields = new Set(("root stories story_id section headline facts why_it_matters " +
+      "source_ids source_urls evidence evidence_refs confidence rank_score title hosts introduction " +
+      "sections conclusion sign_off show_notes closing_comment disclosure dialogue host text approved " +
+      "issues factual_approved").split(" "));
+    const validIndex = value => Number.isInteger(value) && value >= 0 && value <= 1e9;
+    for (const diagnostic of (Array.isArray(profile.validation_history) ? profile.validation_history : []).slice(-16)) {
+      if (!diagnostic || !diagnosticCodes.has(diagnostic.code) ||
+          !validIndex(diagnostic.stage) || diagnostic.stage > 8 ||
+          !validIndex(diagnostic.attempt) || diagnostic.attempt < 1 || diagnostic.attempt > 10) continue;
+      const parts = [`VALIDATION // STAGE ${diagnostic.stage} // ATTEMPT ${diagnostic.attempt}`,
+        diagnostic.code.replaceAll("_", " ").toUpperCase()];
+      if (diagnosticFields.has(diagnostic.field)) parts.push(`FIELD ${diagnostic.field}`);
+      if (new Set(("section_blank section_too_long section_slash section_control section_not_allowed " +
+          "finite_number probability_range json_syntax json_duplicate_key json_nonfinite").split(" ")).has(diagnostic.rule)) {
+        parts.push(`RULE ${diagnostic.rule.replaceAll("_", " ").toUpperCase()}`);
+      }
+      for (const [key, label] of [["item_index", "STORY INDEX"], ["fact_index", "FACT INDEX"],
+        ["actual_count", "ACTUAL COUNT"], ["expected_count", "EXPECTED COUNT"],
+        ["json_line", "JSON LINE"], ["json_column", "JSON COLUMN"]]) {
+        if (validIndex(diagnostic[key])) parts.push(`${label} ${diagnostic[key]}`);
+      }
+      add(parts.join(" // "));
+    }
+    const metadataRepairs = metricNumber(profile.counters?.extraction_metadata_repairs);
+    if (metadataRepairs !== null && metadataRepairs > 0) add(`EXTRACTION METADATA NORMALIZED // ${metadataRepairs}; FACTS AND SOURCE REFERENCES UNCHANGED`);
     const measurements = profile.measurements || {};
     const labels = { start_delay_seconds: "START DELAY (INCLUDES SETUP)", setup_seconds: "JOB SETUP BEFORE GENERATION",
       job_observed_seconds: "JOB TIME OBSERVED SO FAR (EXCLUDES FINAL CLEANUP)", protected_remaining_seconds: "PROTECTED TIME LEFT AT FINISH" };

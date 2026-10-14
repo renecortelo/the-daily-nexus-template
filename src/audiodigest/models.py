@@ -13,21 +13,35 @@ from audiodigest.constants import (
     parse_section,
 )
 from audiodigest.content import minimize_editorial_text, normalize_url
+from audiodigest.validation_diagnostics import safe_detail, value_kind
 
 
 class DataValidationError(ValueError):
     """Raised when model or persisted data does not match the required contract."""
 
-    def __init__(self, message: str, *, failure_code: str = ""):
+    def __init__(self, message: str, *, failure_code: str = "", diagnostic: dict | None = None):
         super().__init__(message)
         self.failure_code = failure_code
+        self.diagnostic = safe_detail(diagnostic)
+
+
+def _finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _required_str(data: dict[str, Any], key: str) -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value.strip():
         raise DataValidationError(f"{key!r} must be a non-empty string",
-                                  failure_code="model_required_field")
+                                  failure_code="model_required_field", diagnostic={
+                                      "field": key,
+                                      "value_kind": value_kind(value) if key in data else "missing",
+                                  })
     return value.strip()
 
 
@@ -35,11 +49,16 @@ def _string_list(data: dict[str, Any], key: str, *, minimum: int = 0) -> list[st
     value = data.get(key, [])
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise DataValidationError(f"{key!r} must be a list of strings",
-                                  failure_code="model_list_shape")
+                                  failure_code="model_list_shape", diagnostic={
+                                      "field": key, "value_kind": value_kind(value),
+                                  })
     result = [item.strip() for item in value if item.strip()]
     if len(result) < minimum:
         raise DataValidationError(f"{key!r} must contain at least {minimum} item(s)",
-                                  failure_code="model_list_shape")
+                                  failure_code="model_list_shape", diagnostic={
+                                      "field": key, "actual_count": len(result),
+                                      "expected_count": minimum,
+                                  })
     return result
 
 
@@ -205,17 +224,40 @@ class Story:
             )
         except ValueError as exc:
             raise DataValidationError(str(exc), failure_code=(
-                getattr(exc, "failure_code", "") or "model_structure"
-            )) from exc
+                getattr(exc, "failure_code", "") or "extraction_section"
+            ), diagnostic={
+                "field": "section", "value_kind": value_kind(data.get("section")),
+                **getattr(exc, "diagnostic", {}),
+            }) from exc
         confidence = data.get("confidence")
         rank_score = data.get("rank_score")
-        if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
-            raise DataValidationError("confidence must be a number from 0 to 1")
-        if not isinstance(rank_score, (int, float)):
-            raise DataValidationError("rank_score must be numeric")
+        if (
+            not _finite_number(confidence) or not 0 <= confidence <= 1
+        ):
+            raise DataValidationError("confidence must be a number from 0 to 1",
+                                      failure_code="extraction_confidence", diagnostic={
+                                          "field": "confidence",
+                                          "value_kind": value_kind(confidence),
+                                          "rule": ("probability_range" if _finite_number(confidence)
+                                                   else "finite_number"),
+                                      })
+        if (
+            not _finite_number(rank_score)
+        ):
+            raise DataValidationError("rank_score must be finite and numeric",
+                                      failure_code="extraction_rank", diagnostic={
+                                          "field": "rank_score",
+                                          "value_kind": value_kind(rank_score),
+                                          "rule": "finite_number",
+                                      })
         raw_evidence = data.get("evidence", [])
         if not isinstance(raw_evidence, list):
-            raise DataValidationError("story evidence must be a list")
+            raise DataValidationError("story evidence must be a list",
+                                      failure_code="extraction_evidence_shape",
+                                      diagnostic={
+                                          "field": "evidence",
+                                          "value_kind": value_kind(raw_evidence),
+                                      })
         return cls(
             story_id=_required_str(data, "story_id"),
             section=section,

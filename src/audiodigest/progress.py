@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
+from audiodigest.validation_diagnostics import DIAGNOSTIC_LIMIT, safe_detail
 
 PREFIX = "TDN_PROGRESS "
 STAGES = {
@@ -58,6 +59,7 @@ COUNTERS = {
     "model_validation_recoveries",
     "script_patch_repairs",
     "script_full_repairs",
+    "extraction_metadata_repairs",
     "progress_updates_failed",
 }
 OPERATIONS = {"model", "voice_model", "speech", "audio_encode", "paper_render"}
@@ -78,6 +80,11 @@ REASONS = {
 }
 RESULTS = {"idle", "already-claimed", "published", "completed", "failed"}
 FAILURE_CODES = {
+    "extraction_section", "extraction_section_limit", "extraction_confidence", "extraction_rank",
+    "extraction_duplicate_id", "extraction_evidence_shape", "extraction_consolidation",
+    "source_alias_unknown", "source_alias_unused", "source_url_unowned",
+    "source_fact_alignment", "source_fact_support_shape", "source_passage_unknown",
+    "model_object_shape",
     "model_required_field",
     "model_list_shape",
     "model_dialogue_shape",
@@ -153,6 +160,26 @@ def safe_event(value: Any) -> dict[str, Any] | None:
                 if k in allowed and (number := _number(v)) is not None
             }
     raw_operations = value.get("operations", {})
+    history = value.get("validation_history")
+    if isinstance(history, list):
+        result["validation_history"] = []
+        for raw in history[-DIAGNOSTIC_LIMIT:]:
+            if not isinstance(raw, dict):
+                continue
+            code, stage = raw.get("code"), raw.get("stage")
+            attempt, elapsed = raw.get("attempt"), _number(raw.get("elapsed_seconds"))
+            if (
+                not isinstance(code, str) or code not in FAILURE_CODES
+                or isinstance(stage, bool) or not isinstance(stage, int) or stage not in STAGES
+                or isinstance(attempt, bool) or not isinstance(attempt, int)
+                or not 1 <= attempt <= 10
+                or elapsed is None
+            ):
+                continue
+            result["validation_history"].append({
+                "code": code, "stage": stage, "attempt": attempt,
+                "elapsed_seconds": elapsed, **safe_detail(raw),
+            })
     result["operations"] = {}
     if isinstance(raw_operations, dict):
         for name, raw in raw_operations.items():
@@ -179,6 +206,7 @@ class ProgressReporter:
         self.status = "running"
         self.reason = ""
         self.failure_code = ""
+        self.validation_history: list[dict[str, Any]] = []
         self.stage = 0
         self.counters: dict[str, float] = {}
         self.operations: dict[str, dict[str, float]] = {}
@@ -209,6 +237,7 @@ class ProgressReporter:
                         "stage": self.stage,
                         "reason": self.reason,
                         "failure_code": self.failure_code,
+                        "validation_history": list(self.validation_history),
                         "elapsed_seconds": current - self.started,
                         "stage_elapsed_seconds": current - self.stage_started,
                         "at": datetime.now(UTC).isoformat(),
@@ -339,6 +368,24 @@ def increment(name: str) -> None:
     if reporter := _CURRENT.get():
         with reporter.lock:
             reporter.count(**{name: int(reporter.counters.get(name, 0)) + 1})
+
+
+def record_validation(code: str, attempt: int, detail: dict | None = None) -> None:
+    """Retain each rejection's safe constraint even if later stages clear its code."""
+    if not isinstance(code, str) or code not in FAILURE_CODES:
+        return
+    if isinstance(attempt, bool) or not isinstance(attempt, int) or not 1 <= attempt <= 10:
+        return
+    if reporter := _CURRENT.get():
+        with reporter.lock:
+            if reporter.finished is not None:
+                return
+            reporter.validation_history.append({
+                "code": code, "stage": reporter.stage, "attempt": attempt,
+                "elapsed_seconds": reporter.clock() - reporter.started, **safe_detail(detail),
+            })
+            reporter.validation_history = reporter.validation_history[-DIAGNOSTIC_LIMIT:]
+            reporter.emit("counts")
 
 
 @contextmanager

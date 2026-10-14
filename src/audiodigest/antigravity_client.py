@@ -25,6 +25,7 @@ from audiodigest.progress import (
     clear_failure_code,
     increment,
     record_failure_code,
+    record_validation,
     timed_operation,
 )
 
@@ -209,20 +210,29 @@ def _json_from_response(value: str) -> dict[str, Any]:
         for key, item in pairs:
             if key in result:
                 raise DataValidationError("JSON object contains duplicate keys",
-                                          failure_code="json_invalid")
+                                          failure_code="json_invalid", diagnostic={
+                                              "field": "root", "rule": "json_duplicate_key",
+                                          })
             result[key] = item
         return result
 
     def invalid_constant(_value):
         raise DataValidationError("JSON must not contain non-finite numeric constants",
-                                  failure_code="json_invalid")
+                                  failure_code="json_invalid", diagnostic={
+                                      "field": "root", "rule": "json_nonfinite",
+                                  })
 
     try:
         parsed = json.loads(text, object_pairs_hook=object_fields, parse_constant=invalid_constant)
     except json.JSONDecodeError as exc:
-        raise DataValidationError(f"Antigravity response was not valid JSON: {exc}") from exc
+        raise DataValidationError(
+            "Antigravity response was not valid JSON", failure_code="json_invalid",
+            diagnostic={"field": "root", "json_line": exc.lineno,
+                        "json_column": exc.colno, "json_position": exc.pos, "rule": "json_syntax"},
+        ) from exc
     if not isinstance(parsed, dict):
-        raise DataValidationError("Antigravity response must be a JSON object")
+        raise DataValidationError("Antigravity response must be a JSON object",
+                                  failure_code="model_object_shape", diagnostic={"field": "root"})
     return parsed
 
 
@@ -487,6 +497,12 @@ class AntigravityCLI:
                 increment("model_validation_failures")
                 failure_code = _validation_code(exc)
                 record_failure_code(failure_code)
+                detail = dict(getattr(exc, "diagnostic", {}) or {})
+                if isinstance(exc, json.JSONDecodeError):
+                    detail.update(
+                        json_line=exc.lineno, json_column=exc.colno, json_position=exc.pos,
+                    )
+                record_validation(failure_code, attempt + 1, detail)
                 last_error = exc
                 if attempt < retries:
                     print(
@@ -498,6 +514,7 @@ class AntigravityCLI:
                         **payload,
                         "previous_response": rejected_response,
                         "validation_error": str(exc),
+                        "validation_diagnostic": detail,
                         "repair_plan": draft_repair_plan(payload, rejected_response, failure_code),
                         "repair_instruction": (
                             "Return corrected JSON only. Preserve valid supported "

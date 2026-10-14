@@ -108,35 +108,52 @@ class SourceEvidenceIndex:
         """Resolve supplied passage IDs locally before deduplication or drafting."""
         cited_sources = set(story.source_ids)
         if not cited_sources.issubset(self.allowed_urls):
-            raise DataValidationError("extracted story uses an unknown source alias")
+            raise DataValidationError("extracted story uses an unknown source alias",
+                                      failure_code="source_alias_unknown",
+                                      diagnostic={"field": "source_ids"})
         allowed = set().union(*(self.allowed_urls[alias] for alias in cited_sources))
         urls = []
         for value in story.source_urls:
             safe = normalize_url(value)
             if not safe or safe not in allowed:
-                raise DataValidationError("story URL does not belong to its cited source records")
+                raise DataValidationError("story URL does not belong to its cited source records",
+                                          failure_code="source_url_unowned",
+                                          diagnostic={"field": "source_urls"})
             if safe not in urls:
                 urls.append(safe)
         refs = raw.get("evidence_refs")
         if not isinstance(refs, list) or len(refs) != len(story.facts):
-            raise DataValidationError("every extracted fact needs a source-passage reference")
+            raise DataValidationError("every extracted fact needs a source-passage reference",
+                                      failure_code="source_fact_alignment", diagnostic={
+                                          "field": "evidence_refs",
+                                          "expected_count": len(story.facts),
+                                          **({"actual_count": len(refs)}
+                                             if isinstance(refs, list) else {}),
+                                      })
         support = []
         supported_sources: set[str] = set()
         for index, references in enumerate(refs):
             if not isinstance(references, list) or not 1 <= len(references) <= MAX_FACT_SUPPORTS:
-                raise DataValidationError("each fact needs one or two source-passage references")
+                raise DataValidationError("each fact needs one or two source-passage references",
+                                          failure_code="source_fact_support_shape", diagnostic={
+                                              "field": "evidence_refs", "fact_index": index,
+                                          })
             for ref in references:
                 passage = self.passages.get(ref) if isinstance(ref, str) else None
                 if passage is None or passage.source_alias not in cited_sources:
                     raise DataValidationError(
-                        "fact refers to an unknown or unrelated source passage"
+                        "fact refers to an unknown or unrelated source passage",
+                        failure_code="source_passage_unknown",
+                        diagnostic={"field": "evidence_refs", "fact_index": index},
                     )
                 supported_sources.add(passage.source_alias)
                 item = passage.support(index)
                 if item not in support:
                     support.append(item)
         if supported_sources != cited_sources:
-            raise DataValidationError("every cited source must support at least one extracted fact")
+            raise DataValidationError("every cited source must support at least one extracted fact",
+                                      failure_code="source_alias_unused",
+                                      diagnostic={"field": "source_ids"})
         story.source_urls = urls
         story.evidence = support
 

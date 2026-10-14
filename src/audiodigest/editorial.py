@@ -20,6 +20,7 @@ from audiodigest.constants import (
 from audiodigest.content import minimize_editorial_text, normalize_url
 from audiodigest.episode_budget import EpisodeBudget, plan_episode
 from audiodigest.evidence import SourceEvidenceIndex, review_evidence
+from audiodigest.extraction_contract import normalize_extraction
 from audiodigest.models import (
     AntigravityMetadata,
     DataValidationError,
@@ -33,7 +34,7 @@ from audiodigest.models import (
 from audiodigest.newsletter_accounting import newsletter_accounting
 from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
-from audiodigest.progress import increment
+from audiodigest.progress import counts, increment
 from audiodigest.script_contract import (
     BRIEF_OPENING_MAX_BUDGET_WORDS,
     CONVERSATION_TURN_MAX_WORDS,
@@ -199,7 +200,9 @@ def _merge_duplicate_stories(primary: Story, secondary: Story) -> Story:
     ):
         for support in evidence:
             if not 0 <= support.fact_index < len(original):
-                raise ValueError("duplicate story has invalid source evidence")
+                raise DataValidationError("duplicate story has invalid source evidence",
+                                          failure_code="extraction_consolidation",
+                                          diagnostic={"field": "evidence"})
             rebound = replace(
                 support, fact_index=fact_positions[original[support.fact_index].casefold()],
             )
@@ -255,13 +258,28 @@ def _stories_validator(
 ) -> list[Story]:
     raw = data.get("stories")
     if not isinstance(raw, list):
-        raise DataValidationError("stories must be a list", failure_code="model_list_shape")
-    stories = [Story.from_dict(item, allowed_sections=allowed_sections) for item in raw]
+        raise DataValidationError("stories must be a list", failure_code="model_list_shape",
+                                  diagnostic={"field": "stories"})
+    stories = []
+    for index, item in enumerate(raw):
+        try:
+            stories.append(Story.from_dict(item, allowed_sections=allowed_sections))
+        except DataValidationError as exc:
+            exc.diagnostic["item_index"] = index
+            raise
     if validate_source is not None:
         if len({story.story_id for story in stories}) != len(stories):
-            raise ValueError("extracted story IDs must be unique")
-        for story, supplied in zip(stories, raw, strict=True):
-            validate_source(story, supplied)
+            raise DataValidationError("extracted story IDs must be unique",
+                                      failure_code="extraction_duplicate_id",
+                                      diagnostic={
+                                          "field": "story_id", "actual_count": len(stories),
+                                      })
+        for index, (story, supplied) in enumerate(zip(stories, raw, strict=True)):
+            try:
+                validate_source(story, supplied)
+            except DataValidationError as exc:
+                exc.diagnostic["item_index"] = index
+                raise
     source_sets = [set(item.source_ids) for item in stories]
     if any(not source_set for source_set in source_sets):
         raise ValueError("every story must cite at least one source")
@@ -728,6 +746,10 @@ Use only the exact newsletter alias and one reason: no_substantive_news, promoti
 outside_sections, insufficient_evidence, or unknown. outside_sections applies only when
 the user configured sections. Do not supply free-text explanations or original mailbox IDs.
 These are unverified editorial explanations, not evidence; never use them to omit useful news.
+Only evidence_refs may identify supporting passages; evidence objects are built by the
+application from those passages. Numeric confidence is 0-1 and rank_score must be finite.
+The application can normalize numeric strings, exact desk spelling and duplicate local IDs
+without changing facts or source references. Do not rely on this to omit required fields.
 """.strip()  # noqa: S608 - prompt string, not a query.
         prompt_sources = source_prompt_dicts(sources)
         alias_to_source = {
@@ -757,11 +779,14 @@ These are unverified editorial explanations, not evidence; never use them to omi
         }
 
         def validate_stories(data: dict[str, Any]) -> list[Story]:
+            data, metadata_repairs = normalize_extraction(data, allowed_sections)
             def validate_source(story: Story, raw: dict[str, Any]) -> None:
                 try:
                     self._source_evidence.bind(story, raw)
                 except DataValidationError as exc:
-                    raise DataValidationError(str(exc), failure_code="source_evidence") from exc
+                    if not exc.failure_code:
+                        exc.failure_code = "source_evidence"
+                    raise
                 story.source_ids = [alias_to_source[alias] for alias in story.source_ids]
 
             stories = _stories_validator(
@@ -776,7 +801,13 @@ These are unverified editorial explanations, not evidence; never use them to omi
                     if story.section != Section.TODAY_IN_HISTORY
                 }
                 if len(derived) > MAX_PODCAST_SECTIONS:
-                    raise ValueError("auto-assigned podcast sections exceed the safety limit")
+                    raise DataValidationError(
+                        "auto-assigned podcast sections exceed the safety limit",
+                        failure_code="extraction_section_limit", diagnostic={
+                            "field": "section", "actual_count": len(derived),
+                            "expected_count": MAX_PODCAST_SECTIONS,
+                        },
+                    )
             self.extraction_counts = {
                 "extracted_story_records": len(data["stories"]),
                 "duplicate_story_records": len(data["stories"]) - len(stories),
@@ -786,6 +817,7 @@ These are unverified editorial explanations, not evidence; never use them to omi
                 sources, self._source_evidence.prompts, stories, data.get("source_accounting"),
                 configured_sections=bool(configured_sections),
             )
+            counts(extraction_metadata_repairs=metadata_repairs)
             return stories
 
         return self.antigravity.invoke(

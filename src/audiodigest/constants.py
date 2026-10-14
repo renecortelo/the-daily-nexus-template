@@ -12,9 +12,9 @@ class Section(StrEnum):
     CYBERSECURITY_IT = "Cybersecurity and IT"
     TECH_BUSINESS_PRODUCTS = "Tech Business and Products"
     WORLD_POLITICS_NEWS = "World Politics and News"
-    NATIONAL_POLITICS_NEWS = "National Politics and News"
-    LOCAL_REGIONAL_NEWS = "Local and Regional News"
-    BUSINESS_ECONOMY = "Business and Economy"
+    SPAIN_POLITICS_NEWS = "Spain Politics and News"
+    BARCELONA_POLITICS_NEWS = "Barcelona Politics and News"
+    MEXICO_POLITICS_NEWS = "Mexico Politics and News"
     SPORTS = "Sports"
     GOOD_NEWS_CULTURE = "Good News and Culture"
 
@@ -49,16 +49,25 @@ class SectionLabel(str):
 SectionReference = Section | SectionLabel
 
 
+class SectionValidationError(ValueError):
+    def __init__(self, message: str, rule: str):
+        super().__init__(message)
+        self.diagnostic = {"field": "section", "rule": rule}
+
+
 def validate_section_name(value: str) -> str:
     name = " ".join(value.split()).strip()
     if not name:
-        raise ValueError("podcast section names must not be blank")
+        raise SectionValidationError("podcast section names must not be blank", "section_blank")
     if len(name) > 60:
-        raise ValueError("podcast section names must be 60 characters or fewer")
+        raise SectionValidationError("podcast section names must be 60 characters or fewer",
+                                     "section_too_long")
     if "/" in name:
-        raise ValueError("podcast section names must use 'and' instead of '/'")
+        raise SectionValidationError("podcast section names must use 'and' instead of '/'",
+                                     "section_slash")
     if any(ord(character) < 32 or ord(character) == 127 for character in name):
-        raise ValueError("podcast section names must not contain control characters")
+        raise SectionValidationError("podcast section names must not contain control characters",
+                                     "section_control")
     return name
 
 
@@ -103,7 +112,7 @@ def parse_section(
     name = validate_section_name(value)
     if allowed_sections is not None and name not in allowed_sections:
         allowed = ", ".join(allowed_sections)
-        raise ValueError(f"section must be one of: {allowed}")
+        raise SectionValidationError(f"section must be one of: {allowed}", "section_not_allowed")
     try:
         return Section(name)
     except ValueError:

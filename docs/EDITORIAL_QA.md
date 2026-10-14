@@ -202,6 +202,33 @@ the 60-minute workflow cap.
 
 ## Structured-draft failure prevention
 
+### Extraction diagnostics and safe metadata repair
+
+Each rejected model attempt now retains a bounded, privacy-filtered validation
+history in GitHub progress and owner-only timing profiles, even if a later retry
+succeeds. The last sixteen entries retain stage, attempt, elapsed time, a fixed
+constraint code, an allowlisted field, zero-based story/fact index and numeric
+JSON position or cardinality where available. No rejected values, private desk
+names, mailbox IDs, excerpts, raw response or arbitrary exception text are stored.
+Legacy records cannot be reconstructed. This history is separate from the final
+failure code, so a recovered rejection does not falsely mark a delivery failed.
+
+Extraction distinguishes desk validity/desk count, confidence, rank, duplicate
+IDs and source alias/URL/passage/alignment failures. The existing single structural
+retry receives constraint-specific guidance. No extra model or generation call,
+automatic retry, time-limit increase or weaker factual approval is introduced.
+
+Before validating fresh extraction, only unambiguous non-factual metadata can be
+normalized: finite decimal numeric strings; exact configured desk spelling matched
+case-insensitively with equivalent `and`/`&` connectors only when the match is unique;
+duplicate local story IDs assigned unique application-owned
+IDs. All records remain present. Model-supplied evidence objects are discarded:
+support is rebuilt only from real supplied evidence_refs and original passages.
+Missing or ambiguous metadata remains rejected with a specific diagnostic. Facts,
+attribution, qualifiers, URLs and passage references are never rewritten. Persisted
+story validation still rejects invalid/duplicate identities. Booleans and non-finite
+scores are rejected. Independent original-source factual review remains mandatory.
+
 The script example is built from the run's exact hosts, nonempty desks and required
 story IDs. It contains no fictitious public URL; empty show notes are valid. Its
 placeholder narration is a shape example, never news or a factual fallback.
