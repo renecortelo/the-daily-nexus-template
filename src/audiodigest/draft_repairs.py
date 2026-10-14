@@ -4,19 +4,30 @@ from __future__ import annotations
 
 from typing import Any
 
+from audiodigest.validation_diagnostics import safe_detail
 
-def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[str, Any]:
+
+def draft_repair_plan(
+    payload: dict, response: dict | None, code: str, *, diagnostic: dict | None = None,
+) -> dict[str, Any]:
     plan: dict[str, Any] = {
         "mode": "smallest-supported-correction",
         "validation_still_required": True,
         "preserve_valid_facts_attribution_and_qualifiers": True,
         "never_expand_to_reach_a_minimum": True,
     }
+    detail = safe_detail(diagnostic)
+    if detail:
+        plan["constraint"] = detail
     if code.startswith("extraction_") or code in {
         "source_alias_unknown", "source_alias_unused", "source_url_unowned",
         "source_fact_alignment", "source_fact_support_shape", "source_passage_unknown",
     }:
         actions = {
+            "source_alias_unused": (
+                "Remove only source_ids aliases that support none of this story's facts. "
+                "Keep all supported facts and their exact evidence_refs; do not drop news."
+            ),
             "extraction_section": (
                 "Use one exact configured desk; otherwise a valid concise auto desk."
             ),
@@ -118,6 +129,30 @@ def draft_repair_plan(payload: dict, response: dict | None, code: str) -> dict[s
             "Rewrite only overlong conversation turns into complete shorter sentences, "
             "preserving each fact, qualifier, attribution and exact host. Follow "
             "output_contract.maximum_words_per_turn. Do not truncate or remove coverage."
+        )
+    elif code == "script_hosts":
+        plan["action"] = (
+            "Use output_contract.exact_hosts_in_order exactly. Introduce each active host, "
+            "and, only for two-host conversation, let both speak in every multi-story section. "
+            "Correct only "
+            "the rejected host field or participation; any new narration must use original "
+            "evidence. Do not rewrite valid news or change coverage, voices or attribution."
+        )
+        if detail.get("rule") == "host_introduction":
+            plan["action"] = (
+                "Correct only introduction: introduce each configured active host by exact name. "
+                "Keep one editor/producer credit. Preserve all valid news dialogue and coverage."
+            )
+        elif detail.get("rule") == "host_participation" and "section_index" in detail:
+            plan["action"] = (
+                "Correct only the indicated conversation section so both configured hosts speak. "
+                "Use distinct supported details, never filler or repeated facts. Keep every "
+                "required story ID in that section and preserve other valid sections."
+            )
+    elif code == "script_editor_credit":
+        plan["action"] = (
+            "Keep exactly one editor/producer credit in the introduction, spoken by an "
+            "active host. Dario Novelli is not a speaker. Preserve the remaining valid script."
         )
     elif code in {"script_section_name", "script_duplicate_section", "script_shape",
                   "model_required_field", "model_list_shape", "model_dialogue_shape"}:

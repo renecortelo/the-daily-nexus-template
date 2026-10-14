@@ -55,10 +55,10 @@ def apply_script_edits(
     run the full script validators and independent original-source factual review.
     Error messages are fixed: no private anchors, indexes, IDs or draft snippets.
     """
-    def reject() -> None:
+    def reject(rule: str = "patch_shape", **detail) -> None:
         raise DataValidationError(
             "script repair must use bounded exact news-turn replacements",
-            failure_code="script_shape",
+            failure_code="script_shape", diagnostic={"field": "edits", "rule": rule, **detail},
         )
 
     if not isinstance(proposal, dict) or set(proposal) != {"edits"}:
@@ -68,30 +68,31 @@ def apply_script_edits(
         reject()
     result = deepcopy(original)
     seen: set[tuple[int, int]] = set()
-    for edit in edits:
+    for index, edit in enumerate(edits):
         if not isinstance(edit, dict) or set(edit) != {
             "section_index", "turn_index", "expected", "replacement",
         }:
-            reject()
+            reject(item_index=index)
         section, turn = edit["section_index"], edit["turn_index"]
         if type(section) is not int or type(turn) is not int or section < 0 or turn < 0:
-            reject()
+            reject("patch_target", item_index=index)
         if (section, turn) in seen:
-            reject()
+            reject("patch_duplicate", item_index=index, section_index=section, turn_index=turn)
         seen.add((section, turn))
         expected, replacement = edit["expected"], edit["replacement"]
         if any(not isinstance(text, str) or not text.strip()
                or len(text) > MAX_EDIT_CHARACTERS for text in (expected, replacement)):
-            reject()
+            reject("patch_text", item_index=index, section_index=section, turn_index=turn)
         if replacement != replacement.strip() or replacement == expected:
-            reject()
+            reject("patch_text", item_index=index, section_index=section, turn_index=turn)
         if maximum_words_per_turn is not None and len(replacement.split()) > maximum_words_per_turn:
-            reject()
+            reject("patch_turn_length", item_index=index, section_index=section, turn_index=turn,
+                   actual_count=len(replacement.split()), expected_count=maximum_words_per_turn)
         try:
             target = result["sections"][section]["dialogue"][turn]
             if not isinstance(target, dict) or target.get("text") != expected:
-                reject()
+                reject("patch_anchor", item_index=index, section_index=section, turn_index=turn)
             target["text"] = replacement
         except (IndexError, KeyError, TypeError):
-            reject()
+            reject("patch_target", item_index=index, section_index=section, turn_index=turn)
     return result

@@ -22,7 +22,7 @@ from audiodigest.episode_budget import MAX_EPISODE_SECONDS
 from audiodigest.execution_budget import check_budget, operation_timeout
 from audiodigest.models import DialogueTurn, EpisodeScript
 from audiodigest.preferences import voice_profile
-from audiodigest.progress import counts, timed_operation
+from audiodigest.progress import add_metric, counts, timed_operation
 from audiodigest.speech import boundary_pause_ms, ends_with_spoken_question, prepare_speech
 
 
@@ -202,30 +202,35 @@ class KokoroAudioRenderer:
         except ImportError as exc:
             raise AudioGenerationError("soundfile is required for local audio rendering") from exc
         audio_parts = []
-        for _graphemes, _phonemes, audio in pipeline(
-            text,
-            voice=voice,
-            speed=self.settings.synthesis_speed,
-            split_pattern=r"\n+",
-        ):
-            audio_parts.append(audio)
+        # Includes phonemization and inference: do not label this pure neural time.
+        with timed_operation("speech_pipeline"):
+            for _graphemes, _phonemes, audio in pipeline(
+                text,
+                voice=voice,
+                speed=self.settings.synthesis_speed,
+                split_pattern=r"\n+",
+            ):
+                audio_parts.append(audio)
         if not audio_parts:
             raise AudioGenerationError("Kokoro returned no audio")
         try:
             import numpy as np
         except ImportError as exc:
             raise AudioGenerationError("numpy is required for local audio rendering") from exc
-        combined = np.concatenate(audio_parts)
-        if combined.ndim != 1 or not combined.size or not np.isfinite(combined).all():
-            raise AudioGenerationError("Kokoro returned invalid mono speech samples")
-        peak = float(np.max(np.abs(combined)))
-        if peak <= 1e-6:
-            raise AudioGenerationError("Kokoro returned silent speech samples")
-        # PCM16 otherwise clips values beyond full scale before loudnorm can help.
-        # Only attenuate oversized waveforms; never boost or compress quiet speech.
-        if peak >= 1:
-            combined = combined * (0.999 / peak)
-        sf.write(str(output), combined, 24_000)
+        with timed_operation("speech_write"):
+            combined = np.concatenate(audio_parts)
+            if combined.ndim != 1 or not combined.size or not np.isfinite(combined).all():
+                raise AudioGenerationError("Kokoro returned invalid mono speech samples")
+            peak = float(np.max(np.abs(combined)))
+            if peak <= 1e-6:
+                raise AudioGenerationError("Kokoro returned silent speech samples")
+            # PCM16 otherwise clips values beyond full scale before loudnorm can help.
+            # Only attenuate oversized waveforms; never boost or compress quiet speech.
+            if peak >= 1:
+                combined = combined * (0.999 / peak)
+            sf.write(str(output), combined, 24_000)
+        add_metric("speech_characters", len(text))
+        add_metric("speech_samples", int(combined.size))
 
     def _voice_for_host(self, host_name: str) -> str:
         if host_name.casefold() == self.hosts.primary_name.casefold():
@@ -308,10 +313,11 @@ class KokoroAudioRenderer:
                 if language_code not in pipelines:
                     with timed_operation("voice_model"):
                         pipelines[language_code] = self._pipeline(language_code)
-                prepared = prepare_speech(
-                    turn.text, is_heading=is_section_heading,
-                    pronunciations=self.settings.pronunciations,
-                )
+                with timed_operation("speech_prepare"):
+                    prepared = prepare_speech(
+                        turn.text, is_heading=is_section_heading,
+                        pronunciations=self.settings.pronunciations,
+                    )
                 cache_key = (voice, language_code, prepared)
                 cached = speech_cache.get(cache_key)
                 if cached is None:
@@ -326,7 +332,8 @@ class KokoroAudioRenderer:
                         )
                     if speech_ms <= 0:
                         raise AudioGenerationError("Kokoro returned an empty speech chunk")
-                    leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
+                    with timed_operation("speech_edges"):
+                        leading_ms, trailing_ms = _wav_edge_silence_ms(chunk)
                     cached = (chunk, speech_ms, leading_ms, trailing_ms)
                     if len(speech_cache) < 64:
                         speech_cache[cache_key] = cached

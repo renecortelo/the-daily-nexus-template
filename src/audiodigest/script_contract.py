@@ -244,11 +244,17 @@ def _normalize_script_closing(
         if not isinstance(raw, list) or len(raw) > 1 or any(
             not isinstance(turn, dict) for turn in raw
         ):
-            raise ValueError("closing_comment must be a list containing at most one dialogue turn")
+            raise DataValidationError("closing_comment must contain at most one dialogue turn",
+                                      failure_code="script_closing_comment", diagnostic={
+                                          "field": "closing_comment", "rule": "closing_shape",
+                                      })
         try:
             comments = [DialogueTurn.from_dict(turn).to_dict() for turn in raw]
         except DataValidationError as exc:
-            raise ValueError("closing_comment requires a nonempty host and text") from exc
+            raise DataValidationError("closing_comment requires a nonempty host and text",
+                                      failure_code="script_closing_comment",
+                                      diagnostic={"field": "closing_comment",
+                                                  **exc.diagnostic}) from exc
     else:
         legacy = data.get("sign_off", [])
         if isinstance(legacy, str):

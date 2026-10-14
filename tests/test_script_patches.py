@@ -217,6 +217,9 @@ class ScriptPatchEditorialTests(TestCase):
         clean = safe_event(profile)
         self.assertEqual(1, clean["counters"]["script_patch_repairs"])
         self.assertEqual(1, clean["counters"]["script_full_repairs"])
+        self.assertEqual(1, clean["counters"]["script_patch_edits"])
+        self.assertGreater(clean["counters"]["script_full_response_bytes"],
+                           clean["counters"]["script_patch_response_bytes"])
         self.assertNotIn("anchor", json.dumps(clean))
         self.assertNotIn("35%", json.dumps(clean))
         for invalid in (True, -1, float("inf"), "private text"):

@@ -34,7 +34,7 @@ from audiodigest.models import (
 from audiodigest.newsletter_accounting import newsletter_accounting
 from audiodigest.newspaper import _complete_sentences, _reader_copy_key
 from audiodigest.preferences import editorial_tone
-from audiodigest.progress import counts, increment
+from audiodigest.progress import add_metric, counts, increment
 from audiodigest.script_contract import (
     BRIEF_OPENING_MAX_BUDGET_WORDS,
     CONVERSATION_TURN_MAX_WORDS,
@@ -659,6 +659,17 @@ class EditorialPipeline:
         )
         return ((tih,) if tih in scores else ()) + tuple(ordered)
 
+    def _draft_story_prompt_dict(self, story: Story) -> dict[str, Any]:
+        """Ranking is complete; narration needs reporting and lineage, not scores.
+
+        Remove only local selection metadata, never facts, aliases, URLs or qualifiers.
+        Original source context remains in the unchanged source_evidence packet.
+        """
+        data = self._story_prompt_dict(story)
+        for key in ("confidence", "rank_score"):
+            data.pop(key, None)
+        return data
+
     def extract_stories(
         self, sources: list[SourceItem], episode_date: date
     ) -> tuple[list[Story], AntigravityMetadata]:
@@ -1056,8 +1067,7 @@ humorous story is available, use a brief thoughtful observation instead.
 Use the quotation as a lens, not a claim that its author commented on today's news. Avoid
 generic technology jokes and stock closing lines. Do not repeat the quotation or its
 attribution in closing_comment. Use an empty closing_comment list if no useful comment
-is available. The application inserts this approved source URL:
-{closing_quote.source_url}
+is available. The application inserts the approved source URL from payload.closing_quote.
 
 The disclosure must be exactly: {AI_DISCLOSURE!r}
 Before returning, check payload.output_contract against your draft in this same response.
@@ -1067,12 +1077,12 @@ Do not output this checklist or treat it as a substitute for the independent fac
 {repair}
 
 Return JSON only:
-{json.dumps(output_example, ensure_ascii=False, indent=2)}
+{json.dumps(output_example, ensure_ascii=False, separators=(',', ':'))}
 """.strip()
         payload = {
             "episode_date": episode_date.isoformat(),
             "section_order": list(section_order),
-            "stories": [self._story_prompt_dict(story) for story in stories],
+            "stories": [self._draft_story_prompt_dict(story) for story in stories],
             "closing_quote": closing_quote.to_dict(),
             "section_definitions": editorial_section_definitions(section_order),
             "hosts": active_hosts,
@@ -1111,9 +1121,13 @@ Return JSON only:
             )
 
         applied_edit_count: int | None = None
+        accepted_response_bytes = 0
 
         def validate_script(data: dict[str, Any]) -> EpisodeScript:
-            nonlocal applied_edit_count
+            nonlocal applied_edit_count, accepted_response_bytes
+            response_bytes = len(json.dumps(
+                data, ensure_ascii=False, separators=(",", ":"),
+            ).encode("utf-8"))
             patched = "edits" in data
             edit_count = len(data.get("edits", [])) if isinstance(data.get("edits"), list) else 0
             if patched:
@@ -1142,74 +1156,113 @@ Return JSON only:
                 section_order=section_order,
             )
             if script.hosts != host_names:
-                raise ValueError("the script host list must exactly match configuration")
+                raise DataValidationError("the script host list must exactly match configuration",
+                                          failure_code="script_hosts", diagnostic={
+                                              "field": "hosts", "rule": "host_configured",
+                                          })
             introduction = script.introduction_text.lower()
             for host_name in host_names:
                 if host_name.lower() not in introduction:
-                    raise ValueError(f"the introduction must name active host {host_name}")
+                    raise DataValidationError("the introduction must name each active host",
+                                              failure_code="script_hosts", diagnostic={
+                                                  "field": "introduction",
+                                                  "rule": "host_introduction",
+                                              })
             if introduction.count("dario novelli") != 1:
-                raise ValueError(
-                    "the introduction must credit editor and producer Dario Novelli exactly once"
+                raise DataValidationError(
+                    "the introduction must credit editor and producer Dario Novelli exactly once",
+                    failure_code="script_editor_credit", diagnostic={
+                        "field": "introduction", "rule": "editor_credit_once",
+                        "actual_count": introduction.count("dario novelli"), "expected_count": 1,
+                    },
                 )
             if closing_quote.text not in script.sign_off_text:
-                raise ValueError("the sign-off must reproduce the selected quotation")
+                raise DataValidationError("the sign-off must reproduce the selected quotation",
+                                          failure_code="script_quote_text",
+                                          diagnostic={"field": "sign_off"})
             if closing_quote.author not in script.sign_off_text:
-                raise ValueError("the sign-off must name the quotation author")
+                raise DataValidationError("the sign-off must name the quotation author",
+                                          failure_code="script_quote_author",
+                                          diagnostic={"field": "sign_off"})
             _bound_closing_comment(script, closing_quote)
             if len(host_names) == 2:
                 speakers = {turn.host.casefold() for turn in script.dialogue_turns}
                 if any(host.casefold() not in speakers for host in host_names):
-                    raise ValueError("both configured hosts must speak in the episode")
+                    raise DataValidationError("both configured hosts must speak in the episode",
+                                              failure_code="script_hosts", diagnostic={
+                                                  "field": "dialogue", "rule": "host_participation",
+                                              })
                 if dialogue_style == "conversation":
                     required_speakers = {host.casefold() for host in host_names}
-                    for section in script.sections:
+                    for section_index, section in enumerate(script.sections):
                         if len(section.story_ids) < 2:
                             continue
                         section_speakers = {turn.host.casefold() for turn in section.dialogue}
                         if section_speakers != required_speakers:
-                            raise ValueError(
+                            raise DataValidationError(
                                 "both hosts must participate in every multi-story "
-                                "conversation section"
+                                "conversation section", failure_code="script_hosts", diagnostic={
+                                    "field": "dialogue", "rule": "host_participation",
+                                    "section_index": section_index,
+                                    "actual_count": len(section_speakers),
+                                    "expected_count": len(required_speakers),
+                                },
                             )
-                    if any(
-                        len(turn.text.split()) > CONVERSATION_TURN_MAX_WORDS
-                        for turn in script.dialogue_turns
-                    ):
-                        raise DataValidationError(
-                            "conversation turns must stay concise and responsive",
-                            failure_code="script_turn_length",
-                        )
+                    for turn_index, turn in enumerate(script.dialogue_turns):
+                        if len(turn.text.split()) > CONVERSATION_TURN_MAX_WORDS:
+                            raise DataValidationError(
+                                "conversation turns must stay concise and responsive",
+                                failure_code="script_turn_length", diagnostic={
+                                    "field": "text", "rule": "word_ceiling",
+                                    "turn_index": turn_index,
+                                    "actual_count": len(turn.text.split()),
+                                    "expected_count": CONVERSATION_TURN_MAX_WORDS,
+                                },
+                            )
             has_tih = any(story.section == Section.TODAY_IN_HISTORY for story in stories)
             if has_tih and (
                 not script.sections or script.sections[0].name != Section.TODAY_IN_HISTORY
             ):
-                raise ValueError("TIH: Today in History must be the first script section")
+                raise DataValidationError("TIH: Today in History must be the first script section",
+                                          failure_code="script_section_name", diagnostic={
+                                              "field": "sections", "rule": "section_first",
+                                          })
             valid_story_ids = {story.story_id for story in stories}
             story_desks = {story.story_id: story.section.value for story in stories}
-            for section in script.sections:
+            for section_index, section in enumerate(script.sections):
                 if any(story_desks.get(identifier, section.name.value) != section.name.value
                        for identifier in section.story_ids):
                     raise DataValidationError(
                         "story IDs must be cited under their supplied subject section",
-                        failure_code="script_section_coverage",
+                        failure_code="script_section_coverage", diagnostic={
+                            "field": "story_ids", "rule": "story_section",
+                            "section_index": section_index,
+                        },
                     )
             cited_story_ids = {
                 story_id for section in script.sections for story_id in section.story_ids
             }
             unsupported_story_ids = cited_story_ids - valid_story_ids
             if unsupported_story_ids:
-                raise ValueError(
-                    f"script cites unsupported story IDs: {sorted(unsupported_story_ids)}"
+                raise DataValidationError(
+                    "script cites unsupported story IDs",
+                    failure_code="script_unsupported_reference",
+                    diagnostic={"field": "story_ids", "rule": "story_supported",
+                                "actual_count": len(unsupported_story_ids)},
                 )
             missing_story_ids = set(required_story_ids) - cited_story_ids
             if missing_story_ids:
-                raise ValueError(
-                    f"script omits required verified story IDs: {sorted(missing_story_ids)}"
+                raise DataValidationError(
+                    "script omits required verified story IDs", failure_code="script_coverage",
+                    diagnostic={"field": "story_ids", "rule": "story_required",
+                                "actual_count": len(missing_story_ids)},
                 )
             if script.word_count > target_max:
-                raise ValueError(
+                raise DataValidationError(
                     f"script contains {script.word_count} words; "
-                    f"the evidence-sized maximum is {target_max}"
+                    f"the evidence-sized maximum is {target_max}", failure_code="script_length",
+                    diagnostic={"field": "text", "rule": "word_ceiling",
+                                "actual_count": script.word_count, "expected_count": target_max},
                 )
             script.show_notes = _script_source_notes(script, stories, closing_quote)
             if patched:
@@ -1223,9 +1276,12 @@ Return JSON only:
                 if immutable_result != expected_result:
                     raise DataValidationError(
                         "script repair must preserve all other draft fields",
-                        failure_code="script_shape",
+                        failure_code="script_shape", diagnostic={
+                            "field": "root", "rule": "immutable_repair",
+                        },
                     )
             applied_edit_count = edit_count if patched else None
+            accepted_response_bytes = response_bytes
             return script
 
         script, metadata = self.antigravity.invoke(
@@ -1237,6 +1293,10 @@ Return JSON only:
         if previous_draft is not None:
             increment("script_patch_repairs" if applied_edit_count is not None
                       else "script_full_repairs")
+            add_metric("script_patch_response_bytes" if applied_edit_count is not None
+                       else "script_full_response_bytes", accepted_response_bytes)
+            if applied_edit_count is not None:
+                add_metric("script_patch_edits", applied_edit_count)
             repair_format = (
                 f"{applied_edit_count} bounded news-turn edits"
                 if applied_edit_count is not None else "complete structured draft"

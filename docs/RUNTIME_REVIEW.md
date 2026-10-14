@@ -77,3 +77,45 @@ an allowlisted metric reader, **not a general-purpose log redaction utility**.
 
 This tool is opt-in and local. It is not installed as a polling job, added to
 runner generation, or used to dispatch/requeue work automatically.
+
+## Response and speech profiling
+
+Normal generation now records fixed numeric request/response UTF-8 byte totals,
+model-response time accepted or rejected by structural validation (milliseconds),
+accepted script patch/full-draft response sizes, and accepted patch edit counts.
+Accepted JSON is not factual approval. These timings include CLI/tool overhead;
+failed exits and process timeouts are not included in the accepted/rejected split,
+but remain in the model operation total. Bytes are neither tokens nor billed usage.
+No rejected prose, edit anchors, model response, private URL or source ID is saved.
+Exact-context sharing also records packet input/sent entry counts and repeated
+context characters not resent. Counts accumulate over validated packets, not distinct
+newsletters; support for every fact is unchanged. They are not tokens or saved seconds.
+
+Speech preparation, Kokoro's phonemization/inference pipeline, PCM validation/write,
+and edge-silence inspection have separate timings. Pipeline/write are nested in
+the speech operation; preparation/edges belong to the audio stage. Never add nested
+timings to their parent totals. Sample counts describe unique synthesized chunks,
+not all replayed chunks; voices, speed, text, pauses and encoding are unchanged.
+New numeric metrics ride existing events/heartbeats and the bounded final profile;
+no new polling or per-metric cloud write is added. Missing legacy metrics are unknown.
+
+For an optional **local synthetic** profile, use an environment with the existing
+audio dependencies and public model/voice/language files already cached:
+
+```powershell
+python scripts/profile-speech-runtime.py --timeout 120 --threads 2
+```
+
+This disposable CPU subprocess uses only built-in fictional text, disables network
+connections and Hub downloads, excludes application/provider secret environment
+variables, captures library output, and deletes temporary synthetic WAVs normally.
+The parent enforces a 30–300 second wall-time limit including model initialization
+and warm-ups. Missing caches fail; nothing is installed or downloaded automatically.
+Only fixed phases and numeric samples are emitted; incomplete profiles exit with
+code 2 rather than claiming success. It is not a workflow or normal-run extra step.
+No production thread setting changes. A Windows result cannot establish Linux-runner
+savings, and matching repeated PCM does not certify subjective naturalness.
+
+Before adopting a synthesis change, compare equivalent text, voices, pronunciation,
+sample counts and complete encoded output on equivalent hardware. The current
+one-thread and inference-mode experiments do not justify a production change.

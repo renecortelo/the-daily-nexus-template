@@ -75,9 +75,9 @@ class WebAppSecurityTests(TestCase):
         self.assertIn(':where(button, a, [tabindex]):focus-visible', styles)
         self.assertIn('.weekday-picker input:focus-visible + span', styles)
         self.assertIn('--mini-player-height', styles)
-        self.assertIn('/app.js?v=4.1.31', page)
-        self.assertIn('/styles.css?v=4.1.31', page)
-        self.assertIn('tdn-shell-v4-61', worker)
+        self.assertIn('/app.js?v=4.1.32', page)
+        self.assertIn('/styles.css?v=4.1.32', page)
+        self.assertIn('tdn-shell-v4-62', worker)
 
     def test_compact_console_keeps_touch_zoom_and_motion_safeguards(self):
         styles = Path("web/styles.css").read_text(encoding="utf-8")

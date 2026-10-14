@@ -22,6 +22,7 @@ from audiodigest.private_store import (
 )
 from audiodigest.progress import (
     FAILURE_CODES,
+    add_metric,
     clear_failure_code,
     increment,
     record_failure_code,
@@ -373,15 +374,15 @@ class AntigravityCLI:
             write_private_value(
                 agent_destination, self.settings.agent_path.read_text(encoding="utf-8"),
             )
+            request = json.dumps(
+                {"instruction": instruction, "payload": payload},
+                ensure_ascii=False, separators=(",", ":"),
+            )
             write_private_value(
-                request_path,
-                json.dumps(
-                    {"instruction": instruction, "payload": payload},
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
+                request_path, request,
                 maximum_bytes=16 * 1024 * 1024,
             )
+            add_metric("model_request_bytes", len(request.encode("utf-8")))
         except (OSError, PrivateStoreError) as exc:
             raise AntigravityConfigurationError(
                 "Could not secure the editorial request file"
@@ -478,12 +479,14 @@ class AntigravityCLI:
                     completed.stdout,
                     elapsed_ms=elapsed_ms,
                 )
+                add_metric("model_response_bytes", len(response.encode("utf-8")))
                 rejected_response = _json_from_response(response)
                 result = validator(rejected_response)
                 if validation_failed:
                     # Count recovered calls, not a guarantee of factual approval.
                     increment("model_validation_recoveries")
                 clear_failure_code()
+                add_metric("model_accepted_ms", elapsed_ms)
                 return result, metadata
             except AntigravityPaymentRiskError:
                 raise
@@ -494,10 +497,12 @@ class AntigravityCLI:
                 ValueError,
             ) as exc:
                 validation_failed = True
+                add_metric("model_rejected_ms", elapsed_ms)
                 increment("model_validation_failures")
                 failure_code = _validation_code(exc)
                 record_failure_code(failure_code)
                 detail = dict(getattr(exc, "diagnostic", {}) or {})
+                detail["attempt_ms"] = elapsed_ms
                 if isinstance(exc, json.JSONDecodeError):
                     detail.update(
                         json_line=exc.lineno, json_column=exc.colno, json_position=exc.pos,
@@ -515,7 +520,9 @@ class AntigravityCLI:
                         "previous_response": rejected_response,
                         "validation_error": str(exc),
                         "validation_diagnostic": detail,
-                        "repair_plan": draft_repair_plan(payload, rejected_response, failure_code),
+                        "repair_plan": draft_repair_plan(
+                            payload, rejected_response, failure_code, diagnostic=detail,
+                        ),
                         "repair_instruction": (
                             "Return corrected JSON only. Preserve valid supported "
                             "material from the rejected response. Change only the rejected "

@@ -8,6 +8,24 @@ a reviewed, allowlisted export.
 
 ## Current implementation versus deployment checks
 
+Efficiency/diagnostic increment (2026-10-14): preserve all current editorial,
+source, audio, deadline and no-spend controls. Script and patch failures gain
+fixed rules/fields and bounded section/turn/edit locations; metadata contains no
+rejected text. Existing structural retries gain focused host/credit guidance.
+Draft requests omit post-selection scores only and serialize the complete schema
+example compactly, retaining reporting, source support and exact configured coverage.
+New numeric metrics separate structurally accepted/rejected model-response time,
+request/response byte totals and accepted patch/full response sizes. Audio profiling
+separates preparation, phonemization/inference, PCM write and edge inspection.
+These are nested costs, not additional generation passes or independent totals.
+
+The opt-in offline synthetic speech tool has a parent wall-time limit and outputs
+only fixed phases and numeric metrics. It reads no application config or newsletters,
+downloads nothing and is not added to Actions. No production voice, speed, dependency
+or thread change is adopted without equivalent-output performance evidence.
+Cloud minute savings and perceptual quality still require ordinary-run observation;
+smaller requests and synthetic tests alone do not prove a production speed gain.
+
 The dated increments below are a chronological record, not a single outstanding
 task list. As of the 2026-10-12 source revision:
 

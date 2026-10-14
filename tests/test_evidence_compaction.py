@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import io
 import json
 from dataclasses import replace
 from types import SimpleNamespace
@@ -12,9 +13,25 @@ from audiodigest.config import load_settings
 from audiodigest.editorial import EditorialPipeline
 from audiodigest.evidence import review_evidence
 from audiodigest.models import AntigravityMetadata, DataValidationError, StoryEvidence
+from audiodigest.progress import ProgressReporter
 
 
 class EvidenceCompactionTests(TestCase):
+    def test_normal_packet_reports_exact_context_sharing_without_private_text(self):
+        story, index = self.two_paragraphs()
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        reporter.start()
+        try:
+            packet = self.packet(story, index)
+            profile = reporter.finish("completed")
+        finally:
+            reporter.close()
+        self.assertEqual(2, profile["counters"]["evidence_passages_input"])
+        self.assertEqual(1, profile["counters"]["evidence_passages_sent"])
+        self.assertEqual(len(packet["passages"][0]["text"]),
+                         profile["counters"]["evidence_context_chars_saved"])
+        self.assertNotIn("provisionals", json.dumps(profile))
+
     def two_paragraphs(self):
         source = synthetic_source(text=(
             "El pilot va créixer un 12%.\n"

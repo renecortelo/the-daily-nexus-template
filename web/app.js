@@ -1623,7 +1623,7 @@ function renderResourceSummary() {
     const diagnosticFields = new Set(("root stories story_id section headline facts why_it_matters " +
       "source_ids source_urls evidence evidence_refs confidence rank_score title hosts introduction " +
       "sections conclusion sign_off show_notes closing_comment disclosure dialogue host text approved " +
-      "issues factual_approved").split(" "));
+      "issues factual_approved name story_ids narration edits").split(" "));
     const validIndex = value => Number.isInteger(value) && value >= 0 && value <= 1e9;
     for (const diagnostic of (Array.isArray(profile.validation_history) ? profile.validation_history : []).slice(-16)) {
       if (!diagnostic || !diagnosticCodes.has(diagnostic.code) ||
@@ -1633,10 +1633,16 @@ function renderResourceSummary() {
         diagnostic.code.replaceAll("_", " ").toUpperCase()];
       if (diagnosticFields.has(diagnostic.field)) parts.push(`FIELD ${diagnostic.field}`);
       if (new Set(("section_blank section_too_long section_slash section_control section_not_allowed " +
-          "finite_number probability_range json_syntax json_duplicate_key json_nonfinite").split(" ")).has(diagnostic.rule)) {
+          "finite_number probability_range json_syntax json_duplicate_key json_nonfinite " +
+          "nonempty object_shape host_count host_unique host_configured host_introduction " +
+          "host_participation editor_credit_once section_order section_unique section_first " +
+          "story_supported story_required story_section word_ceiling closing_shape immutable_repair " +
+          "boolean_required rejection_issues approval_consistent " +
+          "patch_shape patch_target patch_anchor patch_text patch_duplicate patch_turn_length").split(" ")).has(diagnostic.rule)) {
         parts.push(`RULE ${diagnostic.rule.replaceAll("_", " ").toUpperCase()}`);
       }
-      for (const [key, label] of [["item_index", "STORY INDEX"], ["fact_index", "FACT INDEX"],
+      for (const [key, label] of [["item_index", "ITEM INDEX"], ["fact_index", "FACT INDEX"],
+        ["section_index", "SECTION INDEX"], ["turn_index", "TURN INDEX"], ["attempt_ms", "ATTEMPT MS"],
         ["actual_count", "ACTUAL COUNT"], ["expected_count", "EXPECTED COUNT"],
         ["json_line", "JSON LINE"], ["json_column", "JSON COLUMN"]]) {
         if (validIndex(diagnostic[key])) parts.push(`${label} ${diagnostic[key]}`);
@@ -1645,6 +1651,13 @@ function renderResourceSummary() {
     }
     const metadataRepairs = metricNumber(profile.counters?.extraction_metadata_repairs);
     if (metadataRepairs !== null && metadataRepairs > 0) add(`EXTRACTION METADATA NORMALIZED // ${metadataRepairs}; FACTS AND SOURCE REFERENCES UNCHANGED`);
+    const metrics = profile.counters || {};
+    const contextsIn = metricNumber(metrics.evidence_passages_input), contextsSent = metricNumber(metrics.evidence_passages_sent);
+    if (contextsIn !== null && contextsSent !== null) add(`EXACT CONTEXT SHARING ACROSS REVIEW PACKETS // ${contextsIn} entries → ${contextsSent}; ${metricNumber(metrics.evidence_context_chars_saved) ?? 0} repeated context characters not resent; ALL FACT SUPPORT RETAINED, NOT A TOKEN OR TIME SAVING MEASUREMENT`);
+    const acceptedMs = metricNumber(metrics.model_accepted_ms), rejectedMs = metricNumber(metrics.model_rejected_ms);
+    if (acceptedMs !== null || rejectedMs !== null) add(`MODEL RESPONSE TIME (WITHIN MODEL TOTAL; ACCEPTANCE IS NOT FACTUAL APPROVAL) // ${acceptedMs === null ? "ACCEPTED NOT MEASURED" : `ACCEPTED ${secondsText(acceptedMs / 1000)}`} · ${rejectedMs === null ? "REJECTED NOT MEASURED" : `REJECTED ${secondsText(rejectedMs / 1000)}`}`);
+    const patchBytes = metricNumber(metrics.script_patch_response_bytes), fullBytes = metricNumber(metrics.script_full_response_bytes);
+    if (patchBytes !== null || fullBytes !== null) add(`ACCEPTED SCRIPT REPAIRS // ${patchBytes === null ? "PATCH NOT MEASURED" : `PATCH ${patchBytes} bytes · ${metricNumber(metrics.script_patch_edits) ?? 0} edits`} · ${fullBytes === null ? "FULL DRAFT NOT MEASURED" : `FULL ${fullBytes} bytes`}; SIZE IS NOT LATENCY`);
     const measurements = profile.measurements || {};
     const labels = { start_delay_seconds: "START DELAY (INCLUDES SETUP)", setup_seconds: "JOB SETUP BEFORE GENERATION",
       job_observed_seconds: "JOB TIME OBSERVED SO FAR (EXCLUDES FINAL CLEANUP)", protected_remaining_seconds: "PROTECTED TIME LEFT AT FINISH" };
@@ -1664,6 +1677,10 @@ function renderResourceSummary() {
       .filter(key => metricNumber(profile.operations?.[key]?.seconds) !== null);
     if (operations.length) add(`OPERATIONS (ALREADY INCLUDED IN STAGES) // ${operations.map(key =>
       `${key.replaceAll("_", " ")} ${secondsText(profile.operations[key].seconds)}`).join(" · ")}`);
+    const speechParts = ["speech_prepare", "speech_pipeline", "speech_write", "speech_edges"]
+      .filter(key => metricNumber(profile.operations?.[key]?.seconds) !== null);
+    if (speechParts.length) add(`SPEECH BREAKDOWN (NESTED; DO NOT ADD TO TOTALS) // ${speechParts.map(key =>
+      `${key.replaceAll("speech_", "")} ${secondsText(profile.operations[key].seconds)}`).join(" · ")}; PIPELINE INCLUDES PHONEMIZATION AND INFERENCE`);
     const samples = (Array.isArray(profile.recent) ? profile.recent : [profile]).slice(-20);
     const valid = samples.filter(sample => sample && ["completed", "failed", "interrupted"].includes(sample.status) && metricNumber(sample.elapsed_seconds) !== null);
     const completed = valid.filter(sample => sample.status === "completed");

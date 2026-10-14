@@ -71,7 +71,10 @@ class DialogueTurn:
     def from_dict(cls, data: dict[str, Any]) -> DialogueTurn:
         if not isinstance(data, dict):
             raise DataValidationError("dialogue turn must be an object",
-                                      failure_code="model_dialogue_shape")
+                                      failure_code="model_dialogue_shape", diagnostic={
+                                          "field": "dialogue", "rule": "object_shape",
+                                          "value_kind": value_kind(data),
+                                      })
         return cls(
             host=_required_str(data, "host"),
             text=_required_str(data, "text"),
@@ -90,15 +93,24 @@ def _dialogue_list(
     value = data.get(key)
     if isinstance(value, str):
         if not value.strip():
-            raise DataValidationError(f"{key!r} must not be empty")
+            raise DataValidationError(f"{key!r} must not be empty",
+                                      failure_code="model_dialogue_shape",
+                                      diagnostic={"field": key, "rule": "nonempty"})
         return [DialogueTurn(host=default_host, text=value.strip())]
     if not isinstance(value, list) or not value:
         raise DataValidationError(f"{key!r} must be a non-empty dialogue list",
-                                  failure_code="model_dialogue_shape")
-    if any(not isinstance(item, dict) for item in value):
-        raise DataValidationError(f"{key!r} dialogue entries must be objects",
-                                  failure_code="model_dialogue_shape")
-    return [DialogueTurn.from_dict(item) for item in value]
+                                  failure_code="model_dialogue_shape", diagnostic={
+                                      "field": key, "value_kind": value_kind(value),
+                                      "rule": "nonempty",
+                                  })
+    turns = []
+    for index, item in enumerate(value):
+        try:
+            turns.append(DialogueTurn.from_dict(item))
+        except DataValidationError as exc:
+            exc.diagnostic = safe_detail({"field": key, **exc.diagnostic, "turn_index": index})
+            raise
+    return turns
 
 
 @dataclass(slots=True)
@@ -293,7 +305,10 @@ class ScriptSection:
     ) -> ScriptSection:
         if not isinstance(data, dict):
             raise DataValidationError("script section must be an object",
-                                      failure_code="script_shape")
+                                      failure_code="script_shape", diagnostic={
+                                          "field": "sections", "rule": "object_shape",
+                                          "value_kind": value_kind(data),
+                                      })
         try:
             name = parse_section(
                 _required_str(data, "name"),
@@ -302,7 +317,7 @@ class ScriptSection:
         except ValueError as exc:
             raise DataValidationError(str(exc), failure_code=(
                 getattr(exc, "failure_code", "") or "script_section_name"
-            )) from exc
+            ), diagnostic={"field": "name", **getattr(exc, "diagnostic", {})}) from exc
         dialogue_key = "dialogue" if "dialogue" in data else "narration"
         return cls(
             name=name,
@@ -342,29 +357,42 @@ class EpisodeScript:
     ) -> EpisodeScript:
         hosts = _string_list(data, "hosts") or ["Dalia"]
         if len(hosts) not in {1, 2}:
-            raise DataValidationError("an episode must have one or two hosts")
+            raise DataValidationError("an episode must have one or two hosts",
+                                      failure_code="script_hosts", diagnostic={
+                                          "field": "hosts", "rule": "host_count",
+                                          "actual_count": len(hosts),
+                                      })
         if len({host.casefold() for host in hosts}) != len(hosts):
-            raise DataValidationError("host names must be unique")
+            raise DataValidationError("host names must be unique", failure_code="script_hosts",
+                                      diagnostic={"field": "hosts", "rule": "host_unique"})
         default_host = hosts[0]
         raw_sections = data.get("sections")
         if not isinstance(raw_sections, list):
-            raise DataValidationError("sections must be a list", failure_code="script_shape")
-        sections = [
-            ScriptSection.from_dict(
-                item,
-                default_host=default_host,
-                allowed_sections=section_order,
-            )
-            for item in raw_sections
-        ]
+            raise DataValidationError("sections must be a list", failure_code="script_shape",
+                                      diagnostic={"field": "sections",
+                                                  "value_kind": value_kind(raw_sections)})
+        sections = []
+        for index, item in enumerate(raw_sections):
+            try:
+                sections.append(ScriptSection.from_dict(
+                    item, default_host=default_host, allowed_sections=section_order,
+                ))
+            except DataValidationError as exc:
+                exc.diagnostic = safe_detail({**exc.diagnostic, "section_index": index})
+                raise
         if section_order is not None:
             order = {section: index for index, section in enumerate(section_order)}
             indexes = [order[item.name.value] for item in sections]
             if indexes != sorted(indexes):
-                raise DataValidationError("sections are not in the required order")
+                raise DataValidationError("sections are not in the required order",
+                                          failure_code="script_section_name", diagnostic={
+                                              "field": "sections", "rule": "section_order",
+                                          })
         if len({item.name for item in sections}) != len(sections):
             raise DataValidationError("script contains duplicate sections",
-                                      failure_code="script_duplicate_section")
+                                      failure_code="script_duplicate_section", diagnostic={
+                                          "field": "sections", "rule": "section_unique",
+                                      })
         script = cls(
             title=_required_str(data, "title"),
             hosts=hosts,
@@ -388,10 +416,13 @@ class EpisodeScript:
             disclosure=str(data.get("disclosure") or AI_DISCLOSURE).strip(),
         )
         allowed_hosts = {host.casefold() for host in hosts}
-        for turn in script.dialogue_turns:
+        for index, turn in enumerate(script.dialogue_turns):
             if turn.host.casefold() not in allowed_hosts:
                 raise DataValidationError(
-                    f"dialogue host {turn.host!r} is not in the configured host list"
+                    "dialogue host is not in the configured host list",
+                    failure_code="script_hosts", diagnostic={
+                        "field": "host", "rule": "host_configured", "turn_index": index,
+                    },
                 )
         return script
 
@@ -724,15 +755,30 @@ class VerificationResult:
     def from_dict(cls, data: dict[str, Any]) -> VerificationResult:
         approved = data.get("approved")
         if not isinstance(approved, bool):
-            raise DataValidationError("approved must be a boolean")
+            raise DataValidationError("approved must be a boolean",
+                                      failure_code="model_required_field", diagnostic={
+                                          "field": "approved", "rule": "boolean_required",
+                                          "value_kind": value_kind(approved),
+                                      })
         issues = _string_list(data, "issues")
         if not approved and not issues:
-            raise DataValidationError("a rejected script must contain at least one issue")
+            raise DataValidationError("a rejected script must contain at least one issue",
+                                      failure_code="model_required_field", diagnostic={
+                                          "field": "issues", "rule": "rejection_issues",
+                                      })
         factual = data.get("factual_approved")
         if factual is not None and not isinstance(factual, bool):
-            raise DataValidationError("factual_approved must be a boolean")
+            raise DataValidationError("factual_approved must be a boolean",
+                                      failure_code="model_required_field", diagnostic={
+                                          "field": "factual_approved", "rule": "boolean_required",
+                                          "value_kind": value_kind(factual),
+                                      })
         if approved and factual is False:
-            raise DataValidationError("an approved edition cannot fail factual verification")
+            raise DataValidationError("an approved edition cannot fail factual verification",
+                                      failure_code="model_required_field", diagnostic={
+                                          "field": "factual_approved",
+                                          "rule": "approval_consistent",
+                                      })
         return cls(approved=approved, issues=issues, factual_approved=factual)
 
 

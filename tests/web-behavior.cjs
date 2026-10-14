@@ -476,7 +476,7 @@ test('validation history shows fixed constraints and indexes without rejected co
     ]};
   context.renderResourceSummary();
   const text=nodes.get('resource-summary').children.map(node=>node.textContent).join(' ');
-  assert.match(text,/STAGE 3 \/\/ ATTEMPT 1 \/\/ EXTRACTION SECTION \/\/ FIELD section \/\/ STORY INDEX 2/);
+  assert.match(text,/STAGE 3 \/\/ ATTEMPT 1 \/\/ EXTRACTION SECTION \/\/ FIELD section \/\/ ITEM INDEX 2/);
   assert.match(text,/SOURCE PASSAGE UNKNOWN \/\/ FIELD evidence_refs \/\/ FACT INDEX 0/);
   assert.match(text,/EXTRACTION METADATA NORMALIZED \/\/ 2/);
   assert.doesNotMatch(text,/synthetic-private/);
@@ -494,6 +494,24 @@ test('running monitor shows the same bounded coverage summary', () => {
   context.updateRunnerDetail();
   assert.match(nodes.get('runner-detail').textContent,/2 WITH NEWS \/\/ 1 WITHOUT RETAINED NEWS/);
   assert.match(nodes.get('runner-detail').textContent,/0 WITH NEWS OUTSIDE AUDIO/);
+});
+
+test('efficiency details show only measured values and fixed nested locations', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'Synthetic time';context.durationText=v=>`${v/1000}s`;
+  context.appState.resourceProfile={status:'completed',at:'2026-10-14T03:00:00Z',elapsed_seconds:100,
+    counters:{model_accepted_ms:12000,model_rejected_ms:3000,script_patch_response_bytes:150,
+      script_patch_edits:1,source:'synthetic-private'},
+    operations:{speech_pipeline:{seconds:5},speech_write:{seconds:0.1}},
+    validation_history:[{stage:4,attempt:1,code:'script_hosts',field:'dialogue',
+      rule:'host_participation',section_index:2,turn_index:3,attempt_ms:3000,
+      text:'synthetic-private'}]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(n=>n.textContent).join(' ');
+  assert.match(text,/HOST PARTICIPATION.*SECTION INDEX 2.*TURN INDEX 3.*ATTEMPT MS 3000/);
+  assert.match(text,/PATCH 150 bytes · 1 edits.*FULL DRAFT NOT MEASURED/);
+  assert.match(text,/PIPELINE INCLUDES PHONEMIZATION AND INFERENCE/);
+  assert.doesNotMatch(text,/synthetic-private/);
 });
 
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {

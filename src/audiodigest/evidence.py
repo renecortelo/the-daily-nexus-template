@@ -8,6 +8,7 @@ from typing import Any
 
 from audiodigest.content import minimize_editorial_text, normalize_url
 from audiodigest.models import DataValidationError, SourceItem, Story, StoryEvidence
+from audiodigest.progress import add_metric
 
 MAX_PASSAGE_CHARS = 900
 MAX_SUPPORT_CHARS = 3 * MAX_PASSAGE_CHARS + 2
@@ -248,6 +249,11 @@ def review_evidence(
         claim["passage_ids"] = list(dict.fromkeys(
             canonical[ref] for ref in claim["passage_ids"]
         ))
+    add_metric("evidence_passages_input", len(passages))
+    add_metric("evidence_passages_sent", len(retained))
+    add_metric("evidence_context_chars_saved",
+               sum(len(item["text"]) for item in passages.values())
+               - sum(len(item["text"]) for item in retained))
     return {
         "version": "source-passages-v1",
         "origin": "collected-this-run" if index is not None else "saved-source-excerpts",

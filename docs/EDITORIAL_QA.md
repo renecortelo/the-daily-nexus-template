@@ -292,3 +292,20 @@ local output also shows the edit count. These counters do not establish factual
 approval and contain no private text or anchors. Validate adoption and timing in ordinary deliveries;
 smaller response size does not establish model latency, reduced billed minutes,
 or unchanged subjective audio quality. No synthesis or voice setting changed.
+
+### Precise script diagnostics and request efficiency
+
+Script host configuration/participation, introduction credit, coverage, word ceiling,
+section/turn shape and patch contracts emit fixed codes/rules and numeric locations.
+With section_index, turn_index is local to that section; without it, a host-membership
+turn index refers to the combined ordered dialogue. Patch item_index identifies the
+edit, not a story. Invalid anchors/targets fail atomically, without saving their text.
+Existing bounded retries receive the precise constraint; no factual gate is relaxed.
+
+Draft requests omit only confidence/rank_score after selection. All selected facts,
+source aliases, URLs, original-support packets, configured desks and coverage remain.
+The full output example is serialized compactly with identical JSON semantics;
+the quotation URL stays in its payload rather than also being repeated in instructions.
+This reduces deterministic request bytes, not a guaranteed number of cloud minutes.
+Follow RUNTIME_REVIEW.md to compare normal-run measurements, including rejected
+attempts and full original-source verification. Do not create extra test episodes.

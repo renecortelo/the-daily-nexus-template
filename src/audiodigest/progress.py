@@ -60,9 +60,14 @@ COUNTERS = {
     "script_patch_repairs",
     "script_full_repairs",
     "extraction_metadata_repairs",
+    "model_request_bytes", "model_response_bytes", "model_accepted_ms", "model_rejected_ms",
+    "script_patch_edits", "script_patch_response_bytes", "script_full_response_bytes",
+    "speech_characters", "speech_samples",
+    "evidence_passages_input", "evidence_passages_sent", "evidence_context_chars_saved",
     "progress_updates_failed",
 }
-OPERATIONS = {"model", "voice_model", "speech", "audio_encode", "paper_render"}
+OPERATIONS = {"model", "voice_model", "speech", "speech_prepare", "speech_pipeline",
+              "speech_write", "speech_edges", "audio_encode", "paper_render"}
 EVENTS = {"start", "stage", "counts", "operation", "heartbeat", "finish"}
 STATES = {"running", "completed", "failed", "interrupted"}
 REASONS = {
@@ -367,7 +372,20 @@ def clear_failure_code() -> None:
 def increment(name: str) -> None:
     if reporter := _CURRENT.get():
         with reporter.lock:
-            reporter.count(**{name: int(reporter.counters.get(name, 0)) + 1})
+            if reporter.finished is None:
+                reporter.count(**{name: int(reporter.counters.get(name, 0)) + 1})
+
+
+def add_metric(name: str, amount: int) -> None:
+    """Sum fixed numeric measurements, never text or identities; no new cloud write."""
+    if (name not in COUNTERS or isinstance(amount, bool) or not isinstance(amount, int)
+            or not 0 <= amount <= 10**9):
+        return
+    if reporter := _CURRENT.get():
+        with reporter.lock:
+            if reporter.finished is None:
+                # The next ordinary event/heartbeat carries this; no extra per-metric log.
+                reporter.counters[name] = min(10**9, int(reporter.counters.get(name, 0)) + amount)
 
 
 def record_validation(code: str, attempt: int, detail: dict | None = None) -> None:
