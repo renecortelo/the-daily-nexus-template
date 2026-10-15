@@ -72,6 +72,44 @@ class ExtractionContractTests(TestCase):
         self.assertEqual(raw["stories"][1]["facts"], normalized["stories"][1]["facts"])
         self.assertEqual(1, len(self.validate(raw)))
 
+    def test_missing_local_id_is_derived_without_another_model_call(self):
+        row = extracted_story()
+        del row["story_id"]
+        raw = {"stories": [row]}
+        original = copy.deepcopy(raw)
+        normalized, repaired = normalize_extraction(raw, ("AI",))
+        self.assertEqual(1, repaired)
+        self.assertEqual("extracted-0001", normalized["stories"][0]["story_id"])
+        self.assertEqual(original, raw)
+        for key in ("facts", "why_it_matters", "source_ids", "source_urls", "evidence_refs"):
+            self.assertEqual(row[key], normalized["stories"][0][key])
+        story = self.validate(raw, ("AI",))[0]
+        self.assertEqual("extracted-0001", story.story_id)
+        self.assertEqual("source-0001:mail:002", story.evidence[0].passage_id)
+
+    def test_missing_id_collision_uses_a_deterministic_unique_local_id(self):
+        for missing in (None, "", "   "):
+            with self.subTest(missing=missing):
+                first = extracted_story(story_id=missing)
+                second = extracted_story(story_id="extracted-0001")
+                normalized, repaired = normalize_extraction({"stories": [first, second]}, None)
+                self.assertEqual(1, repaired)
+                self.assertEqual(["extracted-0001-r", "extracted-0001"],
+                                 [row["story_id"] for row in normalized["stories"]])
+
+    def test_missing_id_does_not_relax_source_checks_or_invalid_id_types(self):
+        row = extracted_story()
+        del row["story_id"]
+        row["evidence_refs"] = [["unknown-passage"]]
+        with self.assertRaises(DataValidationError) as error:
+            self.validate({"stories": [row]})
+        self.assertEqual("source_passage_unknown", error.exception.failure_code)
+        for invalid in (True, 7, [], {}):
+            with self.subTest(invalid=invalid), self.assertRaises(DataValidationError) as error:
+                self.validate({"stories": [extracted_story(story_id=invalid)]})
+            self.assertEqual("model_required_field", error.exception.failure_code)
+            self.assertEqual("story_id", error.exception.diagnostic["field"])
+
     def test_unsupported_section_is_not_silently_reclassified(self):
         with self.assertRaises(DataValidationError) as error:
             self.validate({"stories": [extracted_story(section="Unrelated") ]}, ("AI",))

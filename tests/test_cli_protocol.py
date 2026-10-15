@@ -17,8 +17,12 @@ from audiodigest.antigravity_client import (
 )
 from audiodigest.cli_protocol import CLI_FAILURE_CODES, provider_failure
 from audiodigest.config import AntigravitySettings
-from audiodigest.models import DataValidationError
+from audiodigest.editorial import _stories_validator
+from audiodigest.evidence import SourceEvidenceIndex
+from audiodigest.extraction_contract import normalize_extraction
+from audiodigest.models import DataValidationError, source_prompt_dicts
 from audiodigest.progress import FAILURE_CODES, ProgressReporter, safe_event
+from tests.test_source_evidence import extracted_story, synthetic_source
 
 GOOD = json.dumps({"status": "SUCCESS", "response": '{"approved":true}'})
 
@@ -141,6 +145,34 @@ class CLIProtocolTests(TestCase):
                 self.assertGreaterEqual(history["stdout_bytes"], 0)
                 self.assertNotIn("failure_code", profile)
                 self.assertNotIn("synthetic-private", output)
+
+    def test_cli_recovery_then_missing_local_story_id_accepts_supported_story(self):
+        source = synthetic_source()
+        evidence = SourceEvidenceIndex([source], source_prompt_dicts([source]))
+        row = extracted_story()
+        del row["story_id"]
+
+        def validate(data):
+            normalized, repairs = normalize_extraction(data, ("AI",))
+            self.assertEqual(1, repairs)
+            return _stories_validator(
+                normalized, allowed_sections=("AI",),
+                validate_source=lambda story, raw: evidence.bind(story, raw),
+            )
+
+        result, error, payloads, profile, output, _ = self._call(
+            [(0, '{"error":{"message":"synthetic-private-provider-detail"}}', ""),
+             (0, json.dumps({"status": "SUCCESS", "response": json.dumps({"stories": [row]})}),
+              "")], validator=validate,
+        )
+        self.assertIsNone(error)
+        self.assertEqual("extracted-0001", result[0].story_id)
+        self.assertEqual("source-0001:mail:002", result[0].evidence[0].passage_id)
+        self.assertEqual(payloads[0], payloads[1])
+        self.assertEqual(2, len(payloads))
+        self.assertEqual(1, profile["counters"]["cli_recoveries"])
+        self.assertNotIn("model_validation_failures", profile["counters"])
+        self.assertNotIn("synthetic-private", output)
 
     def test_permanent_cli_failures_stop_after_first_call_and_never_validate_partial_text(self):
         for error_body, code in (({"code": 401}, "cli_auth"),

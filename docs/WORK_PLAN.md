@@ -9,6 +9,7 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 | ID | Priority | Agreed work | Status | Acceptance / next action |
 |---|---:|---|---|---|
+| T13 | 0 | Recover missing generated story identity without another model call | Awaiting observation | Private and public synthetic suites, interface checks and privacy audit pass. Preserve reporting and source lineage; reject malformed identities and unsupported claims. Observe ordinary runs after reviewed release; do not claim production recovery yet. |
 | T12 | 0 | Separate CLI/provider failures from editorial validation | Awaiting observation | Implementation passed synthetic recovery, fail-closed and privacy regressions in both code copies. Fixed CLI/model-JSON/editorial diagnostics; no fictional draft repair or extra retry. Verify provider behavior in ordinary runs, without extra test episodes. |
 | T01 | 1 | Precise script validation and targeted correction | Released | Fixed rules/locations, existing retry only, no rejected text in logs. Observe future failures. |
 | T02 | 2 | Smaller model requests without losing evidence | Released | Compact schema, post-selection scores omitted; selected facts and original supports retained. |
@@ -24,6 +25,16 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 ## Change log
 
+- 2026-10-15: T13 implementation and synthetic checks passed in both copies;
+  the public history/source privacy scan found no leaks. Changed status to
+  awaiting observation, not verified production benefit. No new episode was run.
+- 2026-10-15: Added urgent T13 after an extraction with a missing local story
+  ID exhausted the existing retry allowance. T13
+  extends the existing duplicate-ID normalization to absent/blank IDs only;
+  facts, citations, source checks and the retry/time limits stay unchanged.
+  T12's CLI diagnosis and retry were observed, but the whole generation did not
+  recover; T12 therefore remains awaiting observation. T01-T12 retain their IDs,
+  scope and priority. No further test episode is authorized.
 - 2026-10-15: User authorized urgent T12 after an incident exposed an earlier CLI
   adapter path not covered by field-level editorial diagnostics. It temporarily
   precedes T06; T01-T11 retain their IDs, relative priorities and scope. No tasks

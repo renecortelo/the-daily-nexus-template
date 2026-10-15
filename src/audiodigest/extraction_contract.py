@@ -13,8 +13,8 @@ def normalize_extraction(
     raw = data.get("stories")
     if not isinstance(raw, list):
         return data, 0
-    # Identity is local metadata. Keep valid IDs; assign a fresh unique ID only
-    # to a duplicate, without merging, dropping or altering its supported news.
+    # Identity is local metadata. Keep valid IDs; assign a fresh unique ID to
+    # an absent, blank or duplicate ID without changing supported reporting.
     reserved = {row["story_id"].strip() for row in raw if isinstance(row, dict)
                 and isinstance(row.get("story_id"), str)}
     seen, records, repaired = set(), [], 0
@@ -29,7 +29,15 @@ def normalize_extraction(
             item.pop("evidence")
             repaired += 1
         identifier = item.get("story_id")
-        if isinstance(identifier, str) and identifier.strip():
+        if identifier is None or (isinstance(identifier, str) and not identifier.strip()):
+            replacement = f"extracted-{index + 1:04d}"
+            while replacement in reserved:
+                replacement += "-r"
+            item["story_id"] = replacement
+            reserved.add(replacement)
+            seen.add(replacement)
+            repaired += 1
+        elif isinstance(identifier, str) and identifier.strip():
             identifier = identifier.strip()
             if identifier in seen:
                 replacement = f"extracted-{index + 1:04d}"
