@@ -1612,6 +1612,8 @@ function renderResourceSummary() {
     if (coverage) add(coverage);
     const diagnosticCodes = new Set(("model_required_field model_list_shape model_dialogue_shape " +
       "model_object_shape model_structure json_invalid model_incomplete model_timeout model_exit " +
+      "cli_empty cli_shape cli_status cli_response_missing cli_error cli_auth cli_access cli_quota " +
+      "cli_rate_limit cli_unavailable cli_request cli_action_denied cli_incomplete " +
       "extraction_section extraction_section_limit extraction_confidence extraction_rank " +
       "extraction_duplicate_id extraction_evidence_shape extraction_consolidation source_evidence " +
       "source_alias_unknown source_alias_unused source_url_unowned source_fact_alignment " +
@@ -1623,14 +1625,23 @@ function renderResourceSummary() {
     const diagnosticFields = new Set(("root stories story_id section headline facts why_it_matters " +
       "source_ids source_urls evidence evidence_refs confidence rank_score title hosts introduction " +
       "sections conclusion sign_off show_notes closing_comment disclosure dialogue host text approved " +
-      "issues factual_approved name story_ids narration edits").split(" "));
+      "issues factual_approved name story_ids narration edits cli_output cli_status cli_response cli_usage").split(" "));
+    const cliLabels = { cli_empty: "CLI EMPTY RESULT", cli_shape: "CLI OUTPUT SHAPE INVALID",
+      cli_status: "CLI UNSUCCESSFUL RESULT", cli_response_missing: "CLI RESPONSE TEXT MISSING",
+      cli_error: "CLI PROVIDER ERROR", cli_auth: "CLI SIGN-IN REQUIRED", cli_access: "CLI ACCESS DENIED",
+      cli_quota: "CLI QUOTA EXHAUSTED; NO AUTOMATIC RETRY", cli_rate_limit: "CLI RATE LIMITED",
+      cli_unavailable: "CLI PROVIDER TEMPORARILY UNAVAILABLE", cli_request: "CLI REQUEST REJECTED",
+      cli_action_denied: "CLI TOOL ACTION DENIED", cli_incomplete: "CLI INCOMPLETE RESULT" };
     const validIndex = value => Number.isInteger(value) && value >= 0 && value <= 1e9;
     for (const diagnostic of (Array.isArray(profile.validation_history) ? profile.validation_history : []).slice(-16)) {
       if (!diagnostic || !diagnosticCodes.has(diagnostic.code) ||
           !validIndex(diagnostic.stage) || diagnostic.stage > 8 ||
           !validIndex(diagnostic.attempt) || diagnostic.attempt < 1 || diagnostic.attempt > 10) continue;
-      const parts = [`VALIDATION // STAGE ${diagnostic.stage} // ATTEMPT ${diagnostic.attempt}`,
-        diagnostic.code.replaceAll("_", " ").toUpperCase()];
+      const diagnosticLabel = diagnostic.layer === "cli" ? "CLI FAILURE"
+        : diagnostic.layer === "model_json" ? "MODEL JSON VALIDATION"
+        : diagnostic.layer === "editorial" ? "EDITORIAL VALIDATION" : "VALIDATION";
+      const parts = [`${diagnosticLabel} // STAGE ${diagnostic.stage} // ATTEMPT ${diagnostic.attempt}`,
+        cliLabels[diagnostic.code] || diagnostic.code.replaceAll("_", " ").toUpperCase()];
       if (diagnosticFields.has(diagnostic.field)) parts.push(`FIELD ${diagnostic.field}`);
       if (new Set(("section_blank section_too_long section_slash section_control section_not_allowed " +
           "finite_number probability_range json_syntax json_duplicate_key json_nonfinite " +
@@ -1638,13 +1649,17 @@ function renderResourceSummary() {
           "host_participation editor_credit_once section_order section_unique section_first " +
           "story_supported story_required story_section word_ceiling closing_shape immutable_repair " +
           "boolean_required rejection_issues approval_consistent " +
-          "patch_shape patch_target patch_anchor patch_text patch_duplicate patch_turn_length").split(" ")).has(diagnostic.rule)) {
+          "patch_shape patch_target patch_anchor patch_text patch_duplicate patch_turn_length " +
+          "cli_empty cli_object cli_error cli_unsuccessful cli_text_missing cli_exit cli_partial " +
+          "cli_duplicate_key cli_timeout cli_action_denied").split(" ")).has(diagnostic.rule)) {
         parts.push(`RULE ${diagnostic.rule.replaceAll("_", " ").toUpperCase()}`);
       }
       for (const [key, label] of [["item_index", "ITEM INDEX"], ["fact_index", "FACT INDEX"],
         ["section_index", "SECTION INDEX"], ["turn_index", "TURN INDEX"], ["attempt_ms", "ATTEMPT MS"],
         ["actual_count", "ACTUAL COUNT"], ["expected_count", "EXPECTED COUNT"],
-        ["json_line", "JSON LINE"], ["json_column", "JSON COLUMN"]]) {
+        ["json_line", "JSON LINE"], ["json_column", "JSON COLUMN"], ["exit_code", "EXIT CODE"],
+        ["exit_signal", "EXIT SIGNAL"], ["http_status", "HTTP STATUS"],
+        ["stdout_bytes", "STDOUT BYTES"], ["stderr_bytes", "STDERR BYTES"]]) {
         if (validIndex(diagnostic[key])) parts.push(`${label} ${diagnostic[key]}`);
       }
       add(parts.join(" // "));
@@ -1652,6 +1667,8 @@ function renderResourceSummary() {
     const metadataRepairs = metricNumber(profile.counters?.extraction_metadata_repairs);
     if (metadataRepairs !== null && metadataRepairs > 0) add(`EXTRACTION METADATA NORMALIZED // ${metadataRepairs}; FACTS AND SOURCE REFERENCES UNCHANGED`);
     const metrics = profile.counters || {};
+    if ((metricNumber(metrics.cli_failures) ?? 0) > 0) add(`CLI RESULTS // ${metricNumber(metrics.cli_failures)} FAILED · ${metricNumber(metrics.cli_retries) ?? 0} RETRIES SELECTED · ${metricNumber(metrics.cli_recoveries) ?? 0} RECOVERED · ${secondsText((metricNumber(metrics.cli_failed_ms) ?? 0) / 1000)} FAILED CALL TIME; SHARES THE EXISTING ATTEMPT LIMIT, NOT EXTRA GENERATIONS`);
+    if ((metricNumber(metrics.cli_usage_discarded) ?? 0) > 0) add(`INVALID OPTIONAL CLI USAGE METRICS DISCARDED // ${metricNumber(metrics.cli_usage_discarded)}; CONTENT VALIDATORS UNCHANGED`);
     if (metricNumber(metrics.paper_completion_reserve_seconds) !== null) add(`OPTIONAL PAPER BUDGET // AUDIO/PUBLISHING RESERVE ${secondsText(metrics.paper_completion_reserve_seconds)} · PAPER WINDOW ${secondsText(metricNumber(metrics.paper_allowance_seconds) ?? 0)}; ESTIMATE, NOT A COMPLETION GUARANTEE`);
     if ((metricNumber(metrics.paper_budget_skipped) ?? 0) > 0) add("PAPER DEFERRED // INSUFFICIENT PROTECTED TIME; NO PAPER CALL STARTED, NO AUTOMATIC RETRY");
     if ((metricNumber(metrics.paper_budget_exhausted) ?? 0) > 0) add("PAPER DEFERRED // OPTIONAL TIME WINDOW EXHAUSTED; VERIFIED PODCAST PRIORITIZED, NO AUTOMATIC RETRY");

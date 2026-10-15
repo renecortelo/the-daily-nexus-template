@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from audiodigest.cli_protocol import CLI_FAILURE_CODES
 from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
 from audiodigest.validation_diagnostics import DIAGNOSTIC_LIMIT, safe_detail
 
@@ -36,6 +37,8 @@ STAGES = {
     8: "Publishing",
 }
 COUNTERS = {
+    "cli_stdout_bytes", "cli_stderr_bytes", "cli_failures", "cli_failed_ms",
+    "cli_retries", "cli_recoveries", "cli_usage_discarded",
     *ACCOUNTING_COUNTERS,
     "newsletters",
     "links",
@@ -87,6 +90,7 @@ REASONS = {
 }
 RESULTS = {"idle", "already-claimed", "published", "completed", "failed"}
 FAILURE_CODES = {
+    *CLI_FAILURE_CODES,
     "extraction_section", "extraction_section_limit", "extraction_confidence", "extraction_rank",
     "extraction_duplicate_id", "extraction_evidence_shape", "extraction_consolidation",
     "source_alias_unknown", "source_alias_unused", "source_url_unowned",

@@ -143,3 +143,25 @@ preference or factual approval. The verified podcast continues with no paper and
 automatic paper retry. Fixed numeric reserve/window/outcome counters reach the owner
 monitor. Cost/security errors and actual global exhaustion still abort the task.
 Ordinary future runs must verify adoption; no extra test generation is needed.
+
+## CLI results versus editorial validation
+
+CLI wrapper/exit/provider failures are distinct from model JSON and editorial
+constraints. Fixed failure categories, layer, permitted HTTP/exit numbers and byte
+counts identify the boundary without storing raw stdout/stderr, messages, unknown
+statuses, accounts or newsletter text. Attempt timings/history survive recovery.
+Explicit authentication/access/quota/request failures and denied tools fail fast;
+payment/credit requests remain fatal no-spend guards. Unknown errors are not given
+an invented quota or authentication cause.
+
+A recoverable CLI failure can use only the existing remaining attempt. When a
+protected deadline exists, at least sixty seconds must remain. Local runs keep
+their existing operation timeout. It resends the unchanged current request,
+never a fictional editorial repair or provider error text. Provider and editorial
+failures share the same attempt limit; there is no separate retry loop or episode
+requeue. Partial/unsuccessful results cannot pass as valid model content. Validated
+draft corrections still use the existing source-grounded editorial repair path.
+Invalid optional usage telemetry is discarded rather than crashing an otherwise
+valid response; all body/JSON/source validators still run unchanged. No model,
+voice, credential, permission or account fallback is introduced. These controls
+reduce avoidable failures/waste, not guarantee availability of an external provider.

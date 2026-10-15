@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 FIELDS = {
+    "cli_output", "cli_status", "cli_response", "cli_usage",
     "edits",
     "root",
     "stories",
@@ -40,6 +41,8 @@ FIELDS = {
 }
 VALUE_KINDS = {"missing", "null", "boolean", "string", "number", "object", "array", "other"}
 RULES = {
+    "cli_empty", "cli_object", "cli_error", "cli_unsuccessful", "cli_text_missing",
+    "cli_exit", "cli_partial", "cli_duplicate_key", "cli_timeout", "cli_action_denied",
     "patch_shape", "patch_target", "patch_anchor", "patch_text", "patch_duplicate",
     "patch_turn_length",
     "boolean_required", "rejection_issues", "approval_consistent",
@@ -94,7 +97,8 @@ def safe_detail(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
     result = {}
-    for key, allowed in (("field", FIELDS), ("value_kind", VALUE_KINDS), ("rule", RULES)):
+    for key, allowed in (("field", FIELDS), ("value_kind", VALUE_KINDS), ("rule", RULES),
+                         ("layer", {"cli", "model_json", "editorial"})):
         value = raw.get(key)
         if isinstance(value, str) and value in allowed:
             result[key] = value
@@ -109,6 +113,7 @@ def safe_detail(raw: Any) -> dict[str, Any]:
         "json_column",
         "json_position",
         "attempt_ms",
+        "stdout_bytes", "stderr_bytes", "exit_code", "exit_signal", "http_status",
     ):
         value = raw.get(key)
         if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 10**9:

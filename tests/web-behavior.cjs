@@ -482,6 +482,29 @@ test('validation history shows fixed constraints and indexes without rejected co
   assert.doesNotMatch(text,/synthetic-private/);
 });
 
+test('CLI diagnostics distinguish the provider layer without private statuses or messages', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'Synthetic time';context.durationText=v=>`${v/1000}s`;
+  context.appState.resourceProfile={status:'completed',at:'2026-10-15T05:00:00Z',elapsed_seconds:100,
+    counters:{cli_failures:1,cli_retries:1,cli_recoveries:1,cli_failed_ms:1000,cli_usage_discarded:2},
+    validation_history:[{stage:3,attempt:1,code:'cli_unavailable',layer:'cli',field:'cli_output',
+      rule:'cli_error',exit_code:0,http_status:503,stdout_bytes:50,stderr_bytes:0,
+      status:'synthetic-private',message:'synthetic-private'},
+      {stage:4,attempt:2,code:'script_hosts',layer:'editorial'},
+      {stage:3,attempt:1,code:'json_invalid',layer:'model_json'},
+      {stage:3,attempt:1,code:'cli_auth',layer:'cli',exit_code:'synthetic-private'}]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(n=>n.textContent).join(' ');
+  assert.match(text,/CLI FAILURE.*CLI PROVIDER TEMPORARILY UNAVAILABLE/);
+  assert.match(text,/EXIT CODE 0.*HTTP STATUS 503.*STDOUT BYTES 50.*STDERR BYTES 0/);
+  assert.match(text,/EDITORIAL VALIDATION.*SCRIPT HOSTS/);
+  assert.match(text,/MODEL JSON VALIDATION.*JSON INVALID/);
+  assert.match(text,/CLI SIGN-IN REQUIRED/);
+  assert.match(text,/1 FAILED · 1 RETRIES SELECTED · 1 RECOVERED/);
+  assert.match(text,/OPTIONAL CLI USAGE METRICS DISCARDED.*2/);
+  assert.doesNotMatch(text,/synthetic-private/);
+});
+
 test('running monitor shows the same bounded coverage summary', () => {
   const {context,nodes}=harness(['newsletterCoverageSummary','updateRunnerDetail']);
   context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.durationText=()=> 'A DURATION';

@@ -10,9 +10,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
+from audiodigest.cli_protocol import RECOVERABLE_CLI_CODES, provider_failure
 from audiodigest.config import AntigravitySettings
 from audiodigest.draft_repairs import draft_repair_plan
-from audiodigest.execution_budget import operation_timeout
+from audiodigest.execution_budget import operation_timeout, remaining_time
 from audiodigest.models import AntigravityMetadata, DataValidationError
 from audiodigest.private_store import (
     PrivateStoreError,
@@ -29,14 +30,32 @@ from audiodigest.progress import (
     record_validation,
     timed_operation,
 )
+from audiodigest.validation_diagnostics import safe_detail, value_kind
 
 T = TypeVar("T")
 
 
 class AntigravityCLIError(RuntimeError):
-    def __init__(self, message: str, *, failure_code: str = ""):
+    def __init__(self, message: str, *, failure_code: str = "", diagnostic: dict | None = None):
         super().__init__(message)
         self.failure_code = failure_code
+        self.diagnostic = safe_detail(diagnostic)
+
+
+def _cli_failure(code: str, *, field="cli_output", rule="cli_error", **detail):
+    return AntigravityCLIError(
+        f"Antigravity CLI result rejected: {code}; provider text withheld for privacy",
+        failure_code=code,
+        diagnostic={"layer": "cli", "field": field, "rule": rule, **detail},
+    )
+
+
+def _provider_error(wrapper: dict) -> AntigravityCLIError:
+    code, http_status = provider_failure(wrapper)
+    if code == "billing":
+        raise AntigravityPaymentRiskError("Antigravity requested payment or credits; run aborted")
+    detail = {} if http_status is None else {"http_status": http_status}
+    return _cli_failure(code, **detail)
 
 
 def _validation_code(exc: Exception) -> str:
@@ -240,8 +259,13 @@ def _json_from_response(value: str) -> dict[str, Any]:
 def _int_value(data: dict[str, Any], *keys: str) -> int:
     for key in keys:
         value = data.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and 0 <= value <= 10**9):
             return int(value)
+        if value is not None:
+            # Usage is optional telemetry, never permission to accept invalid content.
+            # NaN/Infinity/huge values previously crashed int() before body validation.
+            increment("cli_usage_discarded")
     return 0
 
 
@@ -252,10 +276,11 @@ def _metadata_from_wrapper(
 ) -> AntigravityMetadata:
     usage = wrapper.get("usage", wrapper.get("stats", {}))
     if not isinstance(usage, dict):
+        increment("cli_usage_discarded")
         usage = {}
     model = wrapper.get("model", usage.get("model", ""))
     return AntigravityMetadata(
-        model=str(model or ""),
+        model=model if isinstance(model, str) else "",
         input_tokens=_int_value(
             usage,
             "input_tokens",
@@ -291,25 +316,41 @@ def _response_from_cli_output(
 ) -> tuple[str, AntigravityMetadata]:
     clean = _ANSI_ESCAPE.sub("", output).strip()
     if not clean:
-        raise AntigravityCLIError("Antigravity CLI returned no output")
+        raise _cli_failure("cli_empty", rule="cli_empty")
+    def wrapper_fields(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise _cli_failure("cli_shape", rule="cli_duplicate_key")
+            result[key] = value
+        return result
     try:
-        parsed = json.loads(clean)
+        parsed = json.loads(clean, object_pairs_hook=wrapper_fields)
     except json.JSONDecodeError:
         return clean, AntigravityMetadata(latency_ms=elapsed_ms)
+    except (ValueError, RecursionError):
+        raise _cli_failure("cli_shape", rule="cli_object") from None
     if not isinstance(parsed, dict):
-        raise AntigravityCLIError("Antigravity CLI JSON output must be an object")
-    if parsed.get("denied_actions"):
-        raise AntigravityCLIError("Antigravity refused a tool action; incomplete result rejected")
+        raise _cli_failure("cli_shape", rule="cli_object", value_kind=value_kind(parsed))
     if parsed.get("error"):
         error = str(parsed["error"])
         if any(pattern in error.lower() for pattern in PAYMENT_RISK_PATTERNS):
-            raise AntigravityPaymentRiskError(error)
+            raise AntigravityPaymentRiskError(
+                "Antigravity requested payment or credits; run aborted"
+            )
         # CLI errors can contain account details or source excerpts. Keep these
         # out of process monitors, Actions logs and public diagnostic reports.
-        raise AntigravityCLIError("Antigravity CLI reported an execution error")
-    status = str(parsed.get("status", "")).upper()
+        raise _provider_error(parsed)
+    if parsed.get("denied_actions"):
+        raise _cli_failure("cli_action_denied", rule="cli_action_denied")
+    raw_status = parsed.get("status", "")
+    status = raw_status.strip().upper() if isinstance(raw_status, str) else "INVALID"
     if status and status not in {"SUCCESS", "COMPLETED", "OK"}:
-        raise AntigravityCLIError(f"Antigravity CLI reported status {status}")
+        failure = _provider_error(parsed)
+        if failure.failure_code == "cli_error":
+            failure = _cli_failure("cli_status", field="cli_status", rule="cli_unsuccessful",
+                                   value_kind=value_kind(raw_status))
+        raise failure
     metadata = _metadata_from_wrapper(parsed, elapsed_ms=elapsed_ms)
     for key in ("response", "result", "output", "text"):
         value = parsed.get(key)
@@ -321,7 +362,7 @@ def _response_from_cli_output(
                 if isinstance(nested, str) and nested.strip():
                     return nested, metadata
     if any(key in parsed for key in ("response", "result", "output", "text")):
-        raise AntigravityCLIError("Antigravity CLI returned no response text")
+        raise _cli_failure("cli_response_missing", field="cli_response", rule="cli_text_missing")
     # Some CLI builds emit the model's requested JSON object directly.
     return clean, metadata
 
@@ -397,6 +438,8 @@ class AntigravityCLI:
         *,
         retries: int = 1,
     ) -> tuple[T, AntigravityMetadata]:
+        if isinstance(retries, bool) or not isinstance(retries, int) or not 0 <= retries <= 1:
+            raise AntigravityConfigurationError("At most one editorial/CLI retry is permitted")
         enforce_safe_antigravity_settings(self.settings)
         env = dict(os.environ)
         env.update({"AGY_CLI_HIDE_ACCOUNT_INFO": "1", "DO_NOT_TRACK": "1"})
@@ -428,6 +471,7 @@ class AntigravityCLI:
         current_payload = payload
         last_error: Exception | None = None
         validation_failed = False
+        cli_failed = False
         for attempt in range(retries + 1):
             if attempt:
                 increment("model_retries")
@@ -450,41 +494,82 @@ class AntigravityCLI:
                     )
             except subprocess.TimeoutExpired:
                 record_failure_code("model_timeout")
+                record_validation("model_timeout", attempt + 1, {
+                    "layer": "cli", "field": "cli_output", "rule": "cli_timeout",
+                    "attempt_ms": int((time.perf_counter() - started) * 1000),
+                })
                 raise
             finally:
                 delete_private_value(request_path)
                 enforce_safe_antigravity_settings(self.settings)
             elapsed_ms = int((time.perf_counter() - started) * 1000)
+            sizes = {
+                "stdout_bytes": len(completed.stdout.encode("utf-8")),
+                "stderr_bytes": len(completed.stderr.encode("utf-8")),
+            }
+            add_metric("cli_stdout_bytes", sizes["stdout_bytes"])
+            add_metric("cli_stderr_bytes", sizes["stderr_bytes"])
+            cli_error = None
             if completed.returncode != 0:
                 detail = f"{completed.stderr}\n{completed.stdout}".strip()
                 if any(pattern in detail.lower() for pattern in PAYMENT_RISK_PATTERNS):
                     raise AntigravityPaymentRiskError(
                         "Antigravity requested billing, paid credentials, or credits; run aborted"
                     )
-                last_error = AntigravityCLIError(
-                    f"Antigravity CLI failed with exit code {completed.returncode}; "
-                    "raw diagnostic output withheld for privacy",
-                    failure_code="model_exit",
-                )
-                record_failure_code("model_exit")
+                # Exit failures never permit partial content, even if stdout looks valid.
+                try:
+                    wrapper = json.loads(_ANSI_ESCAPE.sub("", completed.stdout).strip())
+                except (ValueError, TypeError, RecursionError):
+                    wrapper = {}
+                cli_error = _provider_error(wrapper)
+                if cli_error.failure_code == "cli_error":
+                    cli_error = _cli_failure("model_exit", rule="cli_exit")
+            else:
+                try:
+                    if re.search(
+                        r"\b(?:truncated|truncation|print[- ]timeout|timed out|timeout expired)\b",
+                        completed.stderr, re.IGNORECASE,
+                    ):
+                        raise _cli_failure("cli_incomplete", rule="cli_partial")
+                    response, metadata = _response_from_cli_output(
+                        completed.stdout, elapsed_ms=elapsed_ms,
+                    )
+                except AntigravityPaymentRiskError:
+                    raise
+                except AntigravityCLIError as exc:
+                    cli_error = exc
+                except (ValueError, OverflowError, RecursionError):
+                    cli_error = _cli_failure("cli_shape", rule="cli_object")
+            if cli_error is not None:
+                cli_failed = True
+                code = _validation_code(cli_error)
+                detail = {**cli_error.diagnostic, **sizes, "attempt_ms": elapsed_ms}
+                if completed.returncode >= 0:
+                    detail["exit_code"] = completed.returncode
+                else:
+                    detail["exit_signal"] = -completed.returncode
+                add_metric("cli_failed_ms", elapsed_ms)
+                increment("cli_failures")
+                record_failure_code(code)
+                record_validation(code, attempt + 1, detail)
+                remaining = remaining_time()  # Global exhaustion still aborts, not another retry.
+                if (code not in RECOVERABLE_CLI_CODES or attempt >= retries
+                        or remaining is not None and remaining < 60):
+                    raise cli_error
+                increment("cli_retries")
+                print(f"Antigravity CLI unavailable ({code}); retrying the same request "
+                      "within the existing attempt budget, without draft repair.", flush=True)
+                # Keep current_payload exactly: no invented draft or provider error in the prompt.
                 continue
             try:
-                if re.search(
-                    r"\b(?:truncated|truncation|print[- ]timeout|timed out|timeout expired)\b",
-                    completed.stderr,
-                    re.IGNORECASE,
-                ):
-                    raise AntigravityCLIError("Antigravity partial or timed-out result rejected")
-                response, metadata = _response_from_cli_output(
-                    completed.stdout,
-                    elapsed_ms=elapsed_ms,
-                )
                 add_metric("model_response_bytes", len(response.encode("utf-8")))
                 rejected_response = _json_from_response(response)
                 result = validator(rejected_response)
                 if validation_failed:
                     # Count recovered calls, not a guarantee of factual approval.
                     increment("model_validation_recoveries")
+                if cli_failed:
+                    increment("cli_recoveries")
                 clear_failure_code()
                 add_metric("model_accepted_ms", elapsed_ms)
                 return result, metadata
@@ -502,6 +587,9 @@ class AntigravityCLI:
                 failure_code = _validation_code(exc)
                 record_failure_code(failure_code)
                 detail = dict(getattr(exc, "diagnostic", {}) or {})
+                detail.setdefault(
+                    "layer", "model_json" if rejected_response is None else "editorial",
+                )
                 detail["attempt_ms"] = elapsed_ms
                 if isinstance(exc, json.JSONDecodeError):
                     detail.update(

@@ -1,6 +1,6 @@
 # Canonical work plan
 
-Updated: 2026-10-14. This is the single backlog, not a release diary.
+Updated: 2026-10-15. This is the single backlog, not a release diary.
 The agreed order prioritizes speed, safety, privacy and zero-cost operation.
 Statuses: pending / in progress / released / awaiting observation / needs user.
 Keep IDs stable; every scope, order or status change must have a dated reason below.
@@ -9,6 +9,7 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 | ID | Priority | Agreed work | Status | Acceptance / next action |
 |---|---:|---|---|---|
+| T12 | 0 | Separate CLI/provider failures from editorial validation | Awaiting observation | Implementation passed synthetic recovery, fail-closed and privacy regressions in both code copies. Fixed CLI/model-JSON/editorial diagnostics; no fictional draft repair or extra retry. Verify provider behavior in ordinary runs, without extra test episodes. |
 | T01 | 1 | Precise script validation and targeted correction | Released | Fixed rules/locations, existing retry only, no rejected text in logs. Observe future failures. |
 | T02 | 2 | Smaller model requests without losing evidence | Released | Compact schema, post-selection scores omitted; selected facts and original supports retained. |
 | T03 | 3 | Measure patch/context efficiency in actual runs | Awaiting observation | Numeric request/response sizes, retry timing and exact context sharing shipped; equivalent-content ordinary runs must establish savings. |
@@ -23,6 +24,17 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 ## Change log
 
+- 2026-10-15: User authorized urgent T12 after an incident exposed an earlier CLI
+  adapter path not covered by field-level editorial diagnostics. It temporarily
+  precedes T06; T01-T11 retain their IDs, relative priorities and scope. No tasks
+  removed. No extra episode, provider call, retry allowance or longer workflow is
+  authorized. Production recovery cannot be guaranteed by diagnostic tests alone.
+- 2026-10-15: T12 implementation passed complete Python/web regressions in both
+  code copies and public source/history checks. Moved to awaiting observation:
+  implementation coverage is established, provider recovery in ordinary runs is
+  not. Optional usage telemetry cannot invalidate otherwise valid model content;
+  body/source verification and no-spend controls remain mandatory. Deployment and
+  review evidence stay local. T06 remains the next independent implementation block.
 - 2026-10-14: Established this ledger from the eleven-item speed-prioritized plan.
   No new tasks added and none removed. T01/T02 are shipped; T03/T04 are explicitly
   awaiting real observations rather than falsely marked fully finished.
