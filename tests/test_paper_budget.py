@@ -12,11 +12,38 @@ from audiodigest import execution_budget as budget
 from audiodigest.config import load_settings
 from audiodigest.execution_budget import RunBudgetExceeded, operation_timeout, reserve_time
 from audiodigest.paper_budget import completion_reserve, paper_allowance
-from audiodigest.pipeline import Pipeline
-from audiodigest.progress import ProgressReporter
+from audiodigest.paper_diagnostics import paper_phase
+from audiodigest.pipeline import Pipeline, VerificationError
+from audiodigest.progress import ProgressReporter, record_failure_code, safe_event
 
 
 class PaperBudgetTests(TestCase):
+    def test_final_paper_cause_survives_successful_podcast_without_private_text(self):
+        def reject(*_args):
+            paper_phase("recheck", 2)
+            raise VerificationError("synthetic private reviewer text",
+                                    failure_code="paper_verification",
+                                    diagnostic={"field": "facts", "password": "synthetic-private"})
+        reporter = ProgressReporter(interval=0, stream=io.StringIO())
+        reporter.start()
+        try:
+            record_failure_code("json_invalid")  # Earlier rejection is not the final cause.
+            with patch("audiodigest.pipeline.remaining_time", return_value=None):
+                issue, metadata, _ = Pipeline._prepare_newspaper_artifact(
+                    SimpleNamespace(_generate_verified_newspaper=reject), [], date(2026, 1, 1),
+                    Path("unused"), Path("unused"))
+            profile = reporter.finish("completed")
+        finally:
+            reporter.close()
+        self.assertIsNone(issue)
+        self.assertNotIn("failure_code", profile)
+        result = profile["paper_result"]
+        self.assertEqual(("failed", "recheck", 2, "paper_verification"),
+                         tuple(result[k] for k in ("outcome", "phase", "attempt", "code")))
+        self.assertEqual(result, metadata[0]["diagnostic"])
+        self.assertEqual(result, safe_event(profile)["paper_result"])
+        self.assertNotIn("synthetic", json.dumps(profile))
+
     def test_completion_reserve_grows_without_claiming_guaranteed_synthesis_time(self):
         self.assertEqual(900, completion_reserve(None))
         self.assertEqual(900, completion_reserve(100))
@@ -124,8 +151,10 @@ class PaperBudgetTests(TestCase):
 
     def test_short_model_timeout_is_not_mislabeled_as_paper_budget_exhaustion(self):
         token = budget._DEADLINE.set(2000)
+        failure = subprocess.TimeoutExpired("synthetic-command", 30)
+        failure.diagnostic = None  # Missing optional details cannot break podcast fallback.
         pipeline = SimpleNamespace(_generate_verified_newspaper=Mock(
-            side_effect=subprocess.TimeoutExpired("synthetic-command", 30),
+            side_effect=failure,
         ))
         try:
             with patch.object(budget.time, "monotonic", return_value=100):
@@ -137,5 +166,6 @@ class PaperBudgetTests(TestCase):
             self.assertEqual([], previews)
             self.assertEqual("newspaper-failed", metadata[0]["stage"])
             self.assertEqual("TimeoutExpired", metadata[0]["error_type"])
+            self.assertEqual("paper_timeout", metadata[0]["diagnostic"]["code"])
         finally:
             budget._DEADLINE.reset(token)

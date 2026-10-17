@@ -15,6 +15,25 @@ CONVERSATION_TURN_MAX_WORDS = 115
 BRIEF_OPENING_MAX_BUDGET_WORDS = 1_300
 
 
+def allocate_script_words(contract: dict, stories: list[Story], maximum: int) -> dict:
+    """Plan below the existing ceiling; guidance only, no reporting is removed."""
+    target = maximum * 9 // 10
+    shared = min(target // 3, 140)
+    rows = contract["sections"]
+    weights = [sum(max(1, len(story.facts)) for story in stories
+                   if story.story_id in row["available_story_ids"]) for row in rows]
+    total = sum(weights)
+    available = target - shared
+    allocations = [available * weight // total for weight in weights] if total else []
+    for index in range(available - sum(allocations) if total else 0):
+        allocations[index % len(allocations)] += 1
+    return {"hard_maximum_words": maximum, "planned_total_words": target,
+            "shared_opening_closing_words": shared,
+            "sections": [{"name": row["name"], "planned_words": words}
+                         for row, words in zip(rows, allocations, strict=True)],
+            "guidance": "Not per-section limits or minima; preserve distinct facts and qualifiers."}
+
+
 def _brief_introduction(host_names: list[str], episode_date: date) -> list[dict[str, str]]:
     """Application-owned identity only; never shorten or summarize news here.
 

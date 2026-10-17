@@ -158,6 +158,51 @@ class SourceEvidenceIndex:
         story.source_urls = urls
         story.evidence = support
 
+    def canonical_story(self, raw: Any) -> Any:
+        """Derive attribution from exact collected fact passages, never guessed links.
+
+        Provider URL/alias lists are redundant, not evidence. Every fact must
+        resolve; the strict binder and independent semantic review still run.
+        """
+        if not isinstance(raw, dict) or not isinstance(raw.get("facts"), list) or not raw["facts"]:
+            return raw
+        refs = raw.get("evidence_refs")
+        if not isinstance(refs, list) or len(refs) != len(raw["facts"]):
+            raise DataValidationError("every fact needs aligned passage references",
+                                      failure_code="source_fact_alignment",
+                                      diagnostic={"field": "evidence_refs"})
+        aliases, urls = [], []
+        for index, references in enumerate(refs):
+            if not isinstance(references, list) or not 1 <= len(references) <= MAX_FACT_SUPPORTS:
+                raise DataValidationError("each fact needs one or two passage references",
+                                          failure_code="source_fact_support_shape",
+                                          diagnostic={"field": "evidence_refs",
+                                                      "fact_index": index})
+            for ref in references:
+                passage = self.passages.get(ref) if isinstance(ref, str) else None
+                if passage is None:
+                    raise DataValidationError("unknown collected passage",
+                                              failure_code="source_passage_unknown",
+                                              diagnostic={"field": "evidence_refs",
+                                                          "fact_index": index})
+                if passage.source_alias not in aliases:
+                    aliases.append(passage.source_alias)
+                allowed = self.allowed_urls[passage.source_alias]
+                url = passage.url
+                if (not url and passage.source_type in {"history", "current_world"}
+                        and len(allowed) == 1):
+                    url = next(iter(allowed))
+                if url:
+                    safe = normalize_url(url)
+                    if not safe or safe not in allowed:
+                        raise DataValidationError("collected passage URL has no owner",
+                                                  failure_code="source_url_unowned",
+                                                  diagnostic={"field": "evidence_refs",
+                                                              "fact_index": index})
+                    if safe not in urls:
+                        urls.append(safe)
+        return {**raw, "source_ids": aliases, "source_urls": urls}
+
     def check(self, support: StoryEvidence) -> None:
         passage = self.passages.get(support.passage_id)
         if passage is None or passage.support(support.fact_index) != support:

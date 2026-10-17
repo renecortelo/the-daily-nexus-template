@@ -1,6 +1,6 @@
 # Canonical work plan
 
-Updated: 2026-10-15. This is the single backlog, not a release diary.
+Updated: 2026-10-17. This is the single backlog, not a release diary.
 The agreed order prioritizes speed, safety, privacy and zero-cost operation.
 Statuses: pending / in progress / released / awaiting observation / needs user.
 Keep IDs stable; every scope, order or status change must have a dated reason below.
@@ -9,14 +9,17 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 | ID | Priority | Agreed work | Status | Acceptance / next action |
 |---|---:|---|---|---|
+| T14 | 0 | Derive extraction attribution from validated passage references | Awaiting observation | Application-owned attribution passed synthetic unrelated/unknown/malformed passage regressions in both copies. Exact passages, strict stored evidence and independent factual review remain mandatory. Observe ordinary-run source failures and saved lineage after reviewed release; recovery is not yet established. |
 | T13 | 0 | Recover missing generated story identity without another model call | Awaiting observation | Private and public synthetic suites, interface checks and privacy audit pass. Preserve reporting and source lineage; reject malformed identities and unsupported claims. Observe ordinary runs after reviewed release; do not claim production recovery yet. |
 | T12 | 0 | Separate CLI/provider failures from editorial validation | Awaiting observation | Implementation passed synthetic recovery, fail-closed and privacy regressions in both code copies. Fixed CLI/model-JSON/editorial diagnostics; no fictional draft repair or extra retry. Verify provider behavior in ordinary runs, without extra test episodes. |
+| T15 | 1 | Preserve terminal diagnostics for optional-paper failures | Awaiting observation | Synthetic podcast-success/paper-failure tests preserve the final fixed code/subphase and bounded details without reviewer prose or an earlier recovered cause. Check adoption in ordinary profiles after reviewed release. Whole-paper deadline and factual gates remain mandatory. |
 | T01 | 1 | Precise script validation and targeted correction | Released | Fixed rules/locations, existing retry only, no rejected text in logs. Observe future failures. |
+| T16 | 2 | Plan first-draft size and shape within existing output budgets | Awaiting observation | Synthetic checks preserve all sections/facts with flexible word guidance and valid paper example IDs/shape. No extra model call, factual deletion, prose clipping or longer episode. Measure ordinary-run rejection rates and time after reviewed release before claiming improvement. |
 | T02 | 2 | Smaller model requests without losing evidence | Released | Compact schema, post-selection scores omitted; selected facts and original supports retained. |
 | T03 | 3 | Measure patch/context efficiency in actual runs | Awaiting observation | Numeric request/response sizes, retry timing and exact context sharing shipped; equivalent-content ordinary runs must establish savings. |
-| T04 | 4 | Profile Kokoro without changing output quality | Awaiting observation | Fine-grained timing and offline tool shipped; local bounded experiment incomplete. Equivalent Linux throughput still needed before tuning. |
+| T04 | 4 | Profile Kokoro without changing output quality | Awaiting observation | Numeric CPU/affinity/thread/sample-rate context passed privacy/regression checks; synthesis settings are unchanged. Local bounded experiments did not complete a throughput/output comparison. Collect ordinary Linux context and complete an equivalent-output benchmark before any thread tuning. Optimization benefit is unproven. |
 | T05 | 5 | Fit optional newspaper within protected execution budget | Awaiting observation | Implementation validated with synthetic regressions; whole paper phase bounded, dynamic completion reserve, clear deferred reason. Verify adoption in ordinary runs, not an extra episode. |
-| T06 | 6 | Reconcile execution time and provider consumption | Pending | Include setup, failures, repairs and shutdown; distinguish measured generation from billed minutes/actual balances. Provider-panel access may be needed. |
+| T06 | 6 | Reconcile execution time and provider consumption | Awaiting observation | Bounded read-only account job accounting passed synthetic checks and a real provider read, including previous attempts, whole-job time and other private workflows. Unknown jobs are unmeasured; remaining balance requires a fresh Billing meter. Planning averages do not change episode cutoffs; reconcile future observations before treating sums as billed consumption. |
 | T07 | 7 | Investigate newsletters without extracted news | Pending | Explain observed gaps, especially unknown reasons; do not treat absence of extraction as absence of useful news. |
 | T08 | 8 | Perceptual naturalness and name pronunciation | Pending | Compare specific excerpts, isolate script/preparation/voice; technical metrics alone are insufficient. Listener feedback may be needed. |
 | T09 | 9 | Review real newspaper readability and visual usefulness | Pending | Semantic non-repetition, complete sentences, useful visuals and readable two-page target. Use existing approved editions. |
@@ -25,6 +28,28 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 ## Change log
 
+- 2026-10-17: T14/T15/T16 implementation and both-copy synthetic checks passed;
+  moved to awaiting ordinary-run observation, not proven speed or recovery.
+  T04 adds runtime context but its bounded local benchmark is incomplete, so no
+  synthesis tuning was made. T06 adds tested, bounded read-only account accounting;
+  measured jobs are not an account balance. Reviewed export/privacy/deployment
+  gates remain mandatory. No episode, retry, schedule or spending change was made.
+- 2026-10-17: User authorized implementation of T14, T15, T16, T04 and T06
+  in this order. Work is in progress; no new episode/retry is authorized. Local
+  synthetic profiling and read-only provider/job accounting are allowed; thread
+  tuning still requires a completed equivalent-output comparison. All unchanged
+  source, time, retry, privacy and no-spend controls remain release requirements.
+- 2026-10-17: Read-only incident/runtime review adds three proposed follow-ups:
+  T14 for repeated redundant source-lineage disagreements, T15 because optional
+  paper fallback clears its terminal cause, and T16 for oversized first drafts
+  and avoidable paper-shape retries. They precede lower-priority pending work;
+  T01-T13 keep their IDs and no task was removed. No functional implementation,
+  schedule change, new generation or retry was authorized by this review.
+- 2026-10-17: T04's remaining work is pending: existing instrumentation stays
+  released, but variable measured throughput needs numeric runtime context and
+  a controlled comparison before choosing thread/inference settings. T06 now
+  distinguishes the completed private account review from unimplemented budget
+  reconciliation. Production evidence and account figures remain private.
 - 2026-10-15: T13 implementation and synthetic checks passed in both copies;
   the public history/source privacy scan found no leaks. Changed status to
   awaiting observation, not verified production benefit. No new episode was run.

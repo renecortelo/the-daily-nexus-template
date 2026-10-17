@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import shutil
 import subprocess
 import tempfile
@@ -28,6 +29,20 @@ from audiodigest.speech import boundary_pause_ms, ends_with_spoken_question, pre
 
 class AudioGenerationError(RuntimeError):
     pass
+
+
+def _speech_runtime_context(torch):
+    """Observe numeric settings without changing threads or inference behavior."""
+    try:
+        values = {"speech_cpu_count": os.cpu_count() or 1,
+                  "speech_torch_threads": torch.get_num_threads(),
+                  "speech_torch_interop_threads": torch.get_num_interop_threads(),
+                  "speech_sample_rate": 24_000}
+        if hasattr(os, "sched_getaffinity"):
+            values["speech_affinity_cpus"] = len(os.sched_getaffinity(0))
+        counts(**values)
+    except (OSError, RuntimeError, ValueError, AttributeError, TypeError):
+        pass  # Observability cannot invalidate otherwise valid speech.
 
 
 def _complete_audio_duration(duration: float, timeline_ms: int) -> bool:
@@ -173,6 +188,10 @@ class KokoroAudioRenderer:
                 "Kokoro is not installed. Run the Windows setup script with audio dependencies."
             ) from exc
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+        # Numeric runtime context only; never host/model/account identifiers.
+        import torch
+
+        _speech_runtime_context(torch)
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",

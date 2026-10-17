@@ -223,7 +223,10 @@ class SourceEvidenceTests(TestCase):
             }), AntigravityMetadata()
         engine.antigravity.invoke.side_effect = factual_review
         quote = ClosingQuote("Learn carefully.", "An Author", "https://example.com/quote")
-        script_review, _ = engine.verify(stories, self.script("The pilot grew 35%."), quote)
+        script = self.script("The pilot grew 35%.")
+        # Body-only attribution has no arbitrary article URL.
+        script.show_notes = [quote.source_url]
+        script_review, _ = engine.verify(stories, script, quote)
         paper_review, _ = engine.verify_newspaper(
             stories, SimpleNamespace(to_dict=lambda: {"lead": "The pilot grew 35%."}),
         )

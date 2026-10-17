@@ -1667,6 +1667,21 @@ function renderResourceSummary() {
     const metadataRepairs = metricNumber(profile.counters?.extraction_metadata_repairs);
     if (metadataRepairs !== null && metadataRepairs > 0) add(`EXTRACTION METADATA NORMALIZED // ${metadataRepairs}; FACTS AND SOURCE REFERENCES UNCHANGED`);
     const metrics = profile.counters || {};
+    const paper = profile.paper_result;
+    if (paper && ["ready", "failed", "deferred"].includes(paper.outcome)
+        && ["admission", "draft", "compact", "review", "rewrite", "recheck", "render", "promote"].includes(paper.phase)) {
+      const codes = new Set([...diagnosticCodes, "paper_verification", "paper_render", "paper_timeout",
+        "paper_validation", "paper_other", "paper_budget_insufficient", "paper_budget_exhausted"]);
+      const parts = [`PAPER ${paper.outcome.toUpperCase()} // ${paper.phase.toUpperCase()}`];
+      if (codes.has(paper.code)) parts.push(paper.code.replaceAll("_", " ").toUpperCase());
+      if (Number.isInteger(paper.attempt) && paper.attempt >= 1 && paper.attempt <= 10) parts.push(`ATTEMPT ${paper.attempt}`);
+      if (diagnosticFields.has(paper.field)) parts.push(`FIELD ${paper.field}`);
+      if (validIndex(paper.item_index)) parts.push(`ITEM INDEX ${paper.item_index}`);
+      if (metricNumber(paper.elapsed_seconds) !== null) parts.push(secondsText(paper.elapsed_seconds));
+      add(parts.join(" // "));
+    }
+    const speechThreads = metricNumber(metrics.speech_torch_threads);
+    if (speechThreads !== null) add(`SPEECH RUNTIME // CPU ${metricNumber(metrics.speech_cpu_count) ?? "UNKNOWN"} · AFFINITY ${metricNumber(metrics.speech_affinity_cpus) ?? "UNKNOWN"} · THREADS ${speechThreads} · INTEROP ${metricNumber(metrics.speech_torch_interop_threads) ?? "UNKNOWN"}`);
     if ((metricNumber(metrics.cli_failures) ?? 0) > 0) add(`CLI RESULTS // ${metricNumber(metrics.cli_failures)} FAILED · ${metricNumber(metrics.cli_retries) ?? 0} RETRIES SELECTED · ${metricNumber(metrics.cli_recoveries) ?? 0} RECOVERED · ${secondsText((metricNumber(metrics.cli_failed_ms) ?? 0) / 1000)} FAILED CALL TIME; SHARES THE EXISTING ATTEMPT LIMIT, NOT EXTRA GENERATIONS`);
     if ((metricNumber(metrics.cli_usage_discarded) ?? 0) > 0) add(`INVALID OPTIONAL CLI USAGE METRICS DISCARDED // ${metricNumber(metrics.cli_usage_discarded)}; CONTENT VALIDATORS UNCHANGED`);
     if (metricNumber(metrics.paper_completion_reserve_seconds) !== null) add(`OPTIONAL PAPER BUDGET // AUDIO/PUBLISHING RESERVE ${secondsText(metrics.paper_completion_reserve_seconds)} · PAPER WINDOW ${secondsText(metricNumber(metrics.paper_allowance_seconds) ?? 0)}; ESTIMATE, NOT A COMPLETION GUARANTEE`);

@@ -549,6 +549,21 @@ test('optional paper deferral is distinct from disabled preferences and terminal
   assert.doesNotMatch(text,/GENERATION FAILED|AS REQUESTED/);
 });
 
+test('paper terminal cause stays separate from podcast success and discards arbitrary text', () => {
+  const {context,nodes}=harness(['metricNumber','newsletterCoverageSummary','renderResourceSummary']);
+  context.timestampText=()=> 'Synthetic time';context.durationText=v=>`${v/1000}s`;
+  context.appState.resourceProfile={status:'completed',at:'2026-01-01T03:00:00Z',elapsed_seconds:100,
+    counters:{speech_torch_threads:2,speech_cpu_count:4,speech_torch_interop_threads:1},
+    paper_result:{outcome:'failed',phase:'recheck',attempt:2,code:'paper_verification',
+      field:'facts',item_index:0,elapsed_seconds:20,message:'synthetic-private'},
+    validation_history:[{stage:6,attempt:1,code:'json_invalid'}]};
+  context.renderResourceSummary();
+  const text=nodes.get('resource-summary').children.map(n=>n.textContent).join(' ');
+  assert.match(text,/PAPER FAILED.*RECHECK.*PAPER VERIFICATION.*ATTEMPT 2.*FIELD facts/);
+  assert.match(text,/CPU 4.*THREADS 2.*INTEROP 1/);
+  assert.doesNotMatch(text,/synthetic-private/);
+});
+
 test('reload and refreshed ID token retain the original absolute and idle deadlines', async () => {
   const {context}=harness(['consoleSessionFor']);
   const storage=storageFixture(); const started=Date.parse('2026-10-09T06:00:00Z');

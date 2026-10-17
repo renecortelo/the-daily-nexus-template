@@ -131,7 +131,7 @@ class ExtractionContractTests(TestCase):
 
     def test_empty_required_field_and_invalid_fact_array_keep_field_and_story_position(self):
         for field, value in (
-            ("headline", None), ("facts", []), ("source_ids", "synthetic-private"),
+            ("headline", None), ("facts", []),
         ):
             with self.subTest(field=field), self.assertRaises(DataValidationError) as error:
                 self.validate({"stories": [extracted_story(**{field: value})]})
@@ -143,8 +143,6 @@ class ExtractionContractTests(TestCase):
             ({"evidence_refs": []}, "source_fact_alignment"),
             ({"evidence_refs": [[]]}, "source_fact_support_shape"),
             ({"evidence_refs": [["synthetic-private-id"]]}, "source_passage_unknown"),
-            ({"source_ids": ["synthetic-private-id"]}, "source_alias_unknown"),
-            ({"source_urls": ["https://example.com/unrelated"]}, "source_url_unowned"),
         )
         for changes, code in cases:
             with self.subTest(code=code), self.assertRaises(DataValidationError) as error:

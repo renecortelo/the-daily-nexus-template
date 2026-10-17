@@ -90,7 +90,7 @@ class SourcePrivacyTests(TestCase):
         self.assertEqual(["source-0001"], engine._story_prompt_dict(stories[0])["source_ids"])
         self.assertEqual(1, client.invoke.call_count)
 
-    def test_unknown_source_alias_is_rejected_without_echoing_mailbox_ids(self):
+    def test_unknown_passage_is_rejected_without_echoing_mailbox_ids(self):
         settings = load_settings("config.example.toml")
         settings.podcast.sections = ()
         client = Mock()
@@ -100,8 +100,11 @@ class SourcePrivacyTests(TestCase):
                 "story_id": "database-launch", "section": "Data Engineering",
                 "headline": "Database launch", "facts": ["It adds 12 connectors."],
                 "why_it_matters": "Teams have connectors.", "source_ids": ["unknown-source"],
+                "evidence_refs": [["unknown-passage"]],
                 "source_urls": [], "confidence": 0.9, "rank_score": 1,
             }]}), Mock()
         client.invoke.side_effect = extract
-        with self.assertRaisesRegex(ValueError, "unknown source alias"):
+        with self.assertRaisesRegex(ValueError, "unknown collected passage") as rejected:
             engine.extract_stories([self.source()], date(2026, 10, 9))
+        self.assertNotIn(self.source().message_id, str(rejected.exception))
+        self.assertNotIn("unknown-passage", str(rejected.exception))

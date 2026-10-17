@@ -78,6 +78,52 @@ an allowlisted metric reader, **not a general-purpose log redaction utility**.
 This tool is opt-in and local. It is not installed as a polling job, added to
 runner generation, or used to dispatch/requeue work automatically.
 
+## Account-wide job accounting and planning
+
+The optional reader uses the existing authenticated GitHub CLI. It reads all
+accessible owned private repositories and job attempts for one calendar month,
+including failed work, setup and cleanup. It never changes permissions or queues
+work. Reads are bounded to four concurrent requests, ten pages per resource and
+three minutes; an incomplete read fails explicitly instead of reporting a partial
+account total as complete. No account/repository/job identifiers leave its report.
+
+Replace `YYYY-MM` with the month to review and use your actual plan allowance:
+
+```powershell
+python -m audiodigest.actions_usage --github-month YYYY-MM --included-minutes 2000
+```
+
+The result estimates standard private Linux job minutes rounded per job. Free
+exceptions, other operating systems and reporting delays mean it is not the
+billing meter. Unknown/incomplete jobs are unmeasured, never assumed free. Public
+repository workflows are outside this private-job review. For an offline review,
+`--input jobs.json` accepts an existing JSON array of GitHub job records instead
+of contacting GitHub; keep any raw input local and ignored.
+
+For planning, supply `--used-minutes` only from a fresh GitHub Billing reading.
+Without it, remaining balance is explicitly unknown and the plan covers a full
+period. `--days`, `--runs-per-day`, `--reserve-minutes` and `--other-work-minutes`
+apply to the same planning horizon; with a used balance, use remaining days and
+anticipated future other work. They are arithmetic planning inputs, not automatic
+generation cutoffs. The tool never changes GitHub's spending budget or the
+one-hour workflow cap, and never obtains a broader token to read billing.
+
+## Prevent redundant attribution and draft retries
+
+New extraction responses supply exact passage references for every fact. The
+application derives source aliases and eligible public URLs from those collected
+passages, then runs the strict binder and independent factual review. Unknown or
+misaligned passages still fail; valid passage IDs alone do not prove a claim true.
+Newsletter-body evidence keeps its attribution without guessing which article
+link in the newsletter belongs to that fact. Public research has a page link only
+when its collected origin is unambiguous. Saved evidence validation remains strict.
+
+Draft requests include a deterministic word allocation about ten percent below
+the existing ceiling, weighted by the facts in each populated section. This is
+flexible guidance, not a new minimum, truncation rule or permission to omit facts.
+Paper requests include the existing total/prose budgets and explicit nested JSON
+shape. Reference URLs remain application-owned. No planning model call is added.
+
 ## Response and speech profiling
 
 Normal generation now records fixed numeric request/response UTF-8 byte totals,
@@ -98,6 +144,13 @@ timings to their parent totals. Sample counts describe unique synthesized chunks
 not all replayed chunks; voices, speed, text, pauses and encoding are unchanged.
 New numeric metrics ride existing events/heartbeats and the bounded final profile;
 no new polling or per-metric cloud write is added. Missing legacy metrics are unknown.
+
+Ordinary speech initialization also records numeric CPU count, CPU affinity where
+available, Torch thread/inter-op counts and sample rate. It records no machine
+name, CPU model, account or path, and does not change synthesis settings. Compare
+speech samples per pipeline second for comparable voices/text; CPU counts alone
+cannot explain variability or justify a particular thread setting. Missing runtime
+measurements remain unknown and do not invalidate speech.
 
 For an optional **local synthetic** profile, use an environment with the existing
 audio dependencies and public model/voice/language files already cached:
@@ -143,6 +196,13 @@ preference or factual approval. The verified podcast continues with no paper and
 automatic paper retry. Fixed numeric reserve/window/outcome counters reach the owner
 monitor. Cost/security errors and actual global exhaustion still abort the task.
 Ordinary future runs must verify adoption; no extra test generation is needed.
+
+The terminal `paper_result` separately records ready/failed/deferred, the last
+paper subphase, bounded attempt/time, fixed error code and allowed field/index
+details. It survives successful podcast completion without claiming that an
+earlier recovered validation error was the final paper cause. Review it in the
+monitor's runtime details. Raw model/reviewer text and arbitrary exception messages
+are never included; a generic code means the exact cause remains unclassified.
 
 ## CLI results versus editorial validation
 

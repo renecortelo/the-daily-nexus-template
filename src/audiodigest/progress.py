@@ -22,6 +22,7 @@ from typing import Any
 
 from audiodigest.cli_protocol import CLI_FAILURE_CODES
 from audiodigest.newsletter_accounting import ACCOUNTING_COUNTERS
+from audiodigest.paper_diagnostics import PAPER_CODES, safe_paper_result
 from audiodigest.validation_diagnostics import DIAGNOSTIC_LIMIT, safe_detail
 
 PREFIX = "TDN_PROGRESS "
@@ -66,6 +67,8 @@ COUNTERS = {
     "model_request_bytes", "model_response_bytes", "model_accepted_ms", "model_rejected_ms",
     "script_patch_edits", "script_patch_response_bytes", "script_full_response_bytes",
     "speech_characters", "speech_samples",
+    "speech_cpu_count", "speech_affinity_cpus", "speech_torch_threads",
+    "speech_torch_interop_threads", "speech_sample_rate",
     "evidence_passages_input", "evidence_passages_sent", "evidence_context_chars_saved",
     "progress_updates_failed",
     "paper_completion_reserve_seconds", "paper_allowance_seconds",
@@ -90,6 +93,7 @@ REASONS = {
 }
 RESULTS = {"idle", "already-claimed", "published", "completed", "failed"}
 FAILURE_CODES = {
+    *PAPER_CODES,
     *CLI_FAILURE_CODES,
     "extraction_section", "extraction_section_limit", "extraction_confidence", "extraction_rank",
     "extraction_duplicate_id", "extraction_evidence_shape", "extraction_consolidation",
@@ -192,6 +196,8 @@ def safe_event(value: Any) -> dict[str, Any] | None:
                 "elapsed_seconds": elapsed, **safe_detail(raw),
             })
     result["operations"] = {}
+    if paper := safe_paper_result(value.get("paper_result"), FAILURE_CODES):
+        result["paper_result"] = paper
     if isinstance(raw_operations, dict):
         for name, raw in raw_operations.items():
             if name in OPERATIONS and isinstance(raw, dict):
@@ -217,6 +223,7 @@ class ProgressReporter:
         self.status = "running"
         self.reason = ""
         self.failure_code = ""
+        self.paper_result = None
         self.validation_history: list[dict[str, Any]] = []
         self.stage = 0
         self.counters: dict[str, float] = {}
@@ -248,6 +255,7 @@ class ProgressReporter:
                         "stage": self.stage,
                         "reason": self.reason,
                         "failure_code": self.failure_code,
+                        "paper_result": self.paper_result,
                         "validation_history": list(self.validation_history),
                         "elapsed_seconds": current - self.started,
                         "stage_elapsed_seconds": current - self.stage_started,
@@ -373,6 +381,15 @@ def clear_failure_code() -> None:
             if reporter.finished is None and reporter.failure_code:
                 reporter.failure_code = ""
                 reporter.emit("counts")
+
+
+def record_paper_result(value):
+    result = safe_paper_result(value, FAILURE_CODES)
+    if result and (reporter := _CURRENT.get()):
+        with reporter.lock:
+            reporter.paper_result = result
+            reporter.emit("counts")
+    return result
 
 
 def increment(name: str) -> None:

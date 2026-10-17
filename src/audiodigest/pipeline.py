@@ -60,7 +60,16 @@ from audiodigest.newspaper import (
     is_legacy_script_style_issue,
 )
 from audiodigest.paper_budget import PAPER_MINIMUM_SECONDS, completion_reserve, paper_allowance
-from audiodigest.progress import clear_failure_code, counts, increment, stage, timed_operation
+from audiodigest.paper_diagnostics import PaperTrace, paper_phase, paper_scope
+from audiodigest.progress import (
+    FAILURE_CODES,
+    clear_failure_code,
+    counts,
+    increment,
+    record_paper_result,
+    stage,
+    timed_operation,
+)
 from audiodigest.publisher import FirebasePublisher, PublishResult
 from audiodigest.web_fetcher import ArticleFetchError, SafeArticleFetcher, UnsafeURLError
 
@@ -70,7 +79,10 @@ class NoContentError(RuntimeError):
 
 
 class VerificationError(RuntimeError):
-    pass
+    def __init__(self, message, *, failure_code="", diagnostic=None):
+        super().__init__(message)
+        self.failure_code = failure_code
+        self.diagnostic = diagnostic or {}
 
 
 def _stage(number: int, total: int, label: str) -> None:
@@ -398,6 +410,7 @@ class Pipeline:
         # rather than failing a complete podcast after the first correction.
         structural_limit = int(getattr(self.settings.podcast, "max_script_repairs", 2))
         for structural_attempt in range(structural_limit + 1):
+            paper_phase("draft", structural_attempt + 1)
             try:
                 newspaper, newspaper_meta = self.editorial.generate_newspaper(
                     stories,
@@ -430,6 +443,7 @@ class Pipeline:
                 "Independent newspaper draft is being compressed for the two-page layout.",
                 flush=True,
             )
+            paper_phase("compact")
             newspaper, compact_meta = self.editorial.generate_newspaper(
                 stories,
                 day,
@@ -453,6 +467,7 @@ class Pipeline:
                     "if legibility requires it.",
                     flush=True,
                 )
+        paper_phase("review")
         review, review_meta = self.editorial.verify_newspaper(
             stories,
             newspaper,
@@ -471,6 +486,7 @@ class Pipeline:
                 flush=True,
             )
             try:
+                paper_phase("rewrite", repair_attempt)
                 newspaper, repair_meta = self.editorial.generate_newspaper(
                     stories,
                     day,
@@ -502,7 +518,9 @@ class Pipeline:
                     break
                 raise VerificationError(
                     "newspaper rewrites could not satisfy the three-page "
-                    f"structural ceiling after {repair_limit} attempts: {exc}"
+                    f"structural ceiling after {repair_limit} attempts",
+                    failure_code=getattr(exc, "failure_code", "") or "model_structure",
+                    diagnostic=getattr(exc, "diagnostic", None),
                 ) from exc
             metadata.append(
                 {
@@ -510,6 +528,7 @@ class Pipeline:
                     **repair_meta.to_dict(),
                 }
             )
+            paper_phase("recheck", repair_attempt)
             review, recheck_meta = self.editorial.verify_newspaper(
                 stories,
                 newspaper,
@@ -523,7 +542,8 @@ class Pipeline:
         if not review.approved:
             if not review.factually_safe:
                 raise VerificationError(
-                    "Newspaper has unresolved factual or unclassified verification issues."
+                    "Newspaper has unresolved factual or unclassified verification issues.",
+                    failure_code="paper_verification",
                 )
             print(
                 "Warning: factually approved newspaper retains editorial warnings.",
@@ -542,20 +562,24 @@ class Pipeline:
             counts(paper_completion_reserve_seconds=reserve, paper_allowance_seconds=allowance)
             if allowance < PAPER_MINIMUM_SECONDS:
                 increment("paper_budget_skipped")
+                record_paper_result({"outcome": "deferred", "phase": "admission", "attempt": 1,
+                                     "code": "paper_budget_insufficient", "elapsed_seconds": 0})
                 print(
                     "Newspaper deferred: insufficient protected time; prioritizing verified audio.",
                     flush=True,
                 )
                 return None, [{"stage": "newspaper-deferred", "reason": "budget_insufficient"}], []
         phase_started = time.monotonic()
+        trace = PaperTrace()
         try:
-            with reserve_time(reserve, maximum_seconds=allowance):
+            with paper_scope(trace), reserve_time(reserve, maximum_seconds=allowance):
                 newspaper, metadata = self._generate_verified_newspaper(stories, day)
                 json_path = working_dir / "newspaper.json"
                 json_path.write_text(
                     json.dumps(newspaper.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
                 )
                 check_budget()
+                paper_phase("render")
                 with timed_operation("paper_render"):
                     result = NewspaperRenderer(self.settings).render(
                         newspaper, day, working_dir / "edition.pdf", working_dir / "edition-1.png",
@@ -568,7 +592,11 @@ class Pipeline:
                     (result.pdf_path, in_progress_dir / "edition.pdf"),
                 ]
                 progress_files.extend((path, in_progress_dir / path.name) for path in previews)
+                paper_phase("promote")
                 _promote_episode_files(progress_files)
+            record_paper_result({"outcome": "ready", "phase": trace.phase,
+                                 "attempt": trace.attempt,
+                                 "elapsed_seconds": time.monotonic() - phase_started})
             return newspaper, metadata, previews
         except (AntigravityPaymentRiskError, AntigravityConfigurationError):
             raise  # Cost/security guards remain fatal, not an optional-paper fallback.
@@ -589,14 +617,33 @@ class Pipeline:
             )
             if phase_expired:
                 increment("paper_budget_exhausted")
+                record_paper_result({"outcome": "deferred", "phase": trace.phase,
+                                     "attempt": trace.attempt, "code": "paper_budget_exhausted",
+                                     "elapsed_seconds": time.monotonic() - phase_started})
                 print("Newspaper deferred: protected paper window exhausted; continuing to audio.",
                       flush=True)
                 return None, [{"stage": "newspaper-deferred", "reason": "budget_exhausted"}], []
+            code = getattr(exc, "failure_code", "")
+            if not isinstance(code, str) or code not in FAILURE_CODES:
+                code = (
+                    "paper_verification" if isinstance(exc, VerificationError) else
+                    "paper_render" if isinstance(exc, NewspaperRenderError) else
+                    "paper_timeout" if isinstance(exc, subprocess.TimeoutExpired) else
+                    "paper_validation" if isinstance(exc, DataValidationError) else "paper_other"
+                )
+            detail = getattr(exc, "diagnostic", None)
+            diagnostic = record_paper_result({
+                **(detail if isinstance(detail, dict) else {}),
+                "outcome": "failed", "phase": trace.phase,
+                "attempt": trace.attempt, "code": code,
+                "elapsed_seconds": time.monotonic() - phase_started,
+            })
             print(
                 "Newspaper unavailable; continuing with the independently verified podcast.",
                 flush=True,
             )
-            return None, [{"stage": "newspaper-failed", "error_type": type(exc).__name__}], []
+            return None, [{"stage": "newspaper-failed", "error_type": type(exc).__name__,
+                           "diagnostic": diagnostic}], []
 
     def _write_manifest(
         self,
