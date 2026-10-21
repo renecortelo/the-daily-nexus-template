@@ -61,7 +61,7 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          python -m pip install --disable-pip-version-check "pip==26.2.1" "uv==0.12.23"
+          python -m pip install --disable-pip-version-check "pip==26.2.1" "uv==0.13.4"
           uv sync --frozen --extra dev --python 3.12
           uv lock --check
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"

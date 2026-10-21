@@ -19,8 +19,9 @@ dependencies = [
   "cryptography>=50.0.2,<51",
   "oauthlib>=4,<5",
   "urllib3>=2.8,<3",
+  "certifi>=2026.10.19",
   "keyring>=25,<26",
-  "pillow>=12.3,<13",
+  "pillow>=13,<14",
   "pymupdf>=1.28.2,<2",
   "reportlab>=4.4,<5",
   "trafilatura>=2.3,<3",
@@ -39,7 +40,7 @@ audio = [
 ]
 dev = [
   "wheel==0.48.0",
-  "uv==0.12.23",
+  "uv==0.13.4",
   "coverage>=7,<8",
   "ruff>=0.12,<1",
   "pip-audit==2.10.1",

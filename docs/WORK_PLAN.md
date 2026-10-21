@@ -24,10 +24,16 @@ production improvement from tests alone. Private deployment/run evidence stays l
 | T08 | 8 | Perceptual naturalness and name pronunciation | Pending | Compare specific excerpts, isolate script/preparation/voice; technical metrics alone are insufficient. Listener feedback may be needed. |
 | T09 | 9 | Review real newspaper readability and visual usefulness | Pending | Semantic non-repetition, complete sentences, useful visuals and readable two-page target. Use existing approved editions. |
 | T10 | 10 | Physical mobile/accessibility validation | Needs user | iPhone/PWA, keyboard, VoiceOver and compact player; synthetic browser tests are not device certification. |
-| T11 | 11 | Maintainability and remaining privacy procedures | Pending | Further module separation; reviewed feed-link rotation procedure only with explicit operator authorization. Preserve existing controls. |
+| T11 | 0 (temporary) | Security dependency refresh, maintainability and remaining privacy procedures | In progress | User-approved minimal Pillow/certifi/uv fixes block release until the complete locked audit, compatibility tests and reviewed sanitized export pass. Further module separation and authorized feed-link rotation remain pending; no audit exemptions or broader permissions. |
 
 ## Change log
 
+- 2026-10-21: User approved an urgent security dependency refresh under T11 after
+  new upstream advisories blocked the public release. Temporarily raise T11 from
+  priority 11 to 0 and mark in progress; keep unrelated dependencies, audio behavior,
+  retry/time/spending controls and the remaining T11 scope unchanged. No task was
+  removed. Release still requires both-copy compatibility and complete dependency,
+  source/history privacy checks; vulnerabilities must not be suppressed.
 - 2026-10-21: T06 Worker publication needs renewal of existing operator sign-in;
   moved to needs user rather than claiming the external observer is deployed.
   Web changes remain backward-compatible with an older clock response. T04's

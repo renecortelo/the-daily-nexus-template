@@ -122,7 +122,7 @@ jobs:
         if: steps.probe.outputs.run == 'true'
         shell: bash
         run: |
-          python -m pip install --disable-pip-version-check "pip==26.2.1" "uv==0.12.23"
+          python -m pip install --disable-pip-version-check "pip==26.2.1" "uv==0.13.4"
           uv sync --frozen --extra audio --python 3.12
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           npm ci --ignore-scripts --no-fund --no-audit

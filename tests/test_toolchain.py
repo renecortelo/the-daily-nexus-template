@@ -13,6 +13,21 @@ spec.loader.exec_module(audit_module)
 
 
 class ToolchainTests(TestCase):
+    def test_security_refresh_matches_lock_and_both_workflow_bootstraps(self):
+        manifest = tomllib.loads(Path("pyproject.toml").read_text())
+        locked = dict(audit_module.locked_packages(Path("uv.lock")))
+        self.assertIn("pillow>=13,<14", manifest["project"]["dependencies"])
+        self.assertIn("certifi>=2026.10.19", manifest["project"]["dependencies"])
+        self.assertEqual(locked["pillow"], "13.0.0")
+        self.assertEqual(locked["certifi"], "2026.10.19")
+        self.assertEqual(locked["uv"], "0.13.4")
+        bootstrap = f'"uv=={locked["uv"]}"'
+        self.assertIn(f'uv=={locked["uv"]}',
+                      manifest["project"]["optional-dependencies"]["dev"])
+        for workflow in ("private-cloud-runner.yml", "public-readiness.yml"):
+            with self.subTest(workflow=workflow):
+                self.assertIn(bootstrap, Path(".github/workflows", workflow).read_text())
+
     def test_firebase_version_matches_installer_publisher_and_lock(self):
         manifest = json.loads(Path("package.json").read_text())
         lock = json.loads(Path("package-lock.json").read_text())
