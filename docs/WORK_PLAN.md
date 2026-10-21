@@ -9,7 +9,7 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 | ID | Priority | Agreed work | Status | Acceptance / next action |
 |---|---:|---|---|---|
-| T06 | 0 (temporary) | Reconcile execution time/provider consumption and expose runner-start status | Needs user | Both-copy provider/monitor tests and privacy checks passed; historical app contact is distinct from dispatch/start/publication. Worker deployment needs renewal of the existing Cloudflare CLI sign-in, not broader token scopes. After deployment, observe authenticated status. Exact quota still needs Billing; no retry/spend changes. |
+| T06 | 0 (temporary) | Reconcile execution time/provider consumption and expose runner-start status | Awaiting observation | Both-copy tests/privacy checks and hosted web/Worker release verification passed, including rejection of unsigned/untrusted requests. Historical app contact is distinct from dispatch/start/publication. Observe authenticated provider status during ordinary use; no extra episode. Exact quota still needs Billing; no retry/spend changes. |
 | T14 | 0 | Derive extraction attribution from validated passage references | Awaiting observation | Application-owned attribution passed synthetic unrelated/unknown/malformed passage regressions in both copies. Exact passages, strict stored evidence and independent factual review remain mandatory. Observe ordinary-run source failures and saved lineage after reviewed release; recovery is not yet established. |
 | T13 | 0 | Recover missing generated story identity without another model call | Awaiting observation | Private and public synthetic suites, interface checks and privacy audit pass. Preserve reporting and source lineage; reject malformed identities and unsupported claims. Observe ordinary runs after reviewed release; do not claim production recovery yet. |
 | T12 | 0 | Separate CLI/provider failures from editorial validation | Awaiting observation | Implementation passed synthetic recovery, fail-closed and privacy regressions in both code copies. Fixed CLI/model-JSON/editorial diagnostics; no fictional draft repair or extra retry. Verify provider behavior in ordinary runs, without extra test episodes. |
@@ -24,10 +24,20 @@ production improvement from tests alone. Private deployment/run evidence stays l
 | T08 | 8 | Perceptual naturalness and name pronunciation | Pending | Compare specific excerpts, isolate script/preparation/voice; technical metrics alone are insufficient. Listener feedback may be needed. |
 | T09 | 9 | Review real newspaper readability and visual usefulness | Pending | Semantic non-repetition, complete sentences, useful visuals and readable two-page target. Use existing approved editions. |
 | T10 | 10 | Physical mobile/accessibility validation | Needs user | iPhone/PWA, keyboard, VoiceOver and compact player; synthetic browser tests are not device certification. |
-| T11 | 0 (temporary) | Security dependency refresh, maintainability and remaining privacy procedures | In progress | User-approved minimal Pillow/certifi/uv fixes block release until the complete locked audit, compatibility tests and reviewed sanitized export pass. Further module separation and authorized feed-link rotation remain pending; no audit exemptions or broader permissions. |
+| T11 | 11 | Maintainability and remaining privacy procedures | Pending | The approved minimal Pillow/certifi/uv refresh is released after complete locked audits, compatibility tests and reviewed sanitized export. Further module separation and authorized feed-link rotation remain pending; no audit exemptions. |
 
 ## Change log
 
+- 2026-10-21: T06 web/Worker release and hosted boundary checks passed after
+  operator-approved renewal using account/user read and Worker-script deployment
+  access only; move from needs user to awaiting ordinary authenticated observation.
+  No schedule synchronization, dispatch, retry or episode was sent. T11's security
+  refresh passed complete Python/npm advisory audits, both-copy compatibility,
+  fictional PDF/preview rendering and public CI/privacy/history checks; it is
+  released, not a guarantee against future advisories. Return T11 to priority 11
+  pending its unchanged remaining work. Public CI retains its additional PR-head
+  and independent history-scanner protections. T04 still requires comparable Linux
+  and perceptual evidence before any production tuning. No task was removed.
 - 2026-10-21: User approved an urgent security dependency refresh under T11 after
   new upstream advisories blocked the public release. Temporarily raise T11 from
   priority 11 to 0 and mark in progress; keep unrelated dependencies, audio behavior,
