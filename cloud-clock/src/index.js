@@ -3,6 +3,7 @@ import {
   nextDueOccurrence,
   normalizeScheduleProjection,
 } from "./schedule.js";
+import { observeWorkflow, safeObservation } from "./runner-status.js";
 
 const MAX_SCHEDULES = 100;
 const MAX_BODY_BYTES = 512;
@@ -273,7 +274,26 @@ export class CloudClock {
       activeScheduleCount: schedules.filter((item) => item.enabled).length,
       nextAlarmAt,
       lastDispatchAt: (await this.state.storage.get("lastDispatchAt")) || null,
+      provider: await this.providerStatus(),
     };
+  }
+
+  async providerStatus() {
+    const cached = await this.state.storage.get("providerStatus");
+    const now = Date.now();
+    if (cached && Number.isSafeInteger(cached.observedAt) && cached.observedAt <= now && now - cached.observedAt < 300000) return safeObservation(cached);
+    if (this.providerPending) return this.providerPending;
+    this.providerPending = (async () => {
+      let observation = { state: "unknown", observedAt: now };
+      try {
+        const config = validDispatchConfig(this.env);
+        observation = await observeWorkflow({ ...config, token: this.env.TDN_GITHUB_DISPATCH_TOKEN }, now);
+      } catch (_error) { /* A status read cannot change clock operation. */ }
+      await this.state.storage.put("providerStatus", safeObservation(observation));
+      return safeObservation(observation);
+    })();
+    try { return await this.providerPending; }
+    finally { this.providerPending = null; }
   }
 
   async wake() {

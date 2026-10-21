@@ -28,6 +28,7 @@ function harness(names) {
     element(_tag,_class,text){const image=node(); if(text!==undefined) image.textContent=text; images.push(image); return image;},
     applyEditionZoom(){}, clearSubscriptions(){}, updateCloudClockStatus(){}, updateArchiveButtons(){},
     clearEditionControls(){},
+    async refreshCloudClockStatus(){},
     syncCompactSelects(){},
     syncHomeFilm(){},
     syncParameterControls(form){context.syncHostControls?.(form);context.syncNewspaperControls?.(form);},
@@ -507,7 +508,7 @@ test('CLI diagnostics distinguish the provider layer without private statuses or
 
 test('running monitor shows the same bounded coverage summary', () => {
   const {context,nodes}=harness(['newsletterCoverageSummary','updateRunnerDetail']);
-  context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.durationText=()=> 'A DURATION';
+  context.dateValue=()=>null;context.timeText=()=> 'A TIME';context.timestampText=()=> 'A DATE AND TIME';context.durationText=()=> 'A DURATION';
   context.SESSION_MAX_MS=3600000;
   context.runEstimateRange=()=>({low:60000,high:120000,observed:false});
   context.appState.runner={state:'running',progress:{stage:3,label:'Extraction',counters:{
@@ -517,6 +518,52 @@ test('running monitor shows the same bounded coverage summary', () => {
   context.updateRunnerDetail();
   assert.match(nodes.get('runner-detail').textContent,/2 WITH NEWS \/\/ 1 WITHOUT RETAINED NEWS/);
   assert.match(nodes.get('runner-detail').textContent,/0 WITH NEWS OUTSIDE AUDIO/);
+});
+
+test('provider observations separate accepted dispatch, no-start refusal and episode publication', () => {
+  const {context,nodes}=harness(['renderProviderStatus']);
+  context.timestampText=()=> 'A DATE AND TIME';
+  const now=Date.now();
+  context.appState.providerStatus={state:'not_started',reason:'billing_or_spending_limit',runNumber:7,
+    createdAt:now-10000,observedAt:now-1000,message:'synthetic-private',url:'https://untrusted.example'};
+  context.appState.clockDispatchAcceptedAt=now-10000;
+  context.renderProviderStatus();
+  let text=nodes.get('provider-detail').textContent;
+  assert.match(text,/REJECTED BEFORE ANY STEP.*BILLING \/ SPENDING LIMIT.*DISPATCH ACCEPTED/);
+  assert.doesNotMatch(text,/synthetic-private|untrusted|PUBLISHED/);
+  context.appState.providerStatus={state:'failed',reason:'billing_or_spending_limit'};
+  context.renderProviderStatus(); assert.doesNotMatch(nodes.get('provider-detail').textContent,/BILLING/);
+  context.appState.providerStatus={state:'completed',observedAt:now-600000};
+  context.renderProviderStatus(); assert.match(nodes.get('provider-detail').textContent,/SUCCEEDED; SEE EPISODE STATUS BELOW.*OLD OBSERVATION/);
+  context.appState.providerStatus={state:['running']};context.renderProviderStatus();
+  assert.match(nodes.get('provider-detail').textContent,/STATUS UNKNOWN/);
+  context.appState.authorized=false; context.renderProviderStatus();
+  assert.equal(nodes.get('provider-detail').textContent,'');assert.equal(nodes.get('provider-detail').hidden,true);
+});
+
+test('provider refresh ignores old requests and logout and never wakes a workflow', async () => {
+  const {context,nodes}=harness(['refreshCloudClockStatus','renderProviderStatus']);
+  context.timestampText=()=> 'A DATE';context.timeText=()=> 'A TIME';context.cloudClockEndpoint=()=> 'https://clock.example';
+  const replies=[];context.cloudClockRequest=(path,options)=>{
+    assert.equal(path,'/v1/status'); assert.equal(options.method,'GET');
+    return new Promise(resolve=>replies.push(resolve));
+  };
+  const first=context.refreshCloudClockStatus(), second=context.refreshCloudClockStatus();
+  replies[1]({provider:{state:'queued'}});await second;
+  replies[0]({provider:{state:'running'}});await first;
+  assert.equal(context.appState.providerStatus.state,'queued');
+  const third=context.refreshCloudClockStatus();context.appState.authorized=false;context.appState.authEpoch++;
+  nodes.get('provider-detail').textContent='';replies[2]({provider:{state:'failed'}});await third;
+  assert.equal(nodes.get('provider-detail').textContent,'');
+});
+
+test('stored app idle state never claims current host availability', () => {
+  const {context,nodes}=harness(['renderRunner','updateRunnerDetail']);
+  context.timestampText=()=> 'OCT 18 AT 05:16';context.timeText=()=> 'A TIME';
+  const status=context.byId('runner-status');status.parentElement.classList.toggle=()=>{};
+  context.renderRunner({exists:()=>true,data:()=>({state:'idle',checkedAt:'2026-10-18T03:16:00Z'})});
+  assert.equal(status.textContent,'LAST APP STATE: IDLE');assert.doesNotMatch(status.textContent,/AVAILABLE/);
+  assert.match(nodes.get('runner-detail').textContent,/LAST APP CONTACT OCT 18/);
 });
 
 test('efficiency details show only measured values and fixed nested locations', () => {

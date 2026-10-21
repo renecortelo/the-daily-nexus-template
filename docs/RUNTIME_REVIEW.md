@@ -157,6 +157,7 @@ audio dependencies and public model/voice/language files already cached:
 
 ```powershell
 python scripts/profile-speech-runtime.py --timeout 120 --threads 2
+python scripts/profile-speech-runtime.py --timeout 300 --compare
 ```
 
 This disposable CPU subprocess uses only built-in fictional text, disables network
@@ -168,6 +169,21 @@ Only fixed phases and numeric samples are emitted; incomplete profiles exit with
 code 2 rather than claiming success. It is not a workflow or normal-run extra step.
 No production thread setting changes. A Windows result cannot establish Linux-runner
 savings, and matching repeated PCM does not certify subjective naturalness.
+
+The optional comparison uses the same warmed model, fictional short/long turns
+and both cached voices in a 1/2/1 thread sequence. Report each case separately:
+the two one-thread observations help reveal order/thermal variability, not a
+statistically conclusive speed-up. WAV equality compares each case with its first
+PCM output across candidates, excluding WAV container headers. Numeric PCM16
+maximum/RMS deltas quantify a mismatch without retaining audio in the report;
+neither a mismatch nor a tiny delta alone establishes perceptual equivalence.
+No real script or generated episode is used.
+
+Completed synthetic measurements and fixed phase timings stream to the parent.
+If the wall-time cap expires, the report retains only sanitized partial samples
+and completed phase times, labels the comparison incomplete and exits 2. A long
+cold start therefore does not erase every measurement. Partial results cannot
+justify deployment tuning or be presented as a completed benchmark.
 
 Before adopting a synthesis change, compare equivalent text, voices, pronunciation,
 sample counts and complete encoded output on equivalent hardware. The current

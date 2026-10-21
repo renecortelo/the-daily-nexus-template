@@ -67,6 +67,9 @@ const appState = {
   runRequests: [],
   runRequestRows: new Map(),
   runner: null,
+  providerStatus: null,
+  clockDispatchAcceptedAt: null,
+  providerRefreshSequence: 0,
   monitorRefreshedAt: null,
   activeEpisode: null,
   activeEdition: null,
@@ -180,6 +183,11 @@ function clearPrivateInterface() {
   appState.generationSubmitting = false;
   appState.requeuingRequests = new Set();
   appState.runner = null;
+  appState.providerStatus = null;
+  appState.clockDispatchAcceptedAt = null;
+  appState.providerRefreshSequence = (appState.providerRefreshSequence || 0) + 1;
+  byId("provider-detail").textContent = "";
+  byId("provider-detail").hidden = true;
   appState.resourceProfile = null;
   appState.resourceReadUnavailable = false;
   byId("resource-summary").replaceChildren();
@@ -1080,17 +1088,49 @@ async function refreshCloudClockStatus() {
     updateCloudClockStatus();
     return null;
   }
+  const uid = appState.user?.uid;
+  const epoch = appState.authEpoch;
+  const sequence = appState.providerRefreshSequence = (appState.providerRefreshSequence || 0) + 1;
+  const current = () => appState.authorized && appState.user?.uid === uid && appState.authEpoch === epoch && appState.providerRefreshSequence === sequence;
   try {
     const result = await cloudClockRequest("/v1/status", { method: "GET" });
+    if (!current()) return null;
+    appState.providerStatus = result?.provider || null;
+    appState.clockDispatchAcceptedAt = result?.lastDispatchAt;
+    renderProviderStatus();
     appState.clockStatus = result?.nextAlarmAt
       ? `CLOUD CLOCK // NEXT ${timeText(new Date(result.nextAlarmAt))}`
       : "CLOUD CLOCK // NO ACTIVE SCHEDULE";
     updateCloudClockStatus();
     return result;
   } catch (_error) {
+    if (!current()) return null;
+    appState.providerStatus = null;
+    renderProviderStatus();
     updateCloudClockStatus("CLOUD CLOCK // UNAVAILABLE");
     return null;
   }
+}
+
+function renderProviderStatus() {
+  const node = byId("provider-detail");
+  if (!appState.authorized) { node.textContent = ""; node.hidden = true; return; }
+  node.hidden = false;
+  const value = appState.providerStatus;
+  const labels = { unknown: "STATUS UNKNOWN", none: "NO WORKFLOW FOUND", queued: "WAITING TO START",
+    starting: "STARTING; NO STEPS CONFIRMED", running: "RUNNING", completed: "SUCCEEDED; SEE EPISODE STATUS BELOW",
+    failed: "FAILED", cancelled: "CANCELLED", not_started: "REJECTED BEFORE ANY STEP" };
+  const state = typeof value?.state === "string" && Object.hasOwn(labels, value.state) ? value.state : "unknown";
+  const parts = [`LAST OBSERVED GITHUB WORKFLOW // ${labels[state]}`];
+  if (state === "not_started") parts.push(value.reason === "billing_or_spending_limit"
+    ? "BILLING / SPENDING LIMIT" : "CAUSE NOT CONFIRMED");
+  const now = Date.now();
+  const valid = n => Number.isSafeInteger(n) && n > 0 && n <= now + 5000;
+  if (valid(appState.clockDispatchAcceptedAt)) parts.push(`DISPATCH ACCEPTED ${timestampText(new Date(appState.clockDispatchAcceptedAt))}`);
+  if (Number.isSafeInteger(value?.runNumber) && value.runNumber > 0 && value.runNumber <= 1e9) parts.push(`#${value.runNumber}`);
+  if (valid(value?.createdAt)) parts.push(`REQUESTED ${timestampText(new Date(value.createdAt))}`);
+  if (valid(value?.observedAt)) parts.push(`${now - value.observedAt > 300000 ? "OLD OBSERVATION" : "CHECKED"} ${timestampText(new Date(value.observedAt))}`);
+  node.textContent = parts.join(" // ");
 }
 
 function renderSchedules(snapshot) {
@@ -1523,7 +1563,7 @@ function updateRunnerDetail() {
       data.progress?.counters?.selected_stories ? `SELECTED STORIES ${data.progress.counters.selected_stories}` : "",
       newsletterCoverageSummary(data.progress?.counters),
       data.progress?.counters?.word_count ? `SCRIPT ${data.progress.counters.word_count} WORDS` : "",
-      data.progress ? `LAST PROGRESS ${timeText(data.checkedAt)}` : "",
+      data.progress ? `LAST PROGRESS ${timestampText(data.checkedAt)}` : "",
       data.progress?.failure_code ? `LAST VALIDATION ${data.progress.failure_code.replaceAll("_", " ").toUpperCase()}` : "",
       `${estimate.observed ? "RECENT RUN RANGE" : "REFERENCE RANGE"} ${durationText(estimate.low)}–${durationText(estimate.high)}`,
       remainingHigh > 0 ? `EST. ${durationText(remainingLow)}–${durationText(remainingHigh)} REMAINING; NOT A DEADLINE` : "PAST ESTIMATE // ONE-HOUR LIMIT",
@@ -1531,12 +1571,12 @@ function updateRunnerDetail() {
     return;
   }
   if (state === "error") {
-    detail.textContent = `LAST RUN NEEDS ATTENTION // ${data.detail || "Review the failed run."}`;
+    detail.textContent = `LAST APP CONTACT ${timestampText(data.checkedAt)} // LAST RUN NEEDS ATTENTION // ${data.detail || "Review the failed run."}`;
     return;
   }
   detail.textContent = [
-    `LAST CLOUD CHECK ${timeText(data.checkedAt)}`,
-    data.detail || "Ready.",
+    `LAST APP CONTACT ${timestampText(data.checkedAt)}`,
+    data.detail || "No active generation reported at that time.",
     appState.monitorRefreshedAt ? `VIEW REFRESHED ${timeText(appState.monitorRefreshedAt)}` : "",
   ].filter(Boolean).join(" // ");
 }
@@ -2308,8 +2348,8 @@ function renderRunner(snapshot) {
   const data = snapshot.data();
   appState.runner = data;
   const stateValue = String(data.state || "unknown").toLowerCase();
-  const state = stateValue.toUpperCase();
-  byId("runner-status").textContent = stateValue === "idle" ? "RUNNER AVAILABLE" : `RUNNER ${state}`;
+  const state = ["idle", "running", "error"].includes(stateValue) ? stateValue.toUpperCase() : "UNKNOWN";
+  byId("runner-status").textContent = `LAST APP STATE: ${state}`;
   byId("runner-status").parentElement.classList.toggle("running", stateValue === "running");
   byId("runner-status").parentElement.classList.toggle("error", stateValue === "error");
   updateRunnerDetail();
@@ -2338,6 +2378,7 @@ async function refreshMonitor() {
     ]);
     if (!appState.authorized || appState.user?.uid !== uid || epoch !== appState.authEpoch) return;
     appState.monitorRefreshedAt = new Date();
+    void refreshCloudClockStatus();
     renderRunner(runner);
     if (profile) renderResourceProfile(profile);
     else { appState.resourceReadUnavailable = true; renderResourceSummary(); }

@@ -1,6 +1,6 @@
 # Canonical work plan
 
-Updated: 2026-10-17. This is the single backlog, not a release diary.
+Updated: 2026-10-21. This is the single backlog, not a release diary.
 The agreed order prioritizes speed, safety, privacy and zero-cost operation.
 Statuses: pending / in progress / released / awaiting observation / needs user.
 Keep IDs stable; every scope, order or status change must have a dated reason below.
@@ -9,6 +9,7 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 | ID | Priority | Agreed work | Status | Acceptance / next action |
 |---|---:|---|---|---|
+| T06 | 0 (temporary) | Reconcile execution time/provider consumption and expose runner-start status | Needs user | Both-copy provider/monitor tests and privacy checks passed; historical app contact is distinct from dispatch/start/publication. Worker deployment needs renewal of the existing Cloudflare CLI sign-in, not broader token scopes. After deployment, observe authenticated status. Exact quota still needs Billing; no retry/spend changes. |
 | T14 | 0 | Derive extraction attribution from validated passage references | Awaiting observation | Application-owned attribution passed synthetic unrelated/unknown/malformed passage regressions in both copies. Exact passages, strict stored evidence and independent factual review remain mandatory. Observe ordinary-run source failures and saved lineage after reviewed release; recovery is not yet established. |
 | T13 | 0 | Recover missing generated story identity without another model call | Awaiting observation | Private and public synthetic suites, interface checks and privacy audit pass. Preserve reporting and source lineage; reject malformed identities and unsupported claims. Observe ordinary runs after reviewed release; do not claim production recovery yet. |
 | T12 | 0 | Separate CLI/provider failures from editorial validation | Awaiting observation | Implementation passed synthetic recovery, fail-closed and privacy regressions in both code copies. Fixed CLI/model-JSON/editorial diagnostics; no fictional draft repair or extra retry. Verify provider behavior in ordinary runs, without extra test episodes. |
@@ -17,9 +18,8 @@ production improvement from tests alone. Private deployment/run evidence stays l
 | T16 | 2 | Plan first-draft size and shape within existing output budgets | Awaiting observation | Synthetic checks preserve all sections/facts with flexible word guidance and valid paper example IDs/shape. No extra model call, factual deletion, prose clipping or longer episode. Measure ordinary-run rejection rates and time after reviewed release before claiming improvement. |
 | T02 | 2 | Smaller model requests without losing evidence | Released | Compact schema, post-selection scores omitted; selected facts and original supports retained. |
 | T03 | 3 | Measure patch/context efficiency in actual runs | Awaiting observation | Numeric request/response sizes, retry timing and exact context sharing shipped; equivalent-content ordinary runs must establish savings. |
-| T04 | 4 | Profile Kokoro without changing output quality | Awaiting observation | Numeric CPU/affinity/thread/sample-rate context passed privacy/regression checks; synthesis settings are unchanged. Local bounded experiments did not complete a throughput/output comparison. Collect ordinary Linux context and complete an equivalent-output benchmark before any thread tuning. Optimization benefit is unproven. |
+| T04 | 4 | Profile Kokoro without changing output quality | Awaiting observation | Offline comparisons now complete and interrupted runs preserve sanitized partial timings/samples. Both voices and short/long cases compare across thread candidates. Local timing variability and cross-thread PCM differences prevent claiming equivalent production savings; Linux/perceptual validation remains pending. Production synthesis is unchanged. |
 | T05 | 5 | Fit optional newspaper within protected execution budget | Awaiting observation | Implementation validated with synthetic regressions; whole paper phase bounded, dynamic completion reserve, clear deferred reason. Verify adoption in ordinary runs, not an extra episode. |
-| T06 | 6 | Reconcile execution time and provider consumption | Awaiting observation | Bounded read-only account job accounting passed synthetic checks and a real provider read, including previous attempts, whole-job time and other private workflows. Unknown jobs are unmeasured; remaining balance requires a fresh Billing meter. Planning averages do not change episode cutoffs; reconcile future observations before treating sums as billed consumption. |
 | T07 | 7 | Investigate newsletters without extracted news | Pending | Explain observed gaps, especially unknown reasons; do not treat absence of extraction as absence of useful news. |
 | T08 | 8 | Perceptual naturalness and name pronunciation | Pending | Compare specific excerpts, isolate script/preparation/voice; technical metrics alone are insufficient. Listener feedback may be needed. |
 | T09 | 9 | Review real newspaper readability and visual usefulness | Pending | Semantic non-repetition, complete sentences, useful visuals and readable two-page target. Use existing approved editions. |
@@ -28,6 +28,26 @@ production improvement from tests alone. Private deployment/run evidence stays l
 
 ## Change log
 
+- 2026-10-21: T06 Worker publication needs renewal of existing operator sign-in;
+  moved to needs user rather than claiming the external observer is deployed.
+  Web changes remain backward-compatible with an older clock response. T04's
+  comparable Linux/perceptual validation is still pending; no inference setting
+  was changed. All scopes and other task IDs/priorities are retained.
+- 2026-10-21: T06 implementation passed authenticated-boundary, provider failure,
+  cache, privacy and stale-response regressions in both code copies; T04 completed
+  local synthetic comparisons and added partial/PCM-delta diagnostics. Both move
+  to awaiting observation, not verified production benefit. No synthesis tuning
+  is justified yet; comparable Linux/output validation remains explicit. No task
+  removed, new episode/retry or schedule/spending/permission change. Release
+  evidence stays private and all reviewed export/deployment gates still apply.
+- 2026-10-21: User approved T06 external runner visibility first, then T04 local
+  speech profiling. T06 temporarily moves from priority 6 to 0 because a rejected
+  job cannot update its own monitor; its scope now includes cached read-only
+  provider evidence, not automatic retries or billing access. T04 returns to in
+  progress; its completed instrumentation/accounting remains valid. All task IDs
+  and other priorities are retained, none removed. No episode, schedule, spending
+  or credential-permission change is authorized. Public/private release gates and
+  the one-hour cap/protected shutdown remain mandatory.
 - 2026-10-17: T14/T15/T16 implementation and both-copy synthetic checks passed;
   moved to awaiting ordinary-run observation, not proven speed or recovery.
   T04 adds runtime context but its bounded local benchmark is incomplete, so no

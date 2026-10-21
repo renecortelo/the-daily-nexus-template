@@ -37,13 +37,13 @@ function timingProjection() {
   return {
     scheduleId: "job-0123456789abcdef0123",
     enabled: true,
-    timezone: "UTC",
+    timezone: "Europe/Madrid",
     startTime: "04:45",
     weekdays: [0, 1, 2, 3, 4],
   };
 }
 
-test("clock state retains timing only", async () => {
+test("schedule projection retains timing only", async () => {
   const storage = new MemoryStorage();
   const clock = new CloudClock({ storage }, clockEnvironment());
   const response = await clock.fetch(new Request("https://clock.internal/v1/command", {
@@ -98,4 +98,22 @@ test("browser clock endpoint rejects an untrusted origin before authentication",
     { TDN_ALLOWED_ORIGIN: "https://trusted.example" },
   );
   assert.equal(response.status, 403);
+});
+
+test("status requires the verified owner before any provider lookup", async () => {
+  const originalFetch = globalThis.fetch; let reads = 0;
+  globalThis.fetch = async () => { reads++; return new Response(null, { status: 403 }); };
+  const env = { TDN_ALLOWED_ORIGIN: "https://trusted.example", TDN_OWNER_UID: "synthetic-owner", TDN_FIREBASE_PROJECT_ID: "example-project" };
+  try {
+    const missing = await cloudWorker.fetch(new Request("https://clock.example/v1/status", {
+      headers: { origin: env.TDN_ALLOWED_ORIGIN },
+    }), env);
+    assert.equal(missing.status, 401); assert.equal(reads, 0);
+    const token = `header.${btoa(JSON.stringify({ sub: env.TDN_OWNER_UID }))}.signature`;
+    const denied = await cloudWorker.fetch(new Request("https://clock.example/v1/status", {
+      headers: { origin: env.TDN_ALLOWED_ORIGIN, authorization: `Bearer ${token}` },
+    }), env);
+    assert.equal(denied.status, 401); assert.equal(reads, 1);
+    assert.doesNotMatch(await denied.text(), /synthetic|GitHub|token/i);
+  } finally { globalThis.fetch = originalFetch; }
 });

@@ -26,13 +26,13 @@ The clock retains only this safe timing projection for each schedule:
 {
   "scheduleId": "opaque-id",
   "enabled": true,
-  "timezone": "UTC",
+  "timezone": "Europe/Madrid",
   "startTime": "04:45",
   "weekdays": [0, 1, 2, 3, 4]
 }
 ```
 
-It does **not** receive a Gmail label, email address, newsletter content,
+The schedule projection does **not** send a Gmail label, mailbox address, newsletter content,
 article URL, run name, host setting, script, transcript, feed path, Firebase
 refresh token, Gmail token, Antigravity session, Firebase deployment token, or
 private episode URL. Firestore rules require this projection to match the
@@ -51,8 +51,9 @@ stay far below the Free allowance. If a free limit is reached, the clock stops
 instead of silently charging the project.
 
 Keep Firebase on Spark with Cloud Billing unlinked, and configure a zero-cost
-GitHub Actions budget with its usage stop enabled. GitHub is invoked only when a schedule is due or a
-manual GEN request needs a wake-up. It has no periodic polling trigger.
+GitHub Actions budget with its usage stop enabled. GitHub is invoked only when
+a schedule is due or a manual GEN request needs a wake-up. It has no periodic
+polling trigger.
 
 ## One-time setup
 
@@ -76,7 +77,7 @@ Do this after the cloud-clock source is pushed to the private repository.
    Set-Location .\cloud-clock
    npm ci
    npx --no-install wrangler login
-   npx --no-install wrangler deploy
+   npx --no-install wrangler deploy --keep-vars
    ```
 
    Wrangler prints a URL shaped like
@@ -147,6 +148,33 @@ The runner processes one episode per job within its one-hour safety window.
 After a successful generation and protected cleanup, it can securely dispatch
 another job for remaining queue work; it does not depend on a timer-based poll.
 Failed or interrupted occurrences remain terminal rather than being retried.
+
+## Runner visibility without an Actions job
+
+The authenticated status request also reads the latest workflow from GitHub using
+the existing restricted dispatch token. A dispatch acceptance is not proof of
+runner start, episode generation or publication. The monitor keeps the last app
+contact separate from the last observed GitHub workflow; a successful workflow
+does not replace the episode's published status.
+
+Provider reads happen only on existing owner status requests, never in a new
+polling job or alarm. A five-minute cache and coalesced requests bound usage to
+at most three GitHub GETs per refresh window; the request has a ten-second limit
+and bounded response sizes. Cached state contains only fixed categories, dates
+and a workflow sequence number, not account/repository IDs, names or annotation
+text. Existing schedule alarms, retry limits and dispatch behavior are unchanged.
+The bounded GitHub response is processed transiently on the server before this
+allowlist is built; its account/commit metadata is never logged, persisted or
+returned to the browser.
+
+A failed job with no steps is shown as rejected before start. Billing/spending
+is named only when an explicit provider annotation confirms that category.
+Reading annotations may be denied because it needs Checks read permission; the
+clock then reports an unconfirmed cause. **Do not broaden the token just to make
+this optional explanation available.** Read failure/rate limiting returns unknown,
+never an invented quota balance or a claim of availability. No Billing access or
+automatic retry is added. Details: [GitHub job API](https://docs.github.com/en/rest/actions/workflow-jobs)
+and [check annotations API](https://docs.github.com/en/rest/checks/runs#list-check-run-annotations).
 
 An alarm is at-least-once. A rare duplicate dispatch is safe because the
 existing Firestore schedule/date execution claim prevents a duplicate episode.
