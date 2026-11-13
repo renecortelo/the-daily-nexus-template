@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11, <3.13"
 resolution-markers = [
     "(python_full_version >= '3.12' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform == 'win32')",
@@ -696,15 +696,15 @@ wheels = [
 
 [[package]]
 name = "google-auth"
-version = "2.60.0"
+version = "2.62.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyasn1-modules" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6e/a0/d9a866dbcf9de983d717a969744e50492d1c9c56b10207a9f23b3fab85d7/google_auth-2.60.0.tar.gz", hash = "sha256:34aa0283ef72c99cd410e35db4417211fa3e6aaa5399183227bbe3b82bd15192", size = 387015, upload-time = "2026-10-05T16:05:09.724Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/b9/4b2528f30114b106e3c3a7298ba38d85e682fd1f83fe7c4a5b77c7677082/google_auth-2.62.0.tar.gz", hash = "sha256:0bef0ce54bdf9ce226c5d66e4264413bd918141c31bbe49fb52eac882f513d69", size = 398180, upload-time = "2026-10-12T19:20:48.328Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/f5/7e1770bb548086797ad936ffe7be3d0438f7066ff39982a7763bbb54ccb4/google_auth-2.60.0-py3-none-any.whl", hash = "sha256:e78414cd2e22cc02884768707def024ca32da17695f2c0e6194cdbe1316c4cd4", size = 264569, upload-time = "2026-10-05T16:05:08.053Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/a3/87fe9b7203ec2e56ea6a57c75e6d632eaf9487c7f7978cdad1d801bee0af/google_auth-2.62.0-py3-none-any.whl", hash = "sha256:4ff4319aeb4ad128409759d397a9fcafad126d0031d241cc0dd6b9a00b43e3f3", size = 267911, upload-time = "2026-10-12T19:20:46.355Z" },
 ]
 
 [[package]]
